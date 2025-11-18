@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Gyandeep</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+      /* Custom scrollbar for a more modern look */
+      ::-webkit-scrollbar {
+        width: 8px;
+      }
+      ::-webkit-scrollbar-track {
+        background: #f1f1f1;
+      }
+      ::-webkit-scrollbar-thumb {
+        background: #888;
+        border-radius: 4px;
+      }
+      ::-webkit-scrollbar-thumb:hover {
+        background: #555;
+      }
+      @keyframes slide-down {
+        from {
+          opacity: 0;
+          transform: translateY(-20px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+      .animate-slide-down {
+        animation: slide-down 0.5s ease-out forwards;
+      }
+    </style>
+  <script type="importmap">
+{
+  "imports": {
+    "recharts": "https://aistudiocdn.com/recharts@^3.4.1",
+    "@google/genai": "https://aistudiocdn.com/@google/genai@^1.29.1",
+    "react/": "https://aistudiocdn.com/react@^19.2.0/",
+    "react": "https://aistudiocdn.com/react@^19.2.0",
+    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/"
+  }
+}
+</script>
+<script>
+    // Script to apply theme from localStorage before React loads to prevent FOUC
+    (function() {
+      try {
+        const theme = localStorage.getItem('gyandeep-theme') || 'indigo';
+        document.documentElement.setAttribute('data-theme', theme);
+      } catch (e) {
+        console.error('Failed to apply theme from localStorage', e);
+      }
+    })();
+  </script>
+</head>
+  <body class="bg-gray-50 antialiased">
+    <div id="root"></div>
+    <script type="module" src="/index.tsx"></script>
+  </body>
+</html>

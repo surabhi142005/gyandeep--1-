@@ -1,0 +1,8 @@
+{
+  "name": "Gyandeep",
+  "description": "Gyandeep: An AI-powered classroom system for teachers and students. Teachers manage classes, track attendance, and generate quizzes. Students can mark their presence, access notes, and test their knowledge.",
+  "requestFramePermissions": [
+    "camera",
+    "geolocation"
+  ]
+}
