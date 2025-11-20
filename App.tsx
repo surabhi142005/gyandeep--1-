@@ -6,6 +6,7 @@ import ToastNotification from './components/ToastNotification';
 import { getCurrentPosition } from './services/locationService';
 import Chatbot from './components/Chatbot';
 import { fetchUsers, fetchClasses } from './services/dataService';
+import { setLocale, t } from './services/i18n';
 
 import AdminSetup from './components/AdminSetup'; 
 import Spinner from './components/Spinner'; // Import Spinner for Suspense fallback
@@ -68,6 +69,8 @@ const App: React.FC = () => {
 
     // --- State Management ---
     const [theme, setTheme] = useLocalStorage('gyandeep-theme', 'indigo');
+    const [highContrast, setHighContrast] = useLocalStorage('gyandeep-high-contrast', false);
+    const [fontScale, setFontScale] = useLocalStorage('gyandeep-font-scale', 1);
     const [allUsers, setAllUsers] = useLocalStorage<AnyUser[]>('gyandeep-users', []);
     const [allSubjects, setAllSubjects] = useLocalStorage<SubjectConfig[]>('gyandeep-subjects', [
         { id: 'math', name: 'Mathematics' },
@@ -102,6 +105,15 @@ const App: React.FC = () => {
     useEffect(() => {
         document.documentElement.setAttribute('data-theme', theme);
     }, [theme]);
+
+    useEffect(() => {
+        document.documentElement.setAttribute('data-high-contrast', highContrast ? '1' : '0');
+    }, [highContrast]);
+
+    useEffect(() => {
+        document.documentElement.style.setProperty('--font-scale', String(fontScale));
+        document.body.style.fontSize = `${fontScale}rem`;
+    }, [fontScale]);
 
     useEffect(() => {
         fetchUsers().then((users) => {
@@ -292,6 +304,24 @@ const App: React.FC = () => {
                     type={notification.type}
                     onClose={() => setNotification(null)}
                 />
+            )}
+            {currentUser && (
+              <>
+                <div className="fixed top-2 left-2 z-50 flex items-center gap-2 bg-white/80 backdrop-blur rounded-md shadow p-2">
+                    <label className="text-xs text-gray-700">{t('Locale')}</label>
+                    <select aria-label="Locale" onChange={e => setLocale(e.target.value as any)} className="text-xs border border-gray-300 rounded px-1 py-0.5">
+                        <option value="en">English</option>
+                        <option value="hi">Hindi</option>
+                        <option value="mr">Marathi</option>
+                    </select>
+                </div>
+                <div className="fixed top-2 right-2 z-50 flex items-center gap-2 bg-white/80 backdrop-blur rounded-md shadow p-2">
+                    <label className="text-xs text-gray-700">High Contrast</label>
+                    <input type="checkbox" aria-label="Toggle high contrast" checked={!!highContrast} onChange={e => setHighContrast(e.target.checked)} />
+                    <label className="text-xs text-gray-700 ml-2">Font Scale</label>
+                    <input type="range" aria-label="Adjust font scale" min={0.9} max={1.4} step={0.05} value={Number(fontScale)} onChange={e => setFontScale(Number(e.target.value))} />
+                </div>
+              </>
             )}
             {renderContent()}
             {currentUser && <Chatbot theme={theme} userLocation={userLocation} />}

@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import type { User, PerformanceData, Coordinates, QuizQuestion, HistoricalSessionRecord } from '../types';
 import { generateQuizFromNotes } from '../services/geminiService';
+import { fetchQuestionBank, upsertQuizToBank, syncCalendar, uploadToDrive, fetchTagPresets } from '../services/dataService';
+import { t } from '../services/i18n';
 import { getCurrentPosition } from '../services/locationService';
 import Spinner from './Spinner';
 import PerformanceChart from './PerformanceChart';
@@ -44,14 +46,46 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ teacher, students, 
   const [quizThinkingMode, setQuizThinkingMode] = useState(false);
   const [weeklyAttendance, setWeeklyAttendance] = useState<{date: string; present: number}[]>([]);
   const [justUpdatedStudentId, setJustUpdatedStudentId] = useState<string | null>(null);
+  const [selectedAttendanceIds, setSelectedAttendanceIds] = useState<string[]>([]);
+  const [selectedPerformanceIds, setSelectedPerformanceIds] = useState<string[]>([]);
   const [filterStatus, setFilterStatus] = useState<'All' | 'Present' | 'Absent'>('All');
   const [selectedClassFilter, setSelectedClassFilter] = useState<string>('All');
   const [sortConfig, setSortConfig] = useState<{ key: 'studentName' | 'status'; direction: 'ascending' | 'descending' }>({ key: 'studentName', direction: 'ascending' });
   const [showFaceRegistration, setShowFaceRegistration] = useState(false);
   const [isHistoryVisible, setIsHistoryVisible] = useState(false);
   const [showCopySuccess, setShowCopySuccess] = useState(false);
+  const exportCSV = (rows: string[][], filename: string) => {
+    const csv = rows.map(r => r.map(v => '"' + String(v).replace(/"/g, '""') + '"').join(',')).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = filename; a.click();
+    URL.revokeObjectURL(url);
+  };
+  const [tagPresets, setTagPresets] = useState<Record<string, string[]>>({});
+  useEffect(() => { fetchTagPresets().then(setTagPresets).catch(() => {}) }, []);
+  const fallbackPresets: Record<string, string[]> = {
+    Mathematics: ['algebra','geometry','trigonometry','calculus','practice'],
+    Science: ['physics','chemistry','biology','lab','experiment'],
+    History: ['timeline','event','figure','cause','effect'],
+    English: ['grammar','vocabulary','reading','writing','comprehension']
+  };
+  const tagOptions = useMemo(() => (tagPresets[selectedSubject] || fallbackPresets[selectedSubject] || ['revision','exam','homework','unit']), [selectedSubject, tagPresets]);
 
   const colors = useMemo(() => THEME_COLORS[theme] || THEME_COLORS.indigo, [theme]);
+
+  const notify = (title: string, body: string) => {
+    try {
+      if (!('Notification' in window)) return;
+      if (Notification.permission === 'granted') {
+        new Notification(title, { body });
+      } else if (Notification.permission !== 'denied') {
+        Notification.requestPermission().then((perm) => {
+          if (perm === 'granted') new Notification(title, { body });
+        });
+      }
+    } catch {}
+  };
   const prevAttendance = usePrevious(attendance);
   
   // Filter subjects based on teacher's assigned subjects
@@ -208,6 +242,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ teacher, students, 
     const code = Math.floor(100000 + Math.random() * 900000).toString();
     const expiry = Date.now() + CODE_DURATION * 1000;
     onUpdateSession({ code, expiry, teacherLocation, subject: selectedSubject, quiz: null, notes: null, quizPublished: false, attendanceRadius });
+    notify('New Class Code', `Code ${code} is active for ${Math.round((expiry - Date.now())/60000)} minutes`);
     setIsGeneratingCode(false);
   };
 
@@ -234,12 +269,22 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ teacher, students, 
         const uploaded = await uploadClassNotes({ classId: teacher.id, subjectId: classSession.subject, content: notesText })
         setSuccessMessage(`Notes saved. URL: ${uploaded.url}`)
       } catch (e) {}
-      const quiz = await generateQuizFromNotes({
+      const quiz = await generateQuizFromNotes({ 
           notesText, 
           subject: classSession.subject, 
           enableThinkingMode: quizThinkingMode 
       });
-      onUpdateSession({ quiz });
+      try {
+        const bank = await fetchQuestionBank();
+        const extras = (Array.isArray(bank) ? bank : [])
+          .filter(q => (q.subject || '') === classSession.subject)
+          .slice(0, Math.max(0, 5 - quiz.length))
+          .map(q => ({ id: q.id, question: q.question, options: q.options, correctAnswer: q.correctAnswer }));
+        const combined = quiz.concat(extras);
+        onUpdateSession({ quiz: combined });
+      } catch {
+        onUpdateSession({ quiz });
+      }
       setSuccessMessage("Quiz is ready for your review.");
     } catch (err: any) {
       setError(err instanceof Error ? err.message : String(err));
@@ -250,14 +295,21 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ teacher, students, 
     }
   };
 
-  const handlePublishQuiz = () => {
+  const handlePublishQuiz = async () => {
     setIsPublishingQuiz(true);
     clearMessages();
-    setTimeout(() => {
-        onUpdateSession({ quizPublished: true });
-        setSuccessMessage("Quiz is now live!");
-        setIsPublishingQuiz(false);
-    }, 500);
+    try {
+      onUpdateSession({ quizPublished: true });
+      if (classSession.quiz) {
+        await upsertQuizToBank(classSession.quiz, selectedSubject);
+      }
+      notify('Quiz Published', `Quiz for ${selectedSubject} is now available`);
+      setSuccessMessage("Quiz is now live!");
+    } catch (e) {
+      setError('Failed to publish quiz');
+    } finally {
+      setIsPublishingQuiz(false);
+    }
   };
   
   const handleSort = (key: 'studentName' | 'status') => {
@@ -438,32 +490,32 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ teacher, students, 
               )}
               {classSession.code && (
                 <div className="mt-4 p-4 bg-gray-50 rounded-lg text-center border-2 border-dashed border-gray-200">
-                  <p className="text-gray-600 text-sm font-semibold mb-2">ACTIVE SESSION CODE</p>
+                  <p className="text-gray-600 text-sm font-semibold mb-2">{t('ACTIVE SESSION CODE')}</p>
                   <div className="flex items-center justify-center gap-2 relative">
                     <p className={`text-6xl font-extrabold ${colors.text} tracking-widest my-2`}>{classSession.code}</p>
                     <button
                       onClick={handleCopyCode}
                       className={`p-3 rounded-full ${colors.lightBg} ${colors.lightText} ${colors.lightHover} transition-colors duration-200`}
                       aria-label="Copy code to clipboard"
-                      title="Copy code"
+                      title={t('Copy code')}
                     >
                       <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M8 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-2m-6-11h4a2 2 0 012 2v4m-10 4l2 2 4-4" /></svg>
                     </button>
                     {showCopySuccess && (
-                      <span className="absolute -top-8 bg-green-500 text-white text-xs px-2 py-1 rounded-md animate-slide-down whitespace-nowrap">Copied to clipboard!</span>
+                      <span className="absolute -top-8 bg-green-500 text-white text-xs px-2 py-1 rounded-md animate-slide-down whitespace-nowrap">{t('Copied to clipboard!')}</span>
                     )}
                   </div>
-                  <p className="text-xs text-gray-500">Radius: {classSession.attendanceRadius}m</p>
+                  <p className="text-xs text-gray-500">{t('Radius')}: {classSession.attendanceRadius}m</p>
                   <div className="relative w-32 h-32 mx-auto my-4">
                     <svg className="w-full h-full" viewBox="0 0 120 120"><circle cx="60" cy="60" r="50" fill="none" stroke="#e6e6e6" strokeWidth="12" /><circle cx="60" cy="60" r="50" fill="none" stroke={timeLeft <= 0 ? '#d1d5db' : timeLeft < 60 ? '#ef4444' : timeLeft < 180 ? '#f59e0b' : '#22c55e'} strokeWidth="12" strokeLinecap="round" transform="rotate(-90 60 60)" style={{ strokeDasharray: 2 * Math.PI * 50, strokeDashoffset: (2 * Math.PI * 50) - (timeLeft / CODE_DURATION) * (2 * Math.PI * 50), transition: 'stroke-dashoffset 1s linear, stroke 0.5s' }} /></svg>
-                    <div className="absolute inset-0 flex flex-col items-center justify-center">{timeLeft > 0 ? (<><span className="text-2xl font-bold text-gray-700">{`${Math.floor(timeLeft / 60)}`.padStart(2, '0')}:{`${timeLeft % 60}`.padStart(2, '0')}</span><span className="text-xs text-gray-500">left</span></>) : (<span className="text-lg font-bold text-red-600">Expired</span>)}</div>
+                    <div className="absolute inset-0 flex flex-col items-center justify-center">{timeLeft > 0 ? (<><span className="text-2xl font-bold text-gray-700">{`${Math.floor(timeLeft / 60)}`.padStart(2, '0')}:{`${timeLeft % 60}`.padStart(2, '0')}</span><span className="text-xs text-gray-500">{t('left')}</span></>) : (<span className="text-lg font-bold text-red-600">{t('Expired')}</span>)}</div>
                   </div>
                 </div>
               )}
             </div>
             
             <div className="bg-white p-6 rounded-lg shadow-md">
-              <h2 className="text-xl font-semibold text-gray-700 mb-4">Attendance Summary</h2>
+              <h2 className="text-xl font-semibold text-gray-700 mb-4">{t('Attendance Summary')}</h2>
               {Object.keys(summaryBySubject).length > 0 ? (
                 <div className="space-y-2"><table className="w-full text-left text-sm"><thead className="bg-gray-50"><tr><th className="p-2 font-semibold text-gray-600">Subject</th><th className="p-2 font-semibold text-gray-600 text-center">Sessions</th><th className="p-2 font-semibold text-gray-600 text-center">Avg.</th></tr></thead><tbody className="divide-y divide-gray-200">{Object.entries(summaryBySubject).map(([subject, data]) => (<tr key={subject}><td className="p-2 font-medium text-gray-800">{subject}</td><td className="p-2 text-gray-600 text-center">{data.totalSessions}</td><td className="p-2 text-gray-600"><div className="flex items-center justify-center gap-2"><div className="w-full bg-gray-200 rounded-full h-2.5"><div className={`${colors.primary} h-2.5 rounded-full`} style={{ width: `${Math.round(data.averageAttendance || 0)}%` }}></div></div><span className="font-semibold w-10 text-right">{Math.round(data.averageAttendance || 0)}%</span></div></td></tr>))}</tbody></table></div>
               ) : (<p className="text-gray-500 text-sm">No past sessions found.</p>)}
@@ -503,9 +555,9 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ teacher, students, 
             {classSession.code && (
               <div className="bg-white p-6 rounded-lg shadow-md">
                   <div className="flex justify-between items-center mb-4">
-                      <h2 className="text-xl font-semibold text-gray-700">Class Notes & Quiz</h2>
+                      <h2 className="text-xl font-semibold text-gray-700">{t('Class Notes & Quiz')}</h2>
                       <div className="flex items-center space-x-2 group relative">
-                          <label htmlFor="thinking-mode" className="text-sm font-medium text-gray-600 cursor-pointer">Thinking Mode</label>
+                          <label htmlFor="thinking-mode" className="text-sm font-medium text-gray-600 cursor-pointer">{t('Thinking Mode')}</label>
                           <button 
                               onClick={() => setQuizThinkingMode(!quizThinkingMode)}
                               id="thinking-mode"
@@ -517,7 +569,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ teacher, students, 
                               <span className={`inline-block w-4 h-4 transform bg-white rounded-full transition-transform duration-200 ease-in-out ${quizThinkingMode ? 'translate-x-6' : 'translate-x-1'}`} />
                           </button>
                           <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 bg-gray-800 text-white text-xs rounded py-1 px-2 text-center opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
-                              Enable for higher quality quizzes from complex notes. (Slower)
+                              {t('Enable for higher quality quizzes from complex notes. (Slower)')}
                               <svg className="absolute text-gray-800 h-2 w-full left-0 top-full" x="0px" y="0px" viewBox="0 0 255 255"><polygon className="fill-current" points="0,0 127.5,127.5 255,0"/></svg>
                           </div>
                       </div>
@@ -529,23 +581,64 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ teacher, students, 
 
             {classSession.quiz && !classSession.quizPublished && (
               <div className="bg-white p-6 rounded-lg shadow-md">
-                  <h2 className="text-xl font-semibold text-gray-700 mb-4">Review Quiz</h2>
-                  <div className="space-y-4 max-h-80 overflow-y-auto pr-2 border-t pt-4">{classSession.quiz.map((q, index) => (<div key={q.id} className="text-sm"><p className="font-semibold text-gray-800">{index + 1}. {q.question}</p><ul className="list-disc pl-5 mt-2 space-y-1">{q.options.map(opt => (<li key={opt} className={`${opt === q.correctAnswer ? 'text-green-700 font-bold' : 'text-gray-600'}`}>{opt} {opt === q.correctAnswer && ' (Correct)'}</li>))}</ul></div>))}</div>
-                  <button onClick={handlePublishQuiz} disabled={isPublishingQuiz} className="w-full mt-4 bg-green-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-green-700 flex items-center justify-center disabled:bg-green-300">{isPublishingQuiz ? <Spinner size="w-5 h-5"/> : 'Publish Quiz'}</button>
+                <h2 className="text-xl font-semibold text-gray-700 mb-4">{t('Review Quiz')}</h2>
+                <div className="space-y-4 max-h-80 overflow-y-auto pr-2 border-t pt-4">{classSession.quiz.map((q, index) => (
+                  <div key={q.id} className="text-sm">
+                    <p className="font-semibold text-gray-800">{index + 1}. {q.question}</p>
+                    <ul className="list-disc pl-5 mt-2 space-y-1">{q.options.map(opt => (
+                      <li key={opt} className={`${opt === q.correctAnswer ? 'text-green-700 font-bold' : 'text-gray-600'}`}>{opt} {opt === q.correctAnswer && ' (Correct)'}</li>
+                    ))}</ul>
+                    <div className="mt-2 grid grid-cols-1 sm:grid-cols-3 gap-2">
+                      <div>
+                        <label className="block text-xs text-gray-600 mb-1">{t('Difficulty')}</label>
+                        <select value={(q as any).difficulty || 'medium'} onChange={e => {
+                          const val = e.target.value
+                          const updated = (classSession.quiz || []).map(item => item.id === q.id ? { ...item, difficulty: val } : item)
+                          onUpdateSession({ quiz: updated })
+                        }} className="w-full px-2 py-1 text-xs border border-gray-300 rounded">
+                          <option value="easy">Easy</option>
+                          <option value="medium">Medium</option>
+                          <option value="hard">Hard</option>
+                        </select>
+                      </div>
+                      <div className="sm:col-span-2">
+                        <label className="block text-xs text-gray-600 mb-1">{t('Tags (comma-separated)')}</label>
+                        <input type="text" value={Array.isArray((q as any).tags) ? (q as any).tags.join(',') : ''} onChange={e => {
+                          const arr = e.target.value.split(',').map(s => s.trim()).filter(Boolean)
+                          const updated = (classSession.quiz || []).map(item => item.id === q.id ? { ...item, tags: arr } : item)
+                          onUpdateSession({ quiz: updated })
+                        }} className="w-full px-2 py-1 text-xs border border-gray-300 rounded" />
+                        <div className="mt-1 flex flex-wrap gap-2">
+                          {tagOptions.map(tag => (
+                            <button key={tag} onClick={() => {
+                              const current = Array.isArray((q as any).tags) ? (q as any).tags : []
+                              if (current.includes(tag)) return
+                              const updated = (classSession.quiz || []).map(item => item.id === q.id ? { ...item, tags: [...current, tag] } : item)
+                              onUpdateSession({ quiz: updated })
+                            }} className="px-2 py-0.5 text-xs rounded bg-gray-100 text-gray-700 hover:bg-gray-200">
+                              #{tag}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ))}</div>
+                <button onClick={handlePublishQuiz} disabled={isPublishingQuiz} className="w-full mt-4 bg-green-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-green-700 flex items-center justify-center disabled:bg-green-300">{isPublishingQuiz ? <Spinner size="w-5 h-5"/> : t('Publish Quiz')}</button>
               </div>
             )}
           </div>
 
           <div className="lg:col-span-2 space-y-6">
             <div className="bg-white p-6 rounded-lg shadow-md">
-              <h2 className="text-xl font-semibold text-gray-700 mb-4">Real-time Attendance</h2>
+              <h2 className="text-xl font-semibold text-gray-700 mb-4">{t('Real-time Attendance')}</h2>
               <div className="grid grid-cols-2 gap-4 mb-4 text-center"><div className="bg-gray-100 p-4 rounded-lg"><p className="text-sm font-medium text-gray-800">Total Students</p><p className="text-3xl font-bold text-gray-600">{students.length}</p></div><div className="bg-green-100 p-4 rounded-lg"><p className="text-sm font-medium text-green-800">Present</p><p className="text-3xl font-bold text-green-600">{attendance.filter(rec => rec.status === 'Present').length}</p></div></div>
               <div className="flex items-center space-x-2 mb-4">
-                <span className="text-sm font-medium text-gray-600">Status:</span>
+                <span className="text-sm font-medium text-gray-600">{t('Status')}:</span>
                 {([ 'All', 'Present', 'Absent'] as const).map(status => (<button key={status} onClick={() => setFilterStatus(status)} className={`px-3 py-1 text-xs font-semibold rounded-full transition-colors ${filterStatus === status ? `${colors.primary} text-white shadow` : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}`}>{status}</button>))}
               </div>
               <div className="flex items-center space-x-2 mb-4">
-                <span className="text-sm font-medium text-gray-600">Class:</span>
+                <span className="text-sm font-medium text-gray-600">{t('Class')}:</span>
                 <select
                   value={selectedClassFilter}
                   onChange={e => setSelectedClassFilter(e.target.value)}
@@ -557,15 +650,54 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ teacher, students, 
                   ))}
                 </select>
               </div>
-              <div className="overflow-x-auto"><table className="w-full text-left"><thead className="bg-gray-50"><tr><th className="p-3 font-semibold text-sm text-gray-600 cursor-pointer hover:bg-gray-100" onClick={() => handleSort('studentName')}>Student Name {sortConfig.key === 'studentName' && (sortConfig.direction === 'ascending' ? '▲' : '▼')}</th><th className="p-3 font-semibold text-sm text-gray-600 cursor-pointer hover:bg-gray-100" onClick={() => handleSort('status')}>Status {sortConfig.key === 'status' && (sortConfig.direction === 'ascending' ? '▲' : '▼')}</th><th className="p-3 font-semibold text-sm text-gray-600">Time</th></tr></thead><tbody className="divide-y divide-gray-200">{sortedAndFilteredAttendance.map(rec => (<tr key={rec.studentId} className={`${justUpdatedStudentId === rec.studentId ? 'bg-green-200' : ''} transition-colors duration-500 ease-out`}><td className="p-3">{rec.studentName}</td><td className="p-3"><span className={`px-2 py-1 text-xs font-semibold rounded-full ${rec.status === 'Present' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>{rec.status}</span></td><td className="p-3 text-sm text-gray-500">{rec.timestamp ? rec.timestamp.toLocaleTimeString() : 'N/A'}</td></tr>))}</tbody></table></div>
+              <div className="overflow-x-auto"><table className="w-full text-left"><thead className="bg-gray-50"><tr><th className="p-3"></th><th className="p-3 font-semibold text-sm text-gray-600 cursor-pointer hover:bg-gray-100" onClick={() => handleSort('studentName')}>{t('Student Name')} {sortConfig.key === 'studentName' && (sortConfig.direction === 'ascending' ? '▲' : '▼')}</th><th className="p-3 font-semibold text-sm text-gray-600 cursor-pointer hover:bg-gray-100" onClick={() => handleSort('status')}>{t('Status')} {sortConfig.key === 'status' && (sortConfig.direction === 'ascending' ? '▲' : '▼')}</th><th className="p-3 font-semibold text-sm text-gray-600">{t('Time')}</th></tr></thead><tbody className="divide-y divide-gray-200">{sortedAndFilteredAttendance.map(rec => (<tr key={rec.studentId} className={`${justUpdatedStudentId === rec.studentId ? 'bg-green-200' : ''} transition-colors duration-500 ease-out`}><td className="p-3"><input type="checkbox" checked={selectedAttendanceIds.includes(rec.studentId)} onChange={e => setSelectedAttendanceIds(prev => e.target.checked ? [...prev, rec.studentId] : prev.filter(id => id !== rec.studentId))} /></td><td className="p-3">{rec.studentName}</td><td className="p-3"><span className={`px-2 py-1 text-xs font-semibold rounded-full ${rec.status === 'Present' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>{rec.status}</span></td><td className="p-3 text-sm text-gray-500">{rec.timestamp ? rec.timestamp.toLocaleTimeString() : 'N/A'}</td></tr>))}</tbody></table></div>
             </div>
             <div className="bg-white p-6 rounded-lg shadow-md">
-              <h2 className="text-xl font-semibold text-gray-700 mb-4">Weekly Attendance Trend</h2>
+              <h2 className="text-xl font-semibold text-gray-700 mb-4">{t('Weekly Attendance Trend')}</h2>
               <AttendanceChart data={weeklyAttendance} theme={theme}/>
+              <div className="mt-3 flex justify-end gap-2">
+                <button onClick={() => exportCSV(
+                  [['date','present']].concat(weeklyAttendance.map(w => [w.date, String(w.present)])),
+                  `attendance_weekly_${new Date().toISOString().slice(0,10)}.csv`
+                )} className={`text-sm px-3 py-1 rounded ${colors.lightText} ${colors.lightHover}`}>
+                  {t('Export CSV')}
+                </button>
+                <button onClick={() => {
+                  const rows: string[][] = [['student','status','time']]
+                  sortedAndFilteredAttendance.filter(a => selectedAttendanceIds.includes(a.studentId)).forEach(a => rows.push([a.studentName, a.status, a.timestamp ? a.timestamp.toLocaleTimeString() : 'N/A']))
+                  exportCSV(rows, `attendance_selected_${new Date().toISOString().slice(0,10)}.csv`)
+                }} className={`text-sm px-3 py-1 rounded ${colors.lightText} ${colors.lightHover}`}>
+                  {t('Export Selected')}
+                </button>
+              </div>
             </div>
             <div className="bg-white p-6 rounded-lg shadow-md">
-              <h2 className="text-xl font-semibold text-gray-700 mb-4">Student Performance ({selectedSubject})</h2>
-                <div className="space-y-8 max-h-[60vh] overflow-y-auto pr-2">{students.filter(student => selectedClassFilter === 'All' || student.classId === selectedClassFilter).map(student => (<div key={student.id}><h3 className="text-lg font-semibold text-gray-600 mb-2">{student.name}</h3><PerformanceChart data={student.performance.filter(p => p.subject === selectedSubject)} title="" theme={theme}/></div>))}</div>
+              <h2 className="text-xl font-semibold text-gray-700 mb-4">{t('Student Performance')} ({selectedSubject})</h2>
+                <div className="space-y-8 max-h-[60vh] overflow-y-auto pr-2">{students.filter(student => selectedClassFilter === 'All' || student.classId === selectedClassFilter).map(student => (<div key={student.id}><div className="flex items-center gap-2 mb-2"><input type="checkbox" checked={selectedPerformanceIds.includes(student.id)} onChange={e => setSelectedPerformanceIds(prev => e.target.checked ? [...prev, student.id] : prev.filter(id => id !== student.id))} /><h3 className="text-lg font-semibold text-gray-600">{student.name}</h3></div><PerformanceChart data={student.performance.filter(p => p.subject === selectedSubject)} title="" theme={theme}/></div>))}</div>
+              <div className="mt-3 flex justify-end gap-2">
+                <button onClick={() => {
+                  const rows: string[][] = [['student','subject','date','score']];
+                  students.forEach(st => {
+                    st.performance.filter(p => !selectedSubject || p.subject === selectedSubject).forEach(p => {
+                      rows.push([st.name, p.subject, p.date, String(p.score)]);
+                    })
+                  });
+                  exportCSV(rows, `performance_${selectedSubject || 'all'}_${new Date().toISOString().slice(0,10)}.csv`);
+                }} className={`text-sm px-3 py-1 rounded ${colors.lightText} ${colors.lightHover}`}>
+                  {t('Export CSV')}
+                </button>
+                <button onClick={() => {
+                  const rows: string[][] = [['student','subject','date','score']];
+                  students.filter(s => selectedPerformanceIds.includes(s.id)).forEach(st => {
+                    st.performance.filter(p => !selectedSubject || p.subject === selectedSubject).forEach(p => {
+                      rows.push([st.name, p.subject, p.date, String(p.score)]);
+                    })
+                  });
+                  exportCSV(rows, `performance_selected_${selectedSubject || 'all'}_${new Date().toISOString().slice(0,10)}.csv`);
+                }} className={`text-sm px-3 py-1 rounded ${colors.lightText} ${colors.lightHover}`}>
+                  {t('Export Selected')}
+                </button>
+              </div>
             </div>
           </div>
         </main>

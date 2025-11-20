@@ -1,6 +1,10 @@
 import type { Coordinates } from '../types'
 
-const BASE_URL = 'http://localhost:5001'
+const host = typeof window !== 'undefined' && window.location?.hostname
+  ? (window.location.hostname === 'localhost' ? '127.0.0.1' : window.location.hostname)
+  : '127.0.0.1'
+const protocol = typeof window !== 'undefined' && window.location?.protocol ? window.location.protocol : 'http:'
+const BASE_URL = `${protocol}//${host}:5001`
 
 export const registerFace = async (userId: string, imageDataUrl: string): Promise<{ ok: boolean }> => {
   const res = await fetch(`${BASE_URL}/face/register`, {

@@ -5,6 +5,7 @@ import { UserRole as UserRoleEnum, ROLE_DISPLAY_NAMES } from '../types';
 import WebcamCapture from './WebcamCapture';
 import { verifyFace } from '../services/authService';
 import Spinner from './Spinner';
+import { t } from '../services/i18n';
 
 interface LoginProps {
   onLogin: (user: User) => void;
@@ -96,7 +97,7 @@ const Login: React.FC<LoginProps> = ({ onLogin, users, onPasswordReset, theme })
 
     setIsRequestingPermission(true);
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } });
       stream.getTracks().forEach(track => track.stop());
       setShowWebcam(true);
     } catch (err) {
@@ -257,9 +258,11 @@ const Login: React.FC<LoginProps> = ({ onLogin, users, onPasswordReset, theme })
 
             {selectedRole !== UserRoleEnum.STUDENT && (
                 <div className="flex justify-center items-center mb-4 text-sm font-medium">
-                    <button onClick={() => setLoginMethod('faceId')} className={`${loginMethod === 'faceId' ? colors.text : 'text-gray-500'}`}>Face ID</button>
+                    <button onClick={() => setLoginMethod('faceId')} className={`${loginMethod === 'faceId' ? colors.text : 'text-gray-500'}`} aria-label="Use Face ID login">{t('Face ID')}</button>
                     <div className="border-l h-4 mx-3"></div>
-                    <button onClick={() => setLoginMethod('password')} className={`${loginMethod === 'password' ? colors.text : 'text-gray-500'}`}>Password</button>
+                    <button onClick={() => setLoginMethod('password')} className={`${loginMethod === 'password' ? colors.text : 'text-gray-500'}`} aria-label="Use password login">{t('Password')}</button>
+                    <div className="border-l h-4 mx-3"></div>
+                    <button onClick={() => setLoginMethod('otp' as any)} className={`${loginMethod === 'otp' ? colors.text : 'text-gray-500'}`} aria-label="Use OTP login">{t('OTP')}</button>
                 </div>
             )}
 
@@ -293,34 +296,80 @@ const Login: React.FC<LoginProps> = ({ onLogin, users, onPasswordReset, theme })
                 </form>
             ) : (
                 <div className="space-y-4">
-                    <div>
-                        <label htmlFor="user-id" className="block text-sm font-medium text-gray-700 mb-1">Enter Your User ID</label>
-                        <input
-                            id="user-id"
-                            type="text"
-                            value={selectedUserId}
-                            onChange={e => {
-                                setSelectedUserId(e.target.value.trim().toLowerCase());
-                                setError(null);
-                            }}
-                            placeholder="e.g., s1, t2, a1"
-                            className={`w-full p-3 text-base border border-gray-300 rounded-md shadow-sm focus:ring-1 ${colors.ring} ${colors.border}`}
-                        />
+                  {loginMethod === 'otp' ? (
+                    <div className="space-y-4">
+                      <div>
+                        <label htmlFor="user-id-otp" className="block text-sm font-medium text-gray-700 mb-1">{t('Enter Your User ID')}</label>
+                        <input id="user-id-otp" type="text" value={selectedUserId} onChange={e => setSelectedUserId(e.target.value.trim().toLowerCase())} placeholder="e.g., s1, t2, a1" className={`w-full p-3 text-base border border-gray-300 rounded-md shadow-sm focus:ring-1 ${colors.ring} ${colors.border}`} />
+                      </div>
+                      <div className="flex gap-3">
+                        <button onClick={async () => {
+                          setError(null);
+                          if (!selectedUserId) { setError('Enter your User ID'); return; }
+                          setIsOtpSending(true);
+                          try {
+                            const user = users.find(u => u.id === selectedUserId);
+                            if (!user) { setError('User not found'); return; }
+                            const { sendOtp } = await import('../services/dataService');
+                            await sendOtp(selectedUserId);
+                          } catch (e: any) {
+                            setError(e.message || 'Failed to send OTP');
+                          } finally {
+                            setIsOtpSending(false);
+                          }
+                        }} className={`flex-1 text-white font-bold py-3 rounded-lg transition-colors duration-300 ${colors.primary} ${colors.hover}`} aria-label="Send OTP" disabled={isOtpSending}>{isOtpSending ? <Spinner /> : t('Send OTP')}</button>
+                        <input type="text" value={otpCode} onChange={e => setOtpCode(e.target.value)} placeholder="6-digit code" maxLength={6} className={`flex-1 p-3 text-base border border-gray-300 rounded-md shadow-sm focus:ring-1 ${colors.ring} ${colors.border}`} aria-label="Enter OTP code" />
+                        <button onClick={async () => {
+                          setError(null);
+                          if (!selectedUserId || otpCode.length !== 6) { setError('Enter a valid 6-digit code'); return; }
+                          setIsOtpVerifying(true);
+                          try {
+                            const { verifyOtp } = await import('../services/dataService');
+                            const res = await verifyOtp(selectedUserId, otpCode);
+                            if (res.ok) {
+                              const user = users.find(u => u.id === selectedUserId);
+                              if (user) onLogin(user);
+                            }
+                          } catch (e: any) {
+                            setError(e.message || 'Failed to verify OTP');
+                          } finally {
+                            setIsOtpVerifying(false);
+                          }
+                        }} className={`flex-1 text-white font-bold py-3 rounded-lg transition-colors duration-300 ${colors.primary} ${colors.hover}`} aria-label="Verify OTP" disabled={isOtpVerifying}>{isOtpVerifying ? <Spinner /> : t('Verify')}</button>
+                      </div>
                     </div>
-                     <button onClick={handleFaceLoginRequest} disabled={isRequestingPermission || !selectedUserId} className={`w-full text-white font-bold py-3 rounded-lg transition-colors duration-300 flex items-center justify-center ${colors.primary} ${colors.hover} disabled:opacity-50`}>
+                  ) : (
+                    <>
+                      <div>
+                        <label htmlFor="user-id" className="block text-sm font-medium text-gray-700 mb-1">{t('Enter Your User ID')}</label>
+                        <input
+                          id="user-id"
+                          type="text"
+                          value={selectedUserId}
+                          onChange={e => {
+                            setSelectedUserId(e.target.value.trim().toLowerCase());
+                            setError(null);
+                          }}
+                          placeholder="e.g., s1, t2, a1"
+                          className={`w-full p-3 text-base border border-gray-300 rounded-md shadow-sm focus:ring-1 ${colors.ring} ${colors.border}`}
+                        />
+                      </div>
+                      <button onClick={handleFaceLoginRequest} disabled={isRequestingPermission || !selectedUserId} className={`w-full text-white font-bold py-3 rounded-lg transition-colors duration-300 flex items-center justify-center ${colors.primary} ${colors.hover} disabled:opacity-50`} aria-label="Login with Face ID">
                         {isRequestingPermission ? <Spinner /> : (
-                            <>
-                              <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 mr-2" fill="none" viewBox="0 0 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
-                              Login with Face ID
-                            </>
+                          <>
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 mr-2" fill="none" viewBox="0 0 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+                            {t('Login with Face ID')}
+                          </>
                         )}
-                    </button>
+                      </button>
+                    </>
+                  )}
                 </div>
             )}
           </div>
         </div>
       </div>
-      {showWebcam && <WebcamCapture onCapture={handleFaceCapture} onClose={() => setShowWebcam(false)} theme={theme} title="Face Verification" buttonText="Verify Identity" />}
+      {showWebcam && <WebcamCapture onCapture={handleFaceCapture} onClose={() => setShowWebcam(false)} theme={theme} title="Face Verification" buttonText="Verify Identity" liveness />}
       {forgotPasswordStep && (
         <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4">
             <div className="bg-white rounded-xl shadow-2xl p-4 sm:p-8 w-full max-w-md relative">

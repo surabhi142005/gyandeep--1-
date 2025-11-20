@@ -5,8 +5,11 @@ import { getCurrentPosition } from '../services/locationService';
 import type { Coordinates } from '../types';
 import Spinner from './Spinner';
 import WebcamCapture from './WebcamCapture';
+import { adminOverride } from '../services/dataService';
 import { registerFace, verifyFace } from '../services/authService';
 import { bulkImportUsers } from '../services/dataService';
+import { fetchQuestionBank, updateQuestionInBank, deleteQuestionFromBank, addQuestionsToBank, fetchTagPresets, updateTagPresets } from '../services/dataService';
+import { t } from '../services/i18n';
 
 interface AdminDashboardProps {
   admin: Admin;
@@ -150,6 +153,9 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ admin, users, onUpdateU
   const [capturingForUser, setCapturingForUser] = useState<AnyUser | null>(null);
   const [showFaceRegistration, setShowFaceRegistration] = useState(false);
   const [verifyingForUser, setVerifyingForUser] = useState<AnyUser | null>(null);
+  const [overrideForUser, setOverrideForUser] = useState<AnyUser | null>(null);
+  const [overrideReason, setOverrideReason] = useState('');
+  const [isOverrideSubmitting, setIsOverrideSubmitting] = useState(false);
   const [verifyMessage, setVerifyMessage] = useState<string | null>(null);
   const [verifySuccess, setVerifySuccess] = useState<boolean | null>(null);
   
@@ -166,7 +172,17 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ admin, users, onUpdateU
   const [editedClassName, setEditedClassName] = useState('');
 
   // UI State
-  const [activeTab, setActiveTab] = useState<'users' | 'subjects' | 'classes' | 'analytics'>('users');
+  const [activeTab, setActiveTab] = useState<'users' | 'subjects' | 'classes' | 'analytics' | 'qbank'>('users');
+  const [bank, setBank] = useState<any[]>([]);
+  const [bankSubjectFilter, setBankSubjectFilter] = useState<string>('');
+  const [bankTagFilter, setBankTagFilter] = useState<string>('');
+  const [editingBankItem, setEditingBankItem] = useState<any | null>(null);
+  const [selectedQIds, setSelectedQIds] = useState<string[]>([]);
+  const [showDeleteFilteredConfirm, setShowDeleteFilteredConfirm] = useState(false);
+  const [lastDeletedSnapshot, setLastDeletedSnapshot] = useState<any[]>([]);
+  const [tagPresets, setTagPresets] = useState<Record<string, string[]>>({});
+  const [presetSubject, setPresetSubject] = useState<string>('');
+  const [presetTagsInput, setPresetTagsInput] = useState<string>('');
   const [searchTerm, setSearchTerm] = useState('');
   const [filterRole, setFilterRole] = useState<UserRole | 'all'>('all');
 
@@ -176,6 +192,11 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ admin, users, onUpdateU
     getCurrentPosition()
       .then(setLocation)
       .catch(err => setLocationError(err.message));
+  }, []);
+
+  useEffect(() => {
+    fetchQuestionBank().then(setBank).catch(() => {});
+    fetchTagPresets().then(setTagPresets).catch(() => {});
   }, []);
   
   // Filter users based on search and role filter
@@ -666,7 +687,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ admin, users, onUpdateU
               { id: 'users', label: 'Users', icon: '👥', desc: 'Manage users' },
               { id: 'subjects', label: 'Subjects', icon: '📚', desc: 'Subject management' },
               { id: 'classes', label: 'Classes', icon: '🏫', desc: 'Class organization' },
-              { id: 'analytics', label: 'Analytics', icon: '📊', desc: 'Data insights' }
+              { id: 'analytics', label: 'Analytics', icon: '📊', desc: 'Data insights' },
+              { id: 'qbank', label: t('Question Bank'), icon: '❓', desc: t('Manage questions') }
             ].map(tab => (
               <button
                 key={tab.id}
@@ -955,7 +977,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ admin, users, onUpdateU
                     >
                       <span className="flex items-center justify-center space-x-2">
                         <span>➕</span>
-                        <span>Add New User</span>
+                      <span>{t('Add New User')}</span>
                       </span>
                     </button>
                   </div>
@@ -966,8 +988,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ admin, users, onUpdateU
               <div className={`${colors.card} rounded-2xl shadow-xl border ${colors.border} p-8 transform hover:scale-[1.01] transition-all duration-300`}>
                 <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-8 space-y-4 sm:space-y-0">
                   <div>
-                    <h2 className="text-2xl font-bold text-gray-800 mb-2">User Management</h2>
-                    <p className="text-gray-600">Manage all system users and their permissions</p>
+                    <h2 className="text-2xl font-bold text-gray-800 mb-2">{t('User Management')}</h2>
+                    <p className="text-gray-600">{t('Manage all system users and their permissions')}</p>
                   </div>
                   <div className="flex flex-col sm:flex-row space-y-3 sm:space-y-0 sm:space-x-4 w-full sm:w-auto">
                     <div className="relative">
@@ -987,10 +1009,10 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ admin, users, onUpdateU
                       onChange={(e) => setFilterRole(e.target.value as UserRole | 'all')}
                       className={`px-5 py-3 border-2 ${colors.border} rounded-xl focus:outline-none ${colors.focus} transition-all duration-200 text-lg font-medium shadow-sm hover:shadow-md bg-white`}
                     >
-                      <option value="all">👥 All Roles</option>
-                      <option value={UserRoleEnum.STUDENT}>🎓 Students</option>
-                      <option value={UserRoleEnum.TEACHER}>👨‍🏫 Teachers</option>
-                      <option value={UserRoleEnum.ADMIN}>👑 Admins</option>
+                      <option value="all">👥 {t('All Roles')}</option>
+                      <option value={UserRoleEnum.STUDENT}>🎓 {t('Students')}</option>
+                      <option value={UserRoleEnum.TEACHER}>👨‍🏫 {t('Teachers')}</option>
+                      <option value={UserRoleEnum.ADMIN}>👑 {t('Admins')}</option>
                     </select>
                   </div>
                 </div>
@@ -1038,6 +1060,12 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ admin, users, onUpdateU
                                         🔓 Face Login
                                       </button>
                                     )}
+                                    <button 
+                                      onClick={() => setOverrideForUser(user)} 
+                                      className="px-3 py-1 text-xs font-medium bg-yellow-100 text-yellow-800 rounded-full hover:bg-yellow-200 transition-all duration-200"
+                                    >
+                                      🛡️ Override
+                                    </button>
                                   </>
                                 )}
                                 {user.id !== admin.id && (
@@ -1073,7 +1101,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ admin, users, onUpdateU
                               </div>
                               
                               <div>
-                                <p className="text-xs text-gray-500 mb-1">Assigned Subjects</p>
+                                <p className="text-xs text-gray-500 mb-1">{t('Assigned Subjects')}</p>
                                 {user.role === UserRoleEnum.TEACHER && (user as Teacher).assignedSubjects.length > 0 ? (
                                   <div className="flex flex-wrap gap-1">
                                     {(user as Teacher).assignedSubjects.map(subjectId => (
@@ -1090,7 +1118,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ admin, users, onUpdateU
                               </div>
                               
                               <div>
-                                <p className="text-xs text-gray-500 mb-1">Class Assignment</p>
+                                <p className="text-xs text-gray-500 mb-1">{t('Class Assignment')}</p>
                                 {user.role === UserRoleEnum.STUDENT ? (
                                   <select
                                     value={(user as Student).classId || ''}
@@ -1117,8 +1145,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ admin, users, onUpdateU
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.746 0 3.332.477 4.5 1.253v13C19.832 18.477 18.246 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
                           </svg>
                         </div>
-                        <h3 className="text-lg font-medium text-gray-900 mb-2">No users found</h3>
-                        <p className="text-gray-500">Try adjusting your search or filter criteria.</p>
+                        <h3 className="text-lg font-medium text-gray-900 mb-2">{t('No users found')}</h3>
+                        <p className="text-gray-500">{t('Try adjusting your search or filter criteria.')}</p>
                       </div>
                     )}
                   </div>
@@ -1134,7 +1162,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ admin, users, onUpdateU
             <div className="lg:col-span-2">
               <div className={`${colors.card} rounded-xl shadow-lg border ${colors.border} p-6`}>
                 <div className="flex items-center justify-between mb-6">
-                  <h2 className="text-xl font-bold text-gray-800">Subject Management</h2>
+                  <h2 className="text-xl font-bold text-gray-800">{t('Subject Management')}</h2>
                   <span className={`px-3 py-1 text-sm font-medium ${colors.badge} rounded-full`}>
                     {allSubjects.length} subjects
                   </span>
@@ -1176,14 +1204,24 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ admin, users, onUpdateU
                                 onClick={() => handleStartEditSubject(subject)} 
                                 className={`px-3 py-1 text-sm font-medium ${colors.badge} rounded-lg hover:shadow-md transition-all duration-200`}
                               >
-                                ✏️ Edit
+                                ✏️ {t('Edit')}
                               </button>
                               <button 
                                 onClick={() => handleRemoveSubject(subject.id)} 
                                 className="px-3 py-1 text-sm font-medium bg-red-100 text-red-800 rounded-lg hover:bg-red-200 transition-colors"
                               >
-                                🗑️ Delete
+                                🗑️ {t('Delete')}
                               </button>
+                            </div>
+                            <div className="mt-2 grid grid-cols-1 sm:grid-cols-3 gap-2">
+                              <div className="sm:col-span-2">
+                                <label className="block text-xs text-gray-600 mb-1">{t('Presets')}</label>
+                                <input type="text" value={tagPresets[subject.name]?.join(',') || ''} onChange={e => { const val = e.target.value; setTagPresets(prev => ({ ...prev, [subject.name]: val.split(',').map(s => s.trim()).filter(Boolean) })) }} className="w-full px-2 py-1 text-xs border border-gray-300 rounded" />
+                              </div>
+                              <div className="flex items-end gap-2">
+                                <button onClick={async () => { const tags = tagPresets[subject.name] || []; await updateTagPresets(subject.name, tags); const map = await fetchTagPresets(); setTagPresets(map) }} className="px-3 py-1 text-xs rounded bg-indigo-600 text-white hover:bg-indigo-700">{t('Save')}</button>
+                                <button onClick={async () => { const map = await fetchTagPresets(); setTagPresets(prev => ({ ...prev, [subject.name]: map[subject.name] || [] })) }} className={`px-3 py-1 text-xs rounded ${colors.lightText} ${colors.lightHover}`}>{t('Load')}</button>
+                              </div>
                             </div>
                           </>
                         )}
@@ -1196,8 +1234,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ admin, users, onUpdateU
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.746 0 3.332.477 4.5 1.253v13C19.832 18.477 18.246 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
                         </svg>
                       </div>
-                      <h3 className="text-lg font-medium text-gray-900 mb-2">No subjects found</h3>
-                      <p className="text-gray-500">Add your first subject using the form on the right.</p>
+                      <h3 className="text-lg font-medium text-gray-900 mb-2">{t('No subjects found')}</h3>
+                      <p className="text-gray-500">{t('Add your first subject using the form on the right.')}</p>
                     </div>
                   )}
                 </div>
@@ -1206,10 +1244,10 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ admin, users, onUpdateU
 
             <div className="lg:col-span-1">
               <div className={`${colors.card} rounded-xl shadow-lg border ${colors.border} p-6`}>
-                <h2 className="text-xl font-bold text-gray-800 mb-6">Add New Subject</h2>
+                <h2 className="text-xl font-bold text-gray-800 mb-6">{t('Add New Subject')}</h2>
                 <form onSubmit={handleAddSubject} className="space-y-4">
                   <div>
-                    <label htmlFor="newSubjectName" className="block text-sm font-medium text-gray-700 mb-2">Subject Name</label>
+                    <label htmlFor="newSubjectName" className="block text-sm font-medium text-gray-700 mb-2">{t('Subject Name')}</label>
                     <input 
                       type="text" 
                       id="newSubjectName" 
@@ -1260,14 +1298,16 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ admin, users, onUpdateU
                               <button 
                                 onClick={() => handleStartEditClass(cls)} 
                                 className={`px-2 py-1 text-xs font-medium ${colors.badge} rounded hover:shadow-md transition-all duration-200`}
+                                title={t('Edit class')}
                               >
-                                ✏️ Edit
+                                ✏️ {t('Edit')}
                               </button>
                               <button 
                                 onClick={() => handleRemoveClass(cls.id)} 
                                 className="px-2 py-1 text-xs font-medium bg-red-100 text-red-800 rounded hover:bg-red-200 transition-colors"
+                                title={t('Delete class')}
                               >
-                                🗑️ Delete
+                                🗑️ {t('Delete')}
                               </button>
                             </div>
                           </div>
@@ -1326,6 +1366,133 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ admin, users, onUpdateU
         )}
 
         {/* Analytics Tab */}
+        {activeTab === 'qbank' && (
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            <div className="lg:col-span-2">
+              <div className={`${colors.card} rounded-xl shadow-lg border ${colors.border} p-6`}>
+                <div className="flex items-center justify-between mb-6">
+                  <h2 className="text-xl font-bold text-gray-800">{t('Question Bank')}</h2>
+                  <span className={`px-3 py-1 text-sm font-medium ${colors.badge} rounded-full`}>
+                    {bank.length} questions
+                  </span>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
+                  <div>
+                    <label className="block text-xs text-gray-600 mb-1">{t('Subject')}</label>
+                    <select value={bankSubjectFilter} onChange={e => setBankSubjectFilter(e.target.value)} className="w-full px-2 py-1 text-xs border border-gray-300 rounded">
+                      <option value="">All</option>
+                      {allSubjects.map(s => (<option key={s.id} value={s.name}>{s.name}</option>))}
+                    </select>
+                  </div>
+                  <div className="sm:col-span-2">
+                    <label className="block text-xs text-gray-600 mb-1">{t('Tag')}</label>
+                    <input type="text" value={bankTagFilter} onChange={e => setBankTagFilter(e.target.value)} placeholder="Filter by tag" className="w-full px-2 py-1 text-xs border border-gray-300 rounded" />
+                  </div>
+                </div>
+                <div className="flex gap-2 mb-4">
+                  <button onClick={() => {
+                    const filtered = bank.filter(q => !bankSubjectFilter || q.subject === bankSubjectFilter).filter(q => !bankTagFilter || (Array.isArray(q.tags) && q.tags.some((t: string) => t.includes(bankTagFilter))))
+                    const rows: string[][] = [['id','subject','difficulty','tags','question','options']]
+                    filtered.forEach(q => rows.push([q.id, q.subject || '', q.difficulty || 'medium', Array.isArray(q.tags) ? q.tags.join('|') : '', q.question, Array.isArray(q.options) ? q.options.join('|') : '']))
+                    const csv = rows.map(r => r.join(',')).join('\n')
+                    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+                    const url = URL.createObjectURL(blob)
+                    const a = document.createElement('a'); a.href = url; a.download = 'question_bank_filtered.csv'; a.click(); URL.revokeObjectURL(url)
+                  }} className={`px-3 py-2 text-xs rounded ${colors.lightText} ${colors.lightHover}`}>{t('Export CSV')}</button>
+                  <button onClick={() => {
+                    const rows: string[][] = [['id','subject','difficulty','tags','question','options']]
+                    bank.filter(q => selectedQIds.includes(q.id)).forEach(q => rows.push([q.id, q.subject || '', q.difficulty || 'medium', Array.isArray(q.tags) ? q.tags.join('|') : '', q.question, Array.isArray(q.options) ? q.options.join('|') : '']))
+                    const csv = rows.map(r => r.join(',')).join('\n')
+                    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+                    const url = URL.createObjectURL(blob)
+                    const a = document.createElement('a'); a.href = url; a.download = 'question_bank_selected.csv'; a.click(); URL.revokeObjectURL(url)
+                  }} className={`px-3 py-2 text-xs rounded ${colors.lightText} ${colors.lightHover}`}>{t('Export Selected')}</button>
+                  <button onClick={() => setShowDeleteFilteredConfirm(true)} className="px-3 py-2 text-xs rounded bg-red-100 text-red-800" title={t('Delete all filtered questions')}>{t('Delete Filtered')}</button>
+                  {lastDeletedSnapshot.length > 0 && (
+                    <button onClick={async () => { await addQuestionsToBank(lastDeletedSnapshot); const list = await fetchQuestionBank(); setBank(list); setLastDeletedSnapshot([]) }} className="px-3 py-2 text-xs rounded bg-green-100 text-green-800" title={t('Restore last deleted')}>{t('Undo Delete')}</button>
+                  )}
+                  <label className={`px-3 py-2 text-xs rounded ${colors.lightText} ${colors.lightHover} cursor-pointer`}>
+                    {t('Import CSV')}
+                    <input type="file" accept=".csv" className="hidden" onChange={async e => {
+                      const file = e.target.files?.[0]; if (!file) return
+                      const text = await file.text()
+                      const lines = text.split(/\r?\n/).filter(Boolean)
+                      const [header, ...rest] = lines
+                      const idx = (name: string) => header.split(',').indexOf(name)
+                      const toAdd = rest.map(line => {
+                        const cols = line.split(',')
+                        const id = cols[idx('id')] || undefined
+                        const subject = cols[idx('subject')] || 'general'
+                        const difficulty = cols[idx('difficulty')] || 'medium'
+                        const tags = (cols[idx('tags')] || '').split('|').filter(Boolean)
+                        const question = cols[idx('question')] || ''
+                        const options = (cols[idx('options')] || '').split('|').filter(Boolean)
+                        return { id, subject, difficulty, tags, question, options, correctAnswer: options[0] || '' }
+                      })
+                      await addQuestionsToBank(toAdd)
+                      const list = await fetchQuestionBank(); setBank(list)
+                      e.target.value = ''
+                    }} />
+                  </label>
+                </div>
+                <div className="flex flex-wrap gap-2 mb-3">
+                  <button onClick={async () => { await Promise.all(selectedQIds.map(id => deleteQuestionFromBank(id))); setBank(prev => prev.filter(i => !selectedQIds.includes(i.id))); setSelectedQIds([]) }} className="px-3 py-2 text-xs rounded bg-red-100 text-red-800">{t('Delete Selected')}</button>
+                  <button onClick={async () => { const toAdd = bank.filter(q => selectedQIds.includes(q.id)).map(q => ({ subject: q.subject, difficulty: q.difficulty || 'medium', tags: Array.isArray(q.tags) ? q.tags : [], question: q.question, options: Array.isArray(q.options) ? q.options : [], correctAnswer: q.correctAnswer || (Array.isArray(q.options) ? q.options[0] : '') })); if (toAdd.length === 0) return; await addQuestionsToBank(toAdd); const list = await fetchQuestionBank(); setBank(list); setSelectedQIds([]) }} className="px-3 py-2 text-xs rounded bg-blue-100 text-blue-800">{t('Duplicate Selected')}</button>
+                  <button onClick={async () => { const union = Array.from(new Set(selectedQIds.flatMap(id => { const q = bank.find(b => b.id === id); return Array.isArray(q?.tags) ? q!.tags : [] }))); await Promise.all(selectedQIds.map(id => updateQuestionInBank(id, { tags: union }))); setBank(prev => prev.map(q => selectedQIds.includes(q.id) ? { ...q, tags: union } : q)) }} className="px-3 py-2 text-xs rounded bg-yellow-100 text-yellow-800">{t('Merge Tags')}</button>
+                  <select onChange={async e => { const subj = e.target.value; if (!subj) return; await Promise.all(selectedQIds.map(id => updateQuestionInBank(id, { subject: subj }))); setBank(prev => prev.map(q => selectedQIds.includes(q.id) ? { ...q, subject: subj } : q)) }} className="px-3 py-2 text-xs border border-gray-300 rounded"><option value="">{t('Move to Subject')}</option>{allSubjects.map(s => (<option key={s.id} value={s.name}>{s.name}</option>))}</select>
+                  <select onChange={async e => { const val = e.target.value; await Promise.all(selectedQIds.map(id => updateQuestionInBank(id, { difficulty: val }))); setBank(prev => prev.map(q => selectedQIds.includes(q.id) ? { ...q, difficulty: val } : q)) }} className="px-3 py-2 text-xs border border-gray-300 rounded"><option value="">{t('Set Difficulty')}</option><option value="easy">Easy</option><option value="medium">Medium</option><option value="hard">Hard</option></select>
+                  <input type="text" placeholder={t('Add Tag')} className="px-2 py-1 text-xs border border-gray-300 rounded" onKeyDown={async e => { if (e.key === 'Enter') { const tag = (e.target as HTMLInputElement).value.trim(); if (!tag) return; await Promise.all(selectedQIds.map(id => { const q = bank.find(b => b.id === id); const tags = Array.isArray(q?.tags) ? Array.from(new Set([...(q!.tags), tag])) : [tag]; return updateQuestionInBank(id, { tags }) })); setBank(prev => prev.map(q => selectedQIds.includes(q.id) ? { ...q, tags: Array.isArray(q.tags) ? Array.from(new Set([...(q.tags), tag])) : [tag] } : q)); (e.target as HTMLInputElement).value = '' } }} />
+                </div>
+                <div className="max-h-96 overflow-y-auto border-t pt-3">
+                  {bank.filter(q => !bankSubjectFilter || q.subject === bankSubjectFilter).filter(q => !bankTagFilter || (Array.isArray(q.tags) && q.tags.some((t: string) => t.includes(bankTagFilter)))).map(q => (
+                    <div key={q.id} className="text-sm py-3 border-b flex items-start gap-2">
+                      <input type="checkbox" checked={selectedQIds.includes(q.id)} onChange={e => setSelectedQIds(prev => e.target.checked ? [...prev, q.id] : prev.filter(id => id !== q.id))} className="mt-1" />
+                      <p className="font-semibold text-gray-800">{q.question}</p>
+                      <div className="text-xs text-gray-600">Subject: {q.subject} • Difficulty: {q.difficulty || 'medium'} • Tags: {Array.isArray(q.tags) ? q.tags.join(', ') : ''}</div>
+                      <div className="mt-2 flex gap-2">
+                        <button onClick={() => setEditingBankItem(q)} className="px-2 py-1 text-xs rounded bg-blue-100 text-blue-800" title={t('Edit')}>{t('Edit')}</button>
+                        <button onClick={async () => { await deleteQuestionFromBank(q.id); setBank(prev => prev.filter(i => i.id !== q.id)) }} className="px-2 py-1 text-xs rounded bg-red-100 text-red-800" title={t('Remove')}>{t('Remove')}</button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+            <div className="lg:col-span-1">
+              <div className={`${colors.card} rounded-xl shadow-lg border ${colors.border} p-6`}>
+                <h2 className="text-xl font-bold text-gray-800 mb-6">{t('Edit Selected')}</h2>
+                {editingBankItem ? (
+                  <div className="space-y-3">
+                    <input type="text" value={editingBankItem.question} onChange={e => setEditingBankItem({ ...editingBankItem, question: e.target.value })} className="w-full px-3 py-2 text-sm border border-gray-300 rounded" />
+                    <select value={editingBankItem.difficulty || 'medium'} onChange={e => setEditingBankItem({ ...editingBankItem, difficulty: e.target.value })} className="w-full px-3 py-2 text-sm border border-gray-300 rounded">
+                      <option value="easy">Easy</option>
+                      <option value="medium">Medium</option>
+                      <option value="hard">Hard</option>
+                    </select>
+                    <input type="text" value={Array.isArray(editingBankItem.tags) ? editingBankItem.tags.join(',') : ''} onChange={e => setEditingBankItem({ ...editingBankItem, tags: e.target.value.split(',').map((s: string) => s.trim()).filter(Boolean) })} className="w-full px-3 py-2 text-sm border border-gray-300 rounded" />
+                    <button onClick={async () => { await updateQuestionInBank(editingBankItem.id, { question: editingBankItem.question, difficulty: editingBankItem.difficulty, tags: editingBankItem.tags }); const list = await fetchQuestionBank(); setBank(list); }} className={`w-full mt-2 text-white font-bold py-2 rounded ${colors.primary} ${colors.hover}`}>{t('Save')}</button>
+                  </div>
+                ) : (
+                  <p className="text-sm text-gray-600">Select a question to edit.</p>
+                )}
+              </div>
+              <div className={`${colors.card} rounded-xl shadow-lg border ${colors.border} p-6 mt-6`}>
+                <h2 className="text-xl font-bold text-gray-800 mb-6">{t('Tag Presets')}</h2>
+                <div className="space-y-3">
+                  <select value={presetSubject} onChange={e => setPresetSubject(e.target.value)} className="w-full px-3 py-2 text-sm border border-gray-300 rounded">
+                    <option value="">{t('Select Subject')}</option>
+                    {allSubjects.map(s => (<option key={s.id} value={s.name}>{s.name}</option>))}
+                  </select>
+                  <input type="text" value={presetTagsInput} onChange={e => setPresetTagsInput(e.target.value)} placeholder={t('Comma-separated tags')} className="w-full px-3 py-2 text-sm border border-gray-300 rounded" />
+                  <div className="flex gap-2">
+                    <button onClick={async () => { if (!presetSubject) return; const tags = presetTagsInput.split(',').map(s => s.trim()).filter(Boolean); await updateTagPresets(presetSubject, tags); const map = await fetchTagPresets(); setTagPresets(map) }} className={`px-3 py-2 text-sm text-white rounded ${colors.primary} ${colors.hover}`}>{t('Save')}</button>
+                    <button onClick={() => { if (!presetSubject) return; setPresetTagsInput((tagPresets[presetSubject] || []).join(',')) }} className={`px-3 py-2 text-sm rounded ${colors.lightText} ${colors.lightHover}`}>{t('Load')}</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
         {activeTab === 'analytics' && (
           <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
             {/* Key Metrics */}
@@ -1338,7 +1505,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ admin, users, onUpdateU
                     </svg>
                   </div>
                   <h3 className="text-2xl font-bold text-gray-800">{analytics.totalUsers}</h3>
-                  <p className="text-sm text-gray-600">Total Users</p>
+                  <p className="text-sm text-gray-600">{t('Total Users')}</p>
                 </div>
                 
                 <div className={`${colors.card} rounded-xl shadow-lg border ${colors.border} p-6 text-center transform hover:scale-105 transition-transform duration-200`}>
@@ -1349,7 +1516,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ admin, users, onUpdateU
                     </svg>
                   </div>
                   <h3 className="text-2xl font-bold text-teal-600">{analytics.students}</h3>
-                  <p className="text-sm text-gray-600">Students</p>
+                  <p className="text-sm text-gray-600">{t('Students')}</p>
                 </div>
                 
                 <div className={`${colors.card} rounded-xl shadow-lg border ${colors.border} p-6 text-center transform hover:scale-105 transition-transform duration-200`}>
@@ -1359,7 +1526,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ admin, users, onUpdateU
                     </svg>
                   </div>
                   <h3 className="text-2xl font-bold text-indigo-600">{analytics.teachers}</h3>
-                  <p className="text-sm text-gray-600">Teachers</p>
+                  <p className="text-sm text-gray-600">{t('Teachers')}</p>
                 </div>
                 
                 <div className={`${colors.card} rounded-xl shadow-lg border ${colors.border} p-6 text-center transform hover:scale-105 transition-transform duration-200`}>
@@ -1369,7 +1536,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ admin, users, onUpdateU
                     </svg>
                   </div>
                   <h3 className="text-2xl font-bold text-green-600">{analytics.usersWithFace}</h3>
-                  <p className="text-sm text-gray-600">Face ID Users</p>
+                  <p className="text-sm text-gray-600">{t('Face ID Users')}</p>
                 </div>
               </div>
             </div>
@@ -1378,6 +1545,25 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ admin, users, onUpdateU
       </main>
 
       {/* Modals */}
+      {showDeleteFilteredConfirm && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-2xl p-6 w-full max-w-md">
+            <h2 className="text-xl font-bold text-gray-800 mb-3">{t('Delete Filtered Questions')}</h2>
+            <p className="text-sm text-gray-600 mb-4">{t('This will delete all questions currently matching your filters. This action cannot be undone.')}</p>
+            <div className="flex gap-2 justify-end">
+              <button onClick={() => setShowDeleteFilteredConfirm(false)} className={`px-3 py-2 text-sm rounded ${colors.lightText} ${colors.lightHover}`}>{t('Cancel')}</button>
+              <button onClick={async () => {
+                const filtered = bank.filter(q => !bankSubjectFilter || q.subject === bankSubjectFilter).filter(q => !bankTagFilter || (Array.isArray(q.tags) && q.tags.some((t: string) => t.includes(bankTagFilter))))
+                setLastDeletedSnapshot(filtered)
+                await Promise.all(filtered.map(q => deleteQuestionFromBank(q.id)))
+                setBank(prev => prev.filter(q => !filtered.some(f => f.id === q.id)))
+                setSelectedQIds([])
+                setShowDeleteFilteredConfirm(false)
+              }} className="px-3 py-2 text-sm rounded bg-red-600 text-white hover:bg-red-700">{t('Delete')}</button>
+            </div>
+          </div>
+        </div>
+      )}
       {editingUser && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl shadow-2xl p-6 w-full max-w-md transform scale-100 transition-transform">
@@ -1477,7 +1663,33 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ admin, users, onUpdateU
           theme={theme}
           title={`Verify Face Login for ${verifyingForUser.name}`}
           buttonText="Verify"
+          liveness
         />
+      )}
+      {overrideForUser && (
+        <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-2xl p-4 sm:p-8 w-full max-w-md relative">
+            <button onClick={() => setOverrideForUser(null)} className="absolute top-3 right-3 text-gray-400 hover:text-gray-600">&times;</button>
+            <h2 className="text-lg sm:text-xl font-bold text-gray-800 mb-2">Admin Override</h2>
+            <p className="text-gray-600 mb-4 text-sm">Provide a reason for overriding login for {overrideForUser.name}.</p>
+            <textarea value={overrideReason} onChange={e => setOverrideReason(e.target.value)} placeholder="Reason" className={`w-full p-3 text-base border border-gray-300 rounded-md shadow-sm focus:ring-1 ${THEME_COLORS[theme].focus}`} />
+            <button onClick={async () => {
+              setIsOverrideSubmitting(true);
+              try {
+                await adminOverride(admin.id, overrideForUser.id, 'login_override', overrideReason);
+                setVerifyMessage('Override recorded in audit log');
+                setOverrideForUser(null);
+                setOverrideReason('');
+              } catch (e) {
+                setVerifyMessage('Failed to record override');
+              } finally {
+                setIsOverrideSubmitting(false);
+              }
+            }} disabled={isOverrideSubmitting} className={`w-full mt-4 text-white font-bold py-2.5 rounded-lg ${THEME_COLORS[theme].primary} ${THEME_COLORS[theme].hover}`}>
+              {isOverrideSubmitting ? 'Submitting...' : 'Confirm Override'}
+            </button>
+          </div>
+        </div>
       )}
     </div>
   );
