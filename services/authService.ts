@@ -1,12 +1,30 @@
 import type { Coordinates } from '../types'
 
-const BASE_URL = 'http://localhost:3001'
+const BASE_URL = 'http://localhost:5001'
 
-export const verifyFace = async (imageDataUrl: string): Promise<{ authenticated: boolean; confidence: number }> => {
-  const res = await fetch(`${BASE_URL}/api/auth/face`, {
+export const registerFace = async (userId: string, imageDataUrl: string): Promise<{ ok: boolean }> => {
+  const res = await fetch(`${BASE_URL}/face/register`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ image: imageDataUrl })
+    body: JSON.stringify({ user_id: userId, image: imageDataUrl })
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}))
+    throw new Error(err.error || 'Face registration failed')
+  }
+  return res.json()
+}
+
+export const verifyFace = async (
+  imageDataUrl: string,
+  userId?: string
+): Promise<{ authenticated: boolean; confidence?: number; distance?: number }> => {
+  const url = userId ? `${BASE_URL}/face/verify` : `${BASE_URL}/auth/face`
+  const payload = userId ? { image: imageDataUrl, user_id: userId } : { image: imageDataUrl }
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
   })
   if (!res.ok) {
     const err = await res.json().catch(() => ({}))
@@ -20,7 +38,7 @@ export const verifyLocation = async (
   target: Coordinates,
   radiusMeters: number
 ): Promise<{ authenticated: boolean; distance_m: number; radius_m: number }> => {
-  const res = await fetch(`${BASE_URL}/api/auth/location`, {
+  const res = await fetch(`${BASE_URL}/auth/location`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ lat: current.lat, lng: current.lng, target_lat: target.lat, target_lng: target.lng, radius_m: radiusMeters })

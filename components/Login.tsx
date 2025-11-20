@@ -111,7 +111,7 @@ const Login: React.FC<LoginProps> = ({ onLogin, users, onPasswordReset, theme })
     setIsAuthenticating(true);
     setError(null);
     try {
-      const result = await verifyFace(imageDataUrl);
+      const result = await verifyFace(imageDataUrl, selectedUserId);
       const userToLogin = users.find(u => u.id === selectedUserId);
       if (result.authenticated && userToLogin && userToLogin.faceImage) {
         onLogin(userToLogin);

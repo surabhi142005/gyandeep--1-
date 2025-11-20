@@ -5,6 +5,7 @@ import { getCurrentPosition } from '../services/locationService';
 import type { Coordinates } from '../types';
 import Spinner from './Spinner';
 import WebcamCapture from './WebcamCapture';
+import { registerFace, verifyFace } from '../services/authService';
 import { bulkImportUsers } from '../services/dataService';
 
 interface AdminDashboardProps {
@@ -148,6 +149,9 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ admin, users, onUpdateU
   // Face Capture State
   const [capturingForUser, setCapturingForUser] = useState<AnyUser | null>(null);
   const [showFaceRegistration, setShowFaceRegistration] = useState(false);
+  const [verifyingForUser, setVerifyingForUser] = useState<AnyUser | null>(null);
+  const [verifyMessage, setVerifyMessage] = useState<string | null>(null);
+  const [verifySuccess, setVerifySuccess] = useState<boolean | null>(null);
   
   // Subject Management State
   const [newSubjectName, setNewSubjectName] = useState('');
@@ -414,18 +418,49 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ admin, users, onUpdateU
     onUpdateUsers(updatedUsers);
   };
 
-  function handleCaptureForUser(imageDataUrl: string) {
+  async function handleCaptureForUser(imageDataUrl: string) {
     if (!capturingForUser) return;
-    const updatedUsers = users.map(u => u.id === capturingForUser.id ? { ...u, faceImage: imageDataUrl } : u
-    );
+    const updatedUsers = users.map(u => u.id === capturingForUser.id ? { ...u, faceImage: imageDataUrl } : u);
     onUpdateUsers(updatedUsers);
+    try {
+      await registerFace(capturingForUser.id, imageDataUrl);
+    } catch (e) {
+      console.error(e);
+    }
     setCapturingForUser(null);
   }
   
-  const handleAdminFaceRegister = (imageDataUrl: string) => {
+  const handleAdminFaceRegister = async (imageDataUrl: string) => {
     onUpdateFaceImage(admin.id, imageDataUrl);
+    try {
+      await registerFace(admin.id, imageDataUrl);
+    } catch (e) {
+      console.error(e);
+    }
     setShowFaceRegistration(false);
   };
+
+  async function handleVerifyCapture(imageDataUrl: string) {
+    if (!verifyingForUser) return;
+    setVerifyMessage(null);
+    setVerifySuccess(null);
+    try {
+      const res = await verifyFace(imageDataUrl, verifyingForUser.id);
+      if (res.authenticated) {
+        setVerifySuccess(true);
+        setVerifyMessage(`Face login verified for ${verifyingForUser.name}`);
+      } else {
+        setVerifySuccess(false);
+        setVerifyMessage(`Face login failed for ${verifyingForUser.name}`);
+      }
+    } catch (e: any) {
+      setVerifySuccess(false);
+      setVerifyMessage(e.message || 'Verification error');
+    } finally {
+      setVerifyingForUser(null);
+      setTimeout(() => setVerifyMessage(null), 4000);
+    }
+  }
 
   const getRoleBadgeColor = (role: UserRole) => {
     switch(role) {
@@ -960,6 +995,12 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ admin, users, onUpdateU
                   </div>
                 </div>
 
+                {verifyMessage && (
+                  <div className={`mb-4 px-4 py-3 rounded-xl border ${verifySuccess ? 'bg-green-50 border-green-200 text-green-700' : 'bg-red-50 border-red-200 text-red-700'}`}>
+                    <p className="text-sm font-semibold">{verifyMessage}</p>
+                  </div>
+                )}
+
                 <div className="overflow-x-auto">
                   <div className="min-w-full">
                     {filteredUsers.length > 0 ? (
@@ -982,12 +1023,22 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ admin, users, onUpdateU
                               
                               <div className="flex flex-wrap items-center gap-2">
                                 {user.role !== UserRoleEnum.ADMIN && (
-                                  <button 
-                                    onClick={() => setCapturingForUser(user)} 
-                                    className={`px-3 py-1 text-xs font-medium ${colors.badge} rounded-full hover:shadow-md transition-all duration-200`}
-                                  >
-                                    {user.faceImage ? '🔄 Update Face' : '👤 Add Face'}
-                                  </button>
+                                  <>
+                                    <button 
+                                      onClick={() => setCapturingForUser(user)} 
+                                      className={`px-3 py-1 text-xs font-medium ${colors.badge} rounded-full hover:shadow-md transition-all duration-200`}
+                                    >
+                                      {user.faceImage ? '🔄 Update Face' : '👤 Add Face'}
+                                    </button>
+                                    {user.faceImage && (
+                                      <button 
+                                        onClick={() => setVerifyingForUser(user)} 
+                                        className="px-3 py-1 text-xs font-medium bg-green-100 text-green-800 rounded-full hover:bg-green-200 transition-all duration-200"
+                                      >
+                                        🔓 Face Login
+                                      </button>
+                                    )}
+                                  </>
                                 )}
                                 {user.id !== admin.id && (
                                   <>
@@ -1419,6 +1470,17 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ admin, users, onUpdateU
           buttonText="Capture & Save"
         />
       )}
+      {verifyingForUser && (
+        <WebcamCapture
+          onCapture={handleVerifyCapture}
+          onClose={() => setVerifyingForUser(null)}
+          theme={theme}
+          title={`Verify Face Login for ${verifyingForUser.name}`}
+          buttonText="Verify"
+        />
+      )}
     </div>
   );
 };
+
+export default AdminDashboard;
