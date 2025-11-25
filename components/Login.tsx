@@ -262,7 +262,7 @@ const Login: React.FC<LoginProps> = ({ onLogin, users, onPasswordReset, theme })
                     <div className="border-l h-4 mx-3"></div>
                     <button onClick={() => setLoginMethod('password')} className={`${loginMethod === 'password' ? colors.text : 'text-gray-500'}`} aria-label="Use password login">{t('Password')}</button>
                     <div className="border-l h-4 mx-3"></div>
-                    <button onClick={() => setLoginMethod('otp' as any)} className={`${loginMethod === 'otp' ? colors.text : 'text-gray-500'}`} aria-label="Use OTP login">{t('OTP')}</button>
+                    <button onClick={() => setLoginMethod('password')} className={`${loginMethod === 'password' ? colors.text : 'text-gray-500'}`} aria-label="Use password login">{t('Password')}</button>
                 </div>
             )}
 
@@ -296,7 +296,7 @@ const Login: React.FC<LoginProps> = ({ onLogin, users, onPasswordReset, theme })
                 </form>
             ) : (
                 <div className="space-y-4">
-                  {loginMethod === 'otp' ? (
+                  {loginMethod === 'faceId' ? (
                     <div className="space-y-4">
                       <div>
                         <label htmlFor="user-id-otp" className="block text-sm font-medium text-gray-700 mb-1">{t('Enter Your User ID')}</label>
@@ -306,7 +306,7 @@ const Login: React.FC<LoginProps> = ({ onLogin, users, onPasswordReset, theme })
                         <button onClick={async () => {
                           setError(null);
                           if (!selectedUserId) { setError('Enter your User ID'); return; }
-                          setIsOtpSending(true);
+                          setIsLoggingIn(true);
                           try {
                             const user = users.find(u => u.id === selectedUserId);
                             if (!user) { setError('User not found'); return; }
@@ -315,17 +315,19 @@ const Login: React.FC<LoginProps> = ({ onLogin, users, onPasswordReset, theme })
                           } catch (e: any) {
                             setError(e.message || 'Failed to send OTP');
                           } finally {
-                            setIsOtpSending(false);
+                            setIsLoggingIn(false);
                           }
-                        }} className={`flex-1 text-white font-bold py-3 rounded-lg transition-colors duration-300 ${colors.primary} ${colors.hover}`} aria-label="Send OTP" disabled={isOtpSending}>{isOtpSending ? <Spinner /> : t('Send OTP')}</button>
-                        <input type="text" value={otpCode} onChange={e => setOtpCode(e.target.value)} placeholder="6-digit code" maxLength={6} className={`flex-1 p-3 text-base border border-gray-300 rounded-md shadow-sm focus:ring-1 ${colors.ring} ${colors.border}`} aria-label="Enter OTP code" />
+                        }} className={`flex-1 text-white font-bold py-3 rounded-lg transition-colors duration-300 ${colors.primary} ${colors.hover}`} aria-label="Send OTP" disabled={isLoggingIn}>{isLoggingIn ? <Spinner /> : t('Send OTP')}</button>
+                        <input type="text" value={verificationCode} onChange={e => setVerificationCode(e.target.value)} placeholder="6-digit code" maxLength={6} className={`flex-1 p-3 text-base border border-gray-300 rounded-md shadow-sm focus:ring-1 ${colors.ring} ${colors.border}`} aria-label="Enter OTP code" />
+
+
                         <button onClick={async () => {
                           setError(null);
-                          if (!selectedUserId || otpCode.length !== 6) { setError('Enter a valid 6-digit code'); return; }
-                          setIsOtpVerifying(true);
+                          if (!selectedUserId || verificationCode.length !== 6) { setError('Enter a valid 6-digit code'); return; }
+                          setIsAuthenticating(true);
                           try {
                             const { verifyOtp } = await import('../services/dataService');
-                            const res = await verifyOtp(selectedUserId, otpCode);
+                            const res = await verifyOtp(selectedUserId, verificationCode);
                             if (res.ok) {
                               const user = users.find(u => u.id === selectedUserId);
                               if (user) onLogin(user);
@@ -333,9 +335,9 @@ const Login: React.FC<LoginProps> = ({ onLogin, users, onPasswordReset, theme })
                           } catch (e: any) {
                             setError(e.message || 'Failed to verify OTP');
                           } finally {
-                            setIsOtpVerifying(false);
+                            setIsAuthenticating(false);
                           }
-                        }} className={`flex-1 text-white font-bold py-3 rounded-lg transition-colors duration-300 ${colors.primary} ${colors.hover}`} aria-label="Verify OTP" disabled={isOtpVerifying}>{isOtpVerifying ? <Spinner /> : t('Verify')}</button>
+                        }} className={`flex-1 text-white font-bold py-3 rounded-lg transition-colors duration-300 ${colors.primary} ${colors.hover}`} aria-label="Verify OTP" disabled={isAuthenticating}>{isAuthenticating ? <Spinner /> : t('Verify')}</button>
                       </div>
                     </div>
                   ) : (
