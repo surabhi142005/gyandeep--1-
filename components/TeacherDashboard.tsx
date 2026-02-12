@@ -63,7 +63,9 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ teacher, students, 
     URL.revokeObjectURL(url);
   };
   const [tagPresets, setTagPresets] = useState<Record<string, string[]>>({});
+  const [notesText, setNotesText] = useState(classSession.notes || '');
   useEffect(() => { fetchTagPresets().then(setTagPresets).catch(() => {}) }, []);
+  useEffect(() => setNotesText(classSession.notes || ''), [classSession.notes]);
   const fallbackPresets: Record<string, string[]> = {
     Mathematics: ['algebra','geometry','trigonometry','calculus','practice'],
     Science: ['physics','chemistry','biology','lab','experiment'],
@@ -558,7 +560,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ teacher, students, 
                       <h2 className="text-xl font-semibold text-gray-700">{t('Class Notes & Quiz')}</h2>
                       <div className="flex items-center space-x-2 group relative">
                           <label htmlFor="thinking-mode" className="text-sm font-medium text-gray-600 cursor-pointer">{t('Thinking Mode')}</label>
-                          <button 
+                          <button
                               onClick={() => setQuizThinkingMode(!quizThinkingMode)}
                               id="thinking-mode"
                               role="switch"
@@ -574,7 +576,66 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ teacher, students, 
                           </div>
                       </div>
                   </div>
-                  <input type="file" accept=".txt,.md" onChange={handleNotesUpload} disabled={isUploading || isGeneratingQuiz} className={`block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:${colors.lightBg} file:${colors.lightText} ${colors.lightHover}`}/>
+                  <div className="mb-4">
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Class Notes</label>
+                      <textarea
+                          value={notesText}
+                          onChange={(e) => setNotesText(e.target.value)}
+                          placeholder="Type class notes here..."
+                          rows={4}
+                          className="w-full p-2 border border-gray-300 rounded-md shadow-sm"
+                      />
+                      <div className="flex gap-2 mt-2">
+                          <button onClick={async () => {
+                              onUpdateSession({ notes: notesText });
+                              try {
+                                  await uploadClassNotes({ classId: teacher.id, subjectId: classSession.subject, content: notesText });
+                                  setSuccessMessage(`Notes saved.`);
+                              } catch (e) {
+                                  setError('Failed to upload notes');
+                              }
+                          }} className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">
+                              Save Notes
+                          </button>
+                          <button onClick={async () => {
+                              if (!notesText.trim()) {
+                                  setError("Please enter notes first.");
+                                  return;
+                              }
+                              setIsGeneratingQuiz(true);
+                              clearMessages();
+                              try {
+                                  const quiz = await generateQuizFromNotes({
+                                      notesText,
+                                      subject: classSession.subject,
+                                      enableThinkingMode: quizThinkingMode
+                                  });
+                                  try {
+                                      const bank = await fetchQuestionBank();
+                                      const extras = (Array.isArray(bank) ? bank : [])
+                                          .filter(q => (q.subject || '') === classSession.subject)
+                                          .slice(0, Math.max(0, 5 - quiz.length))
+                                          .map(q => ({ id: q.id, question: q.question, options: q.options, correctAnswer: q.correctAnswer }));
+                                      const combined = quiz.concat(extras);
+                                      onUpdateSession({ quiz: combined });
+                                  } catch {
+                                      onUpdateSession({ quiz });
+                                  }
+                                  setSuccessMessage("Quiz is ready for your review.");
+                              } catch (err: any) {
+                                  setError(err instanceof Error ? err.message : String(err));
+                              } finally {
+                                  setIsGeneratingQuiz(false);
+                              }
+                          }} disabled={isGeneratingQuiz} className="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 disabled:opacity-50">
+                              Generate Quiz
+                          </button>
+                      </div>
+                  </div>
+                  <div className="mb-4">
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Or Upload Notes File</label>
+                      <input type="file" accept=".txt,.md" onChange={handleNotesUpload} disabled={isUploading || isGeneratingQuiz} className={`block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:${colors.lightBg} file:${colors.lightText} ${colors.lightHover}`}/>
+                  </div>
                   {(isUploading || isGeneratingQuiz) && (<div className="mt-4 flex items-center text-gray-600"><Spinner size="w-5 h-5" color={colors.text} /><span className="ml-2">{isUploading ? "Reading..." : `Generating quiz${quizThinkingMode ? ' with Thinking Mode...' : '...'}`}</span></div>)}
               </div>
             )}

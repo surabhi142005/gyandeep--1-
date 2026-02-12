@@ -1,0 +1,17 @@
+version: '3.8'
+
+services:
+  gyandeep:
+    build: .
+    ports:
+      - "3000:3000"
+      - "5001:5001"
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+    volumes:
+      - ./server/data:/app/server/data
+      - ./server/storage:/app/server/storage
+      - ./python/data:/app/python/data
+    restart: unless-stopped

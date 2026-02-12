@@ -1,10 +1,8 @@
 import type { Coordinates } from '../types'
 
-const host = typeof window !== 'undefined' && window.location?.hostname
-  ? (window.location.hostname === 'localhost' ? '127.0.0.1' : window.location.hostname)
-  : '127.0.0.1'
-const protocol = typeof window !== 'undefined' && window.location?.protocol ? window.location.protocol : 'http:'
-const BASE_URL = `${protocol}//${host}:5001`
+const BASE_URL = typeof window !== 'undefined' && window.location
+  ? `${window.location.protocol}//${window.location.host}/api`
+  : 'http://localhost:3000/api'
 
 export const registerFace = async (userId: string, imageDataUrl: string): Promise<{ ok: boolean }> => {
   const res = await fetch(`${BASE_URL}/face/register`, {
@@ -23,9 +21,8 @@ export const verifyFace = async (
   imageDataUrl: string,
   userId?: string
 ): Promise<{ authenticated: boolean; confidence?: number; distance?: number }> => {
-  const url = userId ? `${BASE_URL}/face/verify` : `${BASE_URL}/auth/face`
   const payload = userId ? { image: imageDataUrl, user_id: userId } : { image: imageDataUrl }
-  const res = await fetch(url, {
+  const res = await fetch(`${BASE_URL}/auth/face`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload)

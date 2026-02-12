@@ -21,7 +21,25 @@ export interface User {
   role: UserRole;
   faceImage: string | null; // Stores base64 image data for face recognition
   email?: string;
+  googleId?: string;
   password?: string;
+  preferences?: UserPreferences;
+  history?: UserHistory[];
+}
+
+export interface UserPreferences {
+  theme?: string;
+  highContrast?: boolean;
+  fontScale?: number;
+  language?: string;
+  notifications?: boolean;
+}
+
+export interface UserHistory {
+  id: string;
+  type: 'quiz' | 'attendance' | 'view';
+  details: string;
+  timestamp: string;
 }
 
 export interface Student extends User {
@@ -62,8 +80,8 @@ export interface QuizQuestion {
 }
 
 export interface Coordinates {
-    lat: number;
-    lng: number;
+  lat: number;
+  lng: number;
 }
 
 export interface ClassSession {

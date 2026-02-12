@@ -5,6 +5,7 @@ import { getCurrentPosition } from '../services/locationService';
 import type { Coordinates } from '../types';
 import Spinner from './Spinner';
 import WebcamCapture from './WebcamCapture';
+import AdminFaceViewer from './AdminFaceViewer';
 import { adminOverride } from '../services/dataService';
 import { registerFace, verifyFace } from '../services/authService';
 import { bulkImportUsers } from '../services/dataService';
@@ -152,6 +153,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ admin, users, onUpdateU
   // Face Capture State
   const [capturingForUser, setCapturingForUser] = useState<AnyUser | null>(null);
   const [showFaceRegistration, setShowFaceRegistration] = useState(false);
+  const [showFaceViewer, setShowFaceViewer] = useState(false);
   const [verifyingForUser, setVerifyingForUser] = useState<AnyUser | null>(null);
   const [overrideForUser, setOverrideForUser] = useState<AnyUser | null>(null);
   const [overrideReason, setOverrideReason] = useState('');
@@ -326,19 +328,17 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ admin, users, onUpdateU
       return;
     }
 
-    if (newUserRole === UserRoleEnum.TEACHER || newUserRole === UserRoleEnum.ADMIN) {
-        if (!trimmedEmail || !trimmedPassword) {
-            setAddUserError("Email and Password are required for this role.");
-            return;
-        }
-        if (trimmedPassword.length < 6) {
-            setAddUserError("Password must be at least 6 characters long.");
-            return;
-        }
-        if (users.some(u => u.email?.toLowerCase() === trimmedEmail.toLowerCase())) {
-            setAddUserError("An account with this email already exists.");
-            return;
-        }
+    if (!trimmedEmail || !trimmedPassword) {
+        setAddUserError("Email and Password are required.");
+        return;
+    }
+    if (trimmedPassword.length < 6) {
+        setAddUserError("Password must be at least 6 characters long.");
+        return;
+    }
+    if (users.some(u => u.email?.toLowerCase() === trimmedEmail.toLowerCase())) {
+        setAddUserError("An account with this email already exists.");
+        return;
     }
   
     // ID prefix validation
@@ -687,6 +687,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ admin, users, onUpdateU
               { id: 'users', label: 'Users', icon: '👥', desc: 'Manage users' },
               { id: 'subjects', label: 'Subjects', icon: '📚', desc: 'Subject management' },
               { id: 'classes', label: 'Classes', icon: '🏫', desc: 'Class organization' },
+              { id: 'faces', label: 'Faces', icon: '📷', desc: 'Registered faces' },
               { id: 'analytics', label: 'Analytics', icon: '📊', desc: 'Data insights' },
               { id: 'qbank', label: t('Question Bank'), icon: '❓', desc: t('Manage questions') }
             ].map(tab => (
@@ -911,34 +912,30 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ admin, users, onUpdateU
                       <option value={UserRoleEnum.ADMIN}>👨‍💼 Administrator</option>
                     </select>
                   </div>
-                  {(newUserRole === UserRoleEnum.TEACHER || newUserRole === UserRoleEnum.ADMIN) && (
-                    <>
-                      <div>
-                        <label htmlFor="newUserEmail" className="block text-sm font-bold text-gray-700 mb-3">Email Address</label>
-                        <input 
-                          type="email" 
-                          id="newUserEmail" 
-                          value={newUserEmail} 
-                          onChange={e => setNewUserEmail(e.target.value)} 
-                          className={`w-full px-5 py-4 border-2 ${colors.border} rounded-xl focus:outline-none ${colors.focus} transition-all duration-200 text-lg font-medium shadow-sm hover:shadow-md`} 
-                          placeholder="user@example.com" 
-                          required 
-                        />
-                      </div>
-                      <div>
-                        <label htmlFor="newUserPassword" className="block text-sm font-bold text-gray-700 mb-3">Password</label>
-                        <input 
-                          type="password" 
-                          id="newUserPassword" 
-                          value={newUserPassword} 
-                          onChange={e => setNewUserPassword(e.target.value)} 
-                          className={`w-full px-5 py-4 border-2 ${colors.border} rounded-xl focus:outline-none ${colors.focus} transition-all duration-200 text-lg font-medium shadow-sm hover:shadow-md`} 
-                          placeholder="Min. 6 characters" 
-                          required 
-                        />
-                      </div>
-                    </>
-                  )}
+                  <div>
+                    <label htmlFor="newUserEmail" className="block text-sm font-bold text-gray-700 mb-3">Email Address</label>
+                    <input
+                      type="email"
+                      id="newUserEmail"
+                      value={newUserEmail}
+                      onChange={e => setNewUserEmail(e.target.value)}
+                      className={`w-full px-5 py-4 border-2 ${colors.border} rounded-xl focus:outline-none ${colors.focus} transition-all duration-200 text-lg font-medium shadow-sm hover:shadow-md`}
+                      placeholder="user@example.com"
+                      required={newUserRole === UserRoleEnum.TEACHER || newUserRole === UserRoleEnum.ADMIN}
+                    />
+                  </div>
+                  <div>
+                    <label htmlFor="newUserPassword" className="block text-sm font-bold text-gray-700 mb-3">Password</label>
+                    <input
+                      type="password"
+                      id="newUserPassword"
+                      value={newUserPassword}
+                      onChange={e => setNewUserPassword(e.target.value)}
+                      className={`w-full px-5 py-4 border-2 ${colors.border} rounded-xl focus:outline-none ${colors.focus} transition-all duration-200 text-lg font-medium shadow-sm hover:shadow-md`}
+                      placeholder="Min. 6 characters"
+                      required={newUserRole === UserRoleEnum.TEACHER || newUserRole === UserRoleEnum.ADMIN}
+                    />
+                  </div>
                   {newUserRole === UserRoleEnum.TEACHER && (
                     <div className="md:col-span-2 lg:col-span-3">
                       <label className="block text-sm font-bold text-gray-700 mb-3">Assigned Subjects</label>
@@ -1365,6 +1362,24 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ admin, users, onUpdateU
           </div>
         )}
 
+        {/* Faces Tab */}
+        {activeTab === 'faces' && (
+          <div>
+            <div className={`${colors.card} rounded-2xl shadow-xl border ${colors.border} p-8`}>
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-2xl font-bold text-gray-800">Registered Student Faces</h2>
+                <button
+                  onClick={() => setShowFaceViewer(true)}
+                  className={`text-white font-bold py-3 px-6 rounded-lg transition ${colors.primary} ${colors.hover} flex items-center gap-2 shadow-lg`}
+                >
+                  📷 View & Manage Faces
+                </button>
+              </div>
+              <p className="text-gray-600">Manage all registered student faces for authentication purposes.</p>
+            </div>
+          </div>
+        )}
+
         {/* Analytics Tab */}
         {activeTab === 'qbank' && (
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -1691,6 +1706,9 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ admin, users, onUpdateU
           </div>
         </div>
       )}
+
+      {/* Face Viewer Modal */}
+      {showFaceViewer && <AdminFaceViewer onClose={() => setShowFaceViewer(false)} />}
     </div>
   );
 };

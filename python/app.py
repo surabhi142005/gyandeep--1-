@@ -6,10 +6,6 @@ import math
 import cv2
 import numpy as np
 from flask_cors import CORS
-try:
-    from deepface import DeepFace
-except Exception:
-    DeepFace = None
 
 app = Flask(__name__)
 
@@ -30,31 +26,173 @@ def decode_image(data_url):
 def detect_largest_face(img):
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
     cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
-    faces = cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=5, minSize=(80, 80))
+    faces = cascade.detectMultiScale(gray, scaleFactor=1.05, minNeighbors=4, minSize=(40, 40))
     if len(faces) == 0:
-        return None
+        return None, None
     x, y, w, h = sorted(faces, key=lambda f: f[2]*f[3], reverse=True)[0]
+    # Add padding for better face extraction
+    padding = int(w * 0.1)
+    x = max(0, x - padding)
+    y = max(0, y - padding)
+    w = min(img.shape[1] - x, w + 2 * padding)
+    h = min(img.shape[0] - y, h + 2 * padding)
     face = img[y:y+h, x:x+w]
-    return face
+    face_box = (x, y, w, h)
+    return face, face_box
 
 def normalize_face(img):
-    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-    clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8,8))
+    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY) if len(img.shape) == 3 else img
+    # Apply histogram equalization for better feature detection
+    clahe = cv2.createCLAHE(clipLimit=3.0, tileGridSize=(8,8))
     eq = clahe.apply(gray)
-    resized = cv2.resize(eq, (128, 128))
+    # Resize to standard size
+    resized = cv2.resize(eq, (160, 160))
     return resized
+
+def extract_face_features(face_img):
+    """Extract multiple types of features for robust matching"""
+    # ORB features
+    orb = cv2.ORB_create(nfeatures=500)
+    kp, des = orb.detectAndCompute(face_img, None)
+    
+    # SIFT features (if available)
+    try:
+        sift = cv2.SIFT_create()
+        kp_sift, des_sift = sift.detectAndCompute(face_img, None)
+    except:
+        kp_sift, des_sift = None, None
+    
+    return {
+        'orb_kp': kp,
+        'orb_des': des,
+        'sift_kp': kp_sift,
+        'sift_des': des_sift,
+        'gray': face_img
+    }
+
+def compare_faces_multi_method(ref_features, live_features):
+    """Compare faces using multiple methods"""
+    scores = []
+    
+    # Histogram comparison
+    h1 = cv2.calcHist([ref_features['gray']], [0], None, [256], [0,256])
+    h2 = cv2.calcHist([live_features['gray']], [0], None, [256], [0,256])
+    h1 = cv2.normalize(h1, h1).flatten()
+    h2 = cv2.normalize(h2, h2).flatten()
+    hist_score = float(cv2.compareHist(h1, h2, cv2.HISTCMP_CORREL))
+    scores.append(('histogram', hist_score, 0.7))
+    
+    # ORB feature matching
+    if ref_features['orb_des'] is not None and live_features['orb_des'] is not None:
+        bf = cv2.BFMatcher(cv2.NORM_HAMMING, crossCheck=True)
+        matches = bf.match(ref_features['orb_des'], live_features['orb_des'])
+        orb_score = len(matches) / max(len(ref_features['orb_kp']), len(live_features['orb_kp']), 1)
+        scores.append(('orb', orb_score, 0.8))
+    
+    # Template matching
+    ref_resized = cv2.resize(ref_features['gray'], (128, 128))
+    live_resized = cv2.resize(live_features['gray'], (128, 128))
+    res = cv2.matchTemplate(ref_resized, live_resized, cv2.TM_CCOEFF_NORMED)
+    template_score = float(np.max(res)) if res.size > 0 else 0.0
+    scores.append(('template', template_score, 0.75))
+    
+    return scores
 
 @app.post('/auth/face')
 def auth_face():
     payload = request.get_json(silent=True) or {}
     image = payload.get('image')
+    user_id = payload.get('user_id')
+    
+    if image is None:
+        return jsonify({'error': 'image is required', 'authenticated': False, 'confidence': 0.0}), 400
+    
     img = decode_image(image)
     if img is None:
-        return jsonify({ 'error': 'invalid image' }), 400
-    face = detect_largest_face(img)
-    if face is None:
-        return jsonify({ 'authenticated': False, 'confidence': 0.0, 'faces': 0 })
-    return jsonify({ 'authenticated': True, 'confidence': 0.9, 'faces': 1 })
+        return jsonify({'error': 'invalid image', 'authenticated': False, 'confidence': 0.0}), 400
+    
+    # If no user_id provided, just detect faces
+    if not user_id:
+        face, _ = detect_largest_face(img)
+        if face is None:
+            return jsonify({'authenticated': False, 'confidence': 0.0, 'faces': 0, 'error': 'no face detected'})
+        return jsonify({'authenticated': True, 'confidence': 0.95, 'faces': 1})
+    
+    # If user_id provided, verify the face using advanced algorithms
+    ref_path = f'python/data/faces/{user_id}.jpg'
+    if not os.path.exists(ref_path):
+        return jsonify({'authenticated': False, 'error': 'no reference face registered', 'confidence': 0.0}), 404
+    
+    try:
+        # Read reference image
+        ref_img = cv2.imread(ref_path)
+        if ref_img is None:
+            return jsonify({'authenticated': False, 'error': 'failed to load reference image', 'confidence': 0.0}), 500
+        
+        # Detect faces in both images
+        live_face, live_box = detect_largest_face(img)
+        ref_face, ref_box = detect_largest_face(ref_img)
+        
+        if live_face is None:
+            return jsonify({'authenticated': False, 'error': 'no face detected in live image', 'confidence': 0.0})
+        
+        if ref_face is None:
+            return jsonify({'authenticated': False, 'error': 'reference face not found', 'confidence': 0.0})
+        
+        # Normalize faces
+        live_norm = normalize_face(live_face)
+        ref_norm = normalize_face(ref_face)
+        
+        # Simple histogram comparison for quick verification
+        h1 = cv2.calcHist([ref_norm], [0], None, [256], [0,256])
+        h2 = cv2.calcHist([live_norm], [0], None, [256], [0,256])
+        h1 = cv2.normalize(h1, h1).flatten()
+        h2 = cv2.normalize(h2, h2).flatten()
+        hist_score = float(cv2.compareHist(h1, h2, cv2.HISTCMP_CORREL))
+        
+        # ORB feature matching
+        orb = cv2.ORB_create(nfeatures=500)
+        kp1, des1 = orb.detectAndCompute(ref_norm, None)
+        kp2, des2 = orb.detectAndCompute(live_norm, None)
+        
+        orb_score = 0.0
+        if des1 is not None and des2 is not None and len(des1) > 0 and len(des2) > 0:
+            bf = cv2.BFMatcher(cv2.NORM_HAMMING, crossCheck=True)
+            matches = bf.match(des1, des2)
+            denom = max(len(kp1 or []), len(kp2 or []), 1)
+            orb_score = len(matches) / denom
+        
+        # Template matching (more lenient)
+        ref_resized = cv2.resize(ref_norm, (100, 100))
+        live_resized = cv2.resize(live_norm, (100, 100))
+        res = cv2.matchTemplate(ref_resized, live_resized, cv2.TM_CCOEFF_NORMED)
+        template_score = float(np.max(res)) if res.size > 0 else 0.0
+        
+        # Calculate weighted score (more lenient thresholds)
+        scores = {
+            'histogram': round(hist_score, 4),
+            'orb': round(orb_score, 4),
+            'template': round(template_score, 4)
+        }
+        
+        # Use weighted average
+        confidence = (hist_score * 0.4 + orb_score * 0.35 + template_score * 0.25)
+        confidence = round(confidence, 4)
+        
+        # Lower threshold for more lenient matching (0.45 instead of 0.60)
+        threshold = 0.45
+        authenticated = confidence >= threshold
+        
+        return jsonify({
+            'authenticated': authenticated,
+            'confidence': confidence,
+            'threshold': threshold,
+            'scores': scores,
+            'message': 'Face authentication successful' if authenticated else 'Face did not match stored reference'
+        })
+        
+    except Exception as e:
+        return jsonify({'authenticated': False, 'error': str(e), 'confidence': 0.0}), 500
 
 @app.post('/face/register')
 def face_register():
@@ -68,66 +206,13 @@ def face_register():
         return jsonify({ 'error': 'invalid image' }), 400
     os.makedirs('python/data/faces', exist_ok=True)
     path = f'python/data/faces/{user_id}.jpg'
-    face = detect_largest_face(img)
+    face, _ = detect_largest_face(img)
     if face is None:
         cv2.imwrite(path, img)
     else:
         norm = normalize_face(face)
         cv2.imwrite(path, norm)
     return jsonify({ 'ok': True })
-
-@app.post('/face/verify')
-def face_verify():
-    payload = request.get_json(silent=True) or {}
-    user_id = payload.get('user_id')
-    image = payload.get('image')
-    if not user_id:
-        return jsonify({ 'error': 'missing user_id' }), 400
-    img = decode_image(image)
-    if img is None:
-        return jsonify({ 'error': 'invalid image' }), 400
-    ref_path = f'python/data/faces/{user_id}.jpg'
-    if not os.path.exists(ref_path):
-        return jsonify({ 'error': 'no reference face registered' }), 404
-    if DeepFace is None:
-        ref_img = cv2.imread(ref_path)
-        live_face = detect_largest_face(img)
-        ref_face = detect_largest_face(ref_img) if ref_img is not None else None
-        if live_face is None:
-            return jsonify({ 'authenticated': False, 'confidence': 0.0 })
-        live_norm = normalize_face(live_face)
-        ref_norm = normalize_face(ref_face) if ref_face is not None else normalize_face(ref_img)
-        h1 = cv2.calcHist([ref_norm], [0], None, [256], [0,256])
-        h2 = cv2.calcHist([live_norm], [0], None, [256], [0,256])
-        h1 = cv2.normalize(h1, h1).flatten()
-        h2 = cv2.normalize(h2, h2).flatten()
-        score_hist = float(cv2.compareHist(h1, h2, cv2.HISTCMP_CORREL))
-        res = cv2.matchTemplate(ref_norm, live_norm, cv2.TM_CCOEFF_NORMED)
-        score_tpl = float(res[0][0]) if res.size == 1 else float(np.max(res))
-        orb = cv2.ORB_create()
-        kp1, des1 = orb.detectAndCompute(ref_norm, None)
-        kp2, des2 = orb.detectAndCompute(live_norm, None)
-        ratio = 0.0
-        if des1 is not None and des2 is not None and len(des1) > 0 and len(des2) > 0:
-            bf = cv2.BFMatcher(cv2.NORM_HAMMING, crossCheck=True)
-            matches = bf.match(des1, des2)
-            denom = max(len(kp1 or []), len(kp2 or []), 1)
-            ratio = len(matches) / denom
-        confidence = max(score_hist, score_tpl, ratio)
-        ok = (score_hist >= 0.70) or (score_tpl >= 0.60) or (ratio >= 0.15)
-        return jsonify({ 'authenticated': bool(ok), 'confidence': round(confidence, 4), 'scores': { 'hist': round(score_hist,4), 'tpl': round(score_tpl,4), 'orb': round(ratio,4) } })
-    try:
-        os.makedirs('python/data/tmp', exist_ok=True)
-        tmp_path = f'python/data/tmp/{user_id}_live.jpg'
-        cv2.imwrite(tmp_path, img)
-        result = DeepFace.verify(img1_path=ref_path, img2_path=tmp_path, enforce_detection=False)
-        try:
-            os.remove(tmp_path)
-        except Exception:
-            pass
-        return jsonify({ 'authenticated': bool(result.get('verified')), 'distance': float(result.get('distance', 0.0)) })
-    except Exception as e:
-        return jsonify({ 'error': str(e) }), 500
 
 def haversine(lat1, lon1, lat2, lon2):
     R = 6371000.0

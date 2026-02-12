@@ -1,0 +1,120 @@
+import sqlite3 from 'sqlite3'
+import path from 'path'
+import fs from 'fs'
+
+const dbPath = path.join(process.cwd(), 'server', 'data', 'gyandeep.db')
+const dataDir = path.join(process.cwd(), 'server', 'data')
+
+const ensureDataDir = () => {
+    if (!fs.existsSync(dataDir)) {
+        fs.mkdirSync(dataDir, { recursive: true })
+    }
+}
+
+let db
+
+export const initDB = () => {
+    ensureDataDir()
+    return new Promise((resolve, reject) => {
+        db = new sqlite3.Database(dbPath, (err) => {
+            if (err) return reject(err)
+            console.log('Connected to SQLite database.')
+            resolve(db)
+        })
+    })
+}
+
+export const getDB = () => {
+    if (!db) throw new Error('Database not initialized')
+    return db
+}
+
+export const run = (sql, params = []) => {
+    return new Promise((resolve, reject) => {
+        getDB().run(sql, params, function (err) {
+            if (err) return reject(err)
+            resolve({ id: this.lastID, changes: this.changes })
+        })
+    })
+}
+
+export const get = (sql, params = []) => {
+    return new Promise((resolve, reject) => {
+        getDB().get(sql, params, (err, row) => {
+            if (err) return reject(err)
+            resolve(row)
+        })
+    })
+}
+
+export const all = (sql, params = []) => {
+    return new Promise((resolve, reject) => {
+        getDB().all(sql, params, (err, rows) => {
+            if (err) return reject(err)
+            resolve(rows)
+        })
+    })
+}
+
+export const setupSchema = async () => {
+    try {
+        // Users Table
+        await run(`CREATE TABLE IF NOT EXISTS users (
+            id TEXT PRIMARY KEY,
+            name TEXT,
+            email TEXT,
+            role TEXT,
+            password TEXT,
+            googleId TEXT,
+            faceImage TEXT,
+            preferences TEXT, 
+            history TEXT,
+            assignedSubjects TEXT,
+            performance TEXT,
+            classId TEXT
+        )`)
+
+        // OTP Table
+        await run(`CREATE TABLE IF NOT EXISTS otp (
+            userId TEXT,
+            code TEXT,
+            expires INTEGER
+        )`)
+
+        // Audit Log Table
+        await run(`CREATE TABLE IF NOT EXISTS audit_logs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            ts INTEGER,
+            type TEXT,
+            userId TEXT,
+            details TEXT
+        )`)
+
+        // Classes Table
+        await run(`CREATE TABLE IF NOT EXISTS classes (
+            id TEXT PRIMARY KEY,
+            name TEXT
+        )`)
+
+        // Question Bank Table
+        await run(`CREATE TABLE IF NOT EXISTS question_bank (
+            id TEXT PRIMARY KEY,
+            question TEXT,
+            options TEXT,
+            correctAnswer TEXT,
+            tags TEXT,
+            difficulty TEXT,
+            subject TEXT
+        )`)
+
+        // Tags Presets Table
+        await run(`CREATE TABLE IF NOT EXISTS tags_presets (
+            subject TEXT PRIMARY KEY,
+            tags TEXT
+        )`)
+
+        console.log('Database schema synced.')
+    } catch (err) {
+        console.error('Error setting up schema:', err)
+    }
+}

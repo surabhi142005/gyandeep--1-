@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import type { Student, ClassSession, HistoricalSessionRecord } from '../types';
 import WebcamCapture from './WebcamCapture';
+import StudentFaceRegistration from './StudentFaceRegistration';
 import { getCurrentPosition, calculateDistance } from '../services/locationService';
 import { verifyFace, verifyLocation } from '../services/authService';
 import Spinner from './Spinner';
@@ -226,6 +227,17 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ student, classSessi
             </div>
 
             <div className="bg-white p-6 rounded-lg shadow-md">
+              <h2 className="text-xl font-semibold text-gray-700 mb-4">Face Registration</h2>
+              <p className="text-gray-600 mb-4">Register your face to enable face-based authentication for attendance.</p>
+              <button
+                onClick={() => setShowFaceRegistration(true)}
+                className={`w-full text-white font-bold py-3 px-6 rounded-lg transition-colors duration-300 ${colors.primary} ${colors.hover}`}
+              >
+                📷 Register Face
+              </button>
+            </div>
+
+            <div className="bg-white p-6 rounded-lg shadow-md">
               <h2 className="text-xl font-semibold text-gray-700 mb-4">Class Notes (Current Session)</h2>
               {classSession.notes ? (
                 <div className="prose max-w-none max-h-80 overflow-y-auto bg-gray-50 p-4 rounded-md">
@@ -318,12 +330,13 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ student, classSessi
       </div>
       {showWebcam && <WebcamCapture onCapture={handleCapture} onClose={() => setShowWebcam(false)} theme={theme} title="Face Verification" buttonText="Verify Identity" />}
       {showFaceRegistration && (
-        <WebcamCapture
-          onCapture={handleFaceRegister}
+        <StudentFaceRegistration
+          userId={student.id}
+          onSuccess={() => {
+            setShowFaceRegistration(false);
+            onShowNotification('Face registered successfully!', 'success');
+          }}
           onClose={() => setShowFaceRegistration(false)}
-          theme={theme}
-          title={student.faceImage ? "Update Face ID" : "Register Face ID"}
-          buttonText="Capture & Save"
         />
       )}
     </>
