@@ -11,6 +11,7 @@ import { setLocale, t } from './services/i18n';
 import AdminSetup from './components/AdminSetup';
 import Spinner from './components/Spinner'; // Import Spinner for Suspense fallback
 import UserProfile from './components/UserProfile';
+import Background3D from './components/Background3D';
 
 // Lazy load dashboard components
 const TeacherDashboard = lazy(() => import('./components/TeacherDashboard'));
@@ -329,6 +330,7 @@ const App: React.FC = () => {
 
     return (
         <>
+            <Background3D />
             {notification && (
                 <ToastNotification
                     message={notification.message}
