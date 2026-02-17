@@ -38,10 +38,13 @@ const Login: React.FC<LoginProps> = ({ onLogin, users, theme }) => {
   const [isLoggingIn, setIsLoggingIn] = useState(false);
 
   // Forgot Password State
-  const [showForgotPassword, setShowForgotPassword] = useState(false);
-  const [resetEmail, setResetEmail] = useState('');
-  const [isResetting, setIsResetting] = useState(false);
-  const [resetMessage, setResetMessage] = useState<string | null>(null);
+  const [forgotPasswordStep, setForgotPasswordStep] = useState<'enterEmail' | 'enterCode' | 'resetPassword' | null>(null);
+  const [forgotPasswordEmail, setForgotPasswordEmail] = useState('');
+  const [verificationCode, setVerificationCode] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmNewPassword, setConfirmNewPassword] = useState('');
+  const [modalMessage, setModalMessage] = useState<{type: 'error' | 'success', text: string} | null>(null);
+  const [isModalLoading, setIsModalLoading] = useState(false);
 
   // General State
   const [error, setError] = useState<string | null>(null);
@@ -49,35 +52,9 @@ const Login: React.FC<LoginProps> = ({ onLogin, users, theme }) => {
 
   const colors = useMemo(() => THEME_COLORS[theme] || THEME_COLORS.indigo, [theme]);
 
-  const handleForgotPassword = async () => {
-    if (!resetEmail.trim()) {
-      setResetMessage('Please enter your email address.');
-      return;
-    }
-
-    if (!validateEmail(resetEmail)) {
-      setResetMessage('Please enter a valid email address.');
-      return;
-    }
-
-    setIsResetting(true);
-    setResetMessage(null);
-
-    try {
-      // Simulate API call delay
-      await new Promise(resolve => setTimeout(resolve, 2000));
-
-      // In a real app, this would send a reset email
-      // For demo purposes, we'll just show a success message
-      setResetMessage('Password reset instructions have been sent to your email. Please check your inbox.');
-      
-      // Clear the form
-      setResetEmail('');
-    } catch (err) {
-      setResetMessage('Failed to send reset email. Please try again.');
-    } finally {
-      setIsResetting(false);
-    }
+  const handleForgotPasswordStart = () => {
+    setForgotPasswordStep('enterEmail');
+    setModalMessage(null);
   };
 
   const handleEmailChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -297,14 +274,11 @@ const Login: React.FC<LoginProps> = ({ onLogin, users, theme }) => {
                     'Login'
                   )}
                 </button>
-                <div className="text-center mt-4">
-                  <button
-                    onClick={() => setShowForgotPassword(true)}
-                    className={`text-sm ${colors.text} hover:underline`}
-                  >
-                    Forgot Password?
-                  </button>
-                </div>
+              <div className="text-center mt-4">
+                <button onClick={handleForgotPasswordStart} className={`text-sm ${colors.text} hover:underline`}>
+                  Forgot Password?
+                </button>
+              </div>
               </div>
             )}
           </div>
@@ -312,49 +286,40 @@ const Login: React.FC<LoginProps> = ({ onLogin, users, theme }) => {
       </div>
       {showWebcam && <WebcamCapture onCapture={handleFaceCapture} onClose={() => setShowWebcam(false)} theme={theme} title="Face Verification" buttonText="Verify Identity" liveness />}
 
-      {/* Forgot Password Modal */}
-      {showForgotPassword && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-2xl p-6 w-full max-w-md">
-            <h2 className="text-xl font-bold text-gray-800 mb-4">Reset Password</h2>
-            <p className="text-sm text-gray-600 mb-4">Enter your email address and we'll send you instructions to reset your password.</p>
-            <div className="space-y-4">
-              <div>
-                <label htmlFor="reset-email" className="block text-sm font-medium text-gray-700 mb-1">Email Address</label>
-                <input
-                  id="reset-email"
-                  type="email"
-                  value={resetEmail}
-                  onChange={(e) => setResetEmail(e.target.value)}
-                  placeholder="your@email.com"
-                  className="w-full p-3 text-base border border-gray-300 rounded-md shadow-sm focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
-                />
-              </div>
-              {resetMessage && (
-                <div className={`p-3 rounded-md text-sm ${resetMessage.includes('sent') ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>
-                  {resetMessage}
+      {forgotPasswordStep && (
+        <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-2xl p-6 w-full max-w-md relative">
+            <button onClick={() => { setForgotPasswordStep(null); setForgotPasswordEmail(''); setVerificationCode(''); setNewPassword(''); setConfirmNewPassword(''); setModalMessage(null); }} className="absolute top-3 right-3 text-gray-400 hover:text-gray-600 disabled:opacity-50" disabled={isModalLoading}>&times;</button>
+            {forgotPasswordStep === 'enterEmail' && (
+              <form onSubmit={async (e) => { e.preventDefault(); setModalMessage(null); if (!validateEmail(forgotPasswordEmail)) { setModalMessage({ type: 'error', text: 'Please enter a valid email address' }); return; } setIsModalLoading(true); try { const { requestPasswordReset } = await import('../services/dataService'); await requestPasswordReset(forgotPasswordEmail); setModalMessage({ type: 'success', text: 'A verification code has been sent to your email.' }); setForgotPasswordStep('enterCode'); } catch (err: any) { setModalMessage({ type: 'error', text: err.message || 'Failed to request reset' }); } finally { setIsModalLoading(false); } }}>
+                <h2 className="text-xl font-bold text-gray-800 mb-2">Reset Password</h2>
+                <p className="text-gray-600 mb-4 text-sm">Enter your account email to receive a verification code.</p>
+                {modalMessage && <p className={`mb-4 text-sm p-2 rounded-md ${modalMessage.type === 'error' ? 'bg-red-50 text-red-600' : 'bg-green-50 text-green-600'}`}>{modalMessage.text}</p>}
+                <input type="email" value={forgotPasswordEmail} onChange={e => setForgotPasswordEmail(e.target.value)} required placeholder="Email Address" disabled={isModalLoading} className={`w-full p-3 text-base border rounded-md mb-4 focus:ring-1 ${colors.ring} ${colors.border} disabled:bg-gray-100 ${!validateEmail(forgotPasswordEmail) && forgotPasswordEmail ? 'border-red-500' : 'border-gray-300'}`} />
+                <button type="submit" disabled={isModalLoading || !validateEmail(forgotPasswordEmail)} className={`w-full text-white font-bold py-2.5 rounded-lg ${colors.primary} ${colors.hover} flex items-center justify-center disabled:opacity-50`}>{isModalLoading ? <Spinner /> : 'Send Code'}</button>
+              </form>
+            )}
+            {forgotPasswordStep === 'enterCode' && (
+              <form onSubmit={async (e) => { e.preventDefault(); setModalMessage(null); if (!verificationCode || verificationCode.length !== 6) { setModalMessage({ type: 'error', text: 'Enter a valid 6-digit code.' }); return; } setIsModalLoading(true); try { const { verifyPasswordReset } = await import('../services/dataService'); await verifyPasswordReset(forgotPasswordEmail, verificationCode); setForgotPasswordStep('resetPassword'); } catch (err: any) { setModalMessage({ type: 'error', text: err.message || 'Failed to verify code' }); } finally { setIsModalLoading(false); } }}>
+                <h2 className="text-xl font-bold text-gray-800 mb-2">Enter Code</h2>
+                <p className="text-gray-600 mb-4 text-sm">A 6-digit code was sent to {forgotPasswordEmail}.</p>
+                {modalMessage && <p className={`mb-4 text-sm p-2 rounded-md ${modalMessage.type === 'error' ? 'bg-red-50 text-red-600' : 'bg-green-50 text-green-600'}`}>{modalMessage.text}</p>}
+                <input type="text" value={verificationCode} onChange={e => setVerificationCode(e.target.value)} required placeholder="6-digit code" maxLength={6} disabled={isModalLoading} className={`w-full p-3 text-base border border-gray-300 rounded-md mb-4 tracking-widest text-center focus:ring-1 ${colors.ring} ${colors.border} disabled:bg-gray-100`} />
+                <button type="submit" disabled={isModalLoading} className={`w-full text-white font-bold py-2.5 rounded-lg ${colors.primary} ${colors.hover} flex items-center justify-center disabled:opacity-50`}>{isModalLoading ? <Spinner /> : 'Verify Code'}</button>
+              </form>
+            )}
+            {forgotPasswordStep === 'resetPassword' && (
+              <form onSubmit={async (e) => { e.preventDefault(); setModalMessage(null); if (newPassword.length < 6) { setModalMessage({ type: 'error', text: 'Password must be at least 6 characters.' }); return; } if (newPassword !== confirmNewPassword) { setModalMessage({ type: 'error', text: 'Passwords do not match.' }); return; } setIsModalLoading(true); try { const { completePasswordReset } = await import('../services/dataService'); await completePasswordReset(forgotPasswordEmail, newPassword); setModalMessage({ type: 'success', text: 'Password updated. You can now log in.' }); setTimeout(() => { setForgotPasswordStep(null); setForgotPasswordEmail(''); setVerificationCode(''); setNewPassword(''); setConfirmNewPassword(''); setModalMessage(null); }, 1000); } catch (err: any) { setModalMessage({ type: 'error', text: err.message || 'Failed to reset password' }); } finally { setIsModalLoading(false); } }}>
+                <h2 className="text-xl font-bold text-gray-800 mb-2">Set New Password</h2>
+                <p className="text-gray-600 mb-4 text-sm">Create a new, strong password.</p>
+                {modalMessage && <p className={`mb-4 text-sm p-2 rounded-md ${modalMessage.type === 'error' ? 'bg-red-50 text-red-600' : 'bg-green-50 text-green-600'}`}>{modalMessage.text}</p>}
+                <div className="space-y-3">
+                  <input type="password" value={newPassword} onChange={e => setNewPassword(e.target.value)} required placeholder="New Password" disabled={isModalLoading} className={`w-full p-3 text-base border border-gray-300 rounded-md focus:ring-1 ${colors.ring} ${colors.border} disabled:bg-gray-100`} />
+                  <input type="password" value={confirmNewPassword} onChange={e => setConfirmNewPassword(e.target.value)} required placeholder="Confirm New Password" disabled={isModalLoading} className={`w-full p-3 text-base border border-gray-300 rounded-md focus:ring-1 ${colors.ring} ${colors.border} disabled:bg-gray-100`} />
                 </div>
-              )}
-              <div className="flex gap-2">
-                <button
-                  onClick={() => {
-                    setShowForgotPassword(false);
-                    setResetEmail('');
-                    setResetMessage(null);
-                  }}
-                  className="flex-1 px-4 py-2 text-sm font-medium bg-gray-200 hover:bg-gray-300 rounded-lg transition-colors"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleForgotPassword}
-                  disabled={isResetting}
-                  className={`flex-1 px-4 py-2 text-sm font-medium text-white rounded-lg transition-colors ${colors.primary} ${colors.hover} disabled:opacity-50`}
-                >
-                  {isResetting ? 'Sending...' : 'Send Reset Email'}
-                </button>
-              </div>
-            </div>
+                <button type="submit" disabled={isModalLoading} className={`w-full mt-4 text-white font-bold py-2.5 rounded-lg ${colors.primary} ${colors.hover} flex items-center justify-center disabled:opacity-50`}>{isModalLoading ? <Spinner /> : 'Save New Password'}</button>
+              </form>
+            )}
           </div>
         </div>
       )}

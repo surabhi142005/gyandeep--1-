@@ -516,6 +516,60 @@ app.post('/api/auth/otp/verify', (req, res) => {
   }
 })
 
+// --- Password Recovery ---
+const resetStore = new Map()
+app.post('/api/auth/password/request', (req, res) => {
+  try {
+    const { email } = req.body || {}
+    if (!email) return res.status(400).json({ error: 'email is required' })
+    const users = fs.existsSync(usersFile) ? JSON.parse(fs.readFileSync(usersFile, 'utf8') || '[]') : []
+    const exists = users.some(u => (u.email || '').toLowerCase() === String(email).toLowerCase())
+    if (!exists) return res.status(404).json({ error: 'No account with that email' })
+    const code = String(Math.floor(100000 + Math.random() * 900000))
+    const expires = Date.now() + 10 * 60 * 1000
+    resetStore.set(String(email).toLowerCase(), { code, expires })
+    console.log(`Password reset code for ${email}: ${code}`)
+    return res.json({ ok: true, expires })
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown error'
+    return res.status(500).json({ error: message })
+  }
+})
+
+app.post('/api/auth/password/verify', (req, res) => {
+  try {
+    const { email, code } = req.body || {}
+    if (!email || !code) return res.status(400).json({ error: 'email and code are required' })
+    const rec = resetStore.get(String(email).toLowerCase())
+    const ok = !!rec && rec.code === String(code) && rec.expires > Date.now()
+    if (!ok) return res.status(401).json({ error: 'invalid or expired code' })
+    return res.json({ ok: true })
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown error'
+    return res.status(500).json({ error: message })
+  }
+})
+
+app.post('/api/auth/password/complete', (req, res) => {
+  try {
+    const { email, newPassword } = req.body || {}
+    if (!email || !newPassword) return res.status(400).json({ error: 'email and newPassword are required' })
+    const rec = resetStore.get(String(email).toLowerCase())
+    if (!rec || rec.expires <= Date.now()) return res.status(401).json({ error: 'invalid or expired code' })
+    if (!fs.existsSync(usersFile)) return res.status(404).json({ error: 'No users' })
+    const users = JSON.parse(fs.readFileSync(usersFile, 'utf8') || '[]')
+    const idx = users.findIndex(u => (u.email || '').toLowerCase() === String(email).toLowerCase())
+    if (idx === -1) return res.status(404).json({ error: 'User not found' })
+    users[idx].password = String(newPassword)
+    fs.writeFileSync(usersFile, JSON.stringify(users, null, 2))
+    resetStore.delete(String(email).toLowerCase())
+    return res.json({ ok: true })
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown error'
+    return res.status(500).json({ error: message })
+  }
+})
+
 // --- Admin Override with Audit ---
 app.post('/api/admin/override', (req, res) => {
   try {

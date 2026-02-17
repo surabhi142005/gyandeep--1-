@@ -19,6 +19,9 @@ const QuizView: React.FC<QuizViewProps> = ({ quiz, subject, onSubmit, theme }) =
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [submitted, setSubmitted] = useState(false);
   const [score, setScore] = useState(0);
+  const [startTs] = useState<number>(Date.now());
+  const totalTime = quiz.length * 20;
+  const [timeLeft, setTimeLeft] = useState<number>(totalTime);
   
   const colors = useMemo(() => THEME_COLORS[theme] || THEME_COLORS.indigo, [theme]);
 
@@ -29,11 +32,11 @@ const QuizView: React.FC<QuizViewProps> = ({ quiz, subject, onSubmit, theme }) =
   const handleSubmit = () => {
     let correctAnswers = 0;
     quiz.forEach(q => {
-      if (answers[q.id] === q.correctAnswer) {
-        correctAnswers++;
-      }
+      if (answers[q.id] === q.correctAnswer) correctAnswers++;
     });
     const finalScore = Math.round((correctAnswers / quiz.length) * 100);
+    const elapsed = Math.max(0, Math.floor((Date.now() - startTs) / 1000));
+    const bonus = Math.max(0, Math.min(totalTime - elapsed, totalTime));
     setScore(finalScore);
     setSubmitted(true);
     onSubmit(finalScore);
@@ -59,6 +62,10 @@ const QuizView: React.FC<QuizViewProps> = ({ quiz, subject, onSubmit, theme }) =
         <p className="text-lg text-gray-600 mb-4">Subject: {subject}</p>
         <p className={`text-4xl font-bold ${colors.text}`}>{score}%</p>
         <p className="text-gray-500 mt-2">Your performance has been recorded.</p>
+        <div className="mt-4 text-sm text-gray-600">Max streak: {quiz.reduce((max, _, i) => {
+          const run = quiz.slice(i).reduce((r, q, idx) => r + (answers[q.id] === q.correctAnswer ? 1 : 0) * (idx === r ? 1 : 0), 0);
+          return Math.max(max, run);
+        }, 0)}</div>
         <div className="mt-6">
           <h3 className="text-xl font-semibold mb-4 text-left">Review Your Answers:</h3>
           {quiz.map((q) => (
@@ -80,7 +87,10 @@ const QuizView: React.FC<QuizViewProps> = ({ quiz, subject, onSubmit, theme }) =
 
   return (
     <div className="bg-white p-6 rounded-lg shadow-md">
-      <h2 className="text-2xl font-bold text-gray-800 mb-4">Quiz Time: {subject}</h2>
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="text-2xl font-bold text-gray-800">Quiz Time: {subject}</h2>
+        <div className="text-sm font-semibold text-gray-700">Time Left: {timeLeft}s</div>
+      </div>
       {quiz.map((q, index) => (
         <div key={q.id} className="mb-6">
           <p className="font-semibold text-gray-700 mb-2">{index + 1}. {q.question}</p>
@@ -113,3 +123,11 @@ const QuizView: React.FC<QuizViewProps> = ({ quiz, subject, onSubmit, theme }) =
 };
 
 export default QuizView;
+  React.useEffect(() => {
+    if (submitted) return;
+    const id = setInterval(() => {
+      const elapsed = Math.floor((Date.now() - startTs) / 1000);
+      setTimeLeft(Math.max(0, totalTime - elapsed));
+    }, 500);
+    return () => clearInterval(id);
+  }, [submitted, startTs, totalTime]);

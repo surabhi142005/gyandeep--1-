@@ -46,6 +46,9 @@ export interface Student extends User {
   role: UserRole.STUDENT;
   performance: PerformanceData[];
   classId?: string;
+  xp?: number;
+  badges?: string[];
+  coins?: number;
 }
 
 export interface Teacher extends User {

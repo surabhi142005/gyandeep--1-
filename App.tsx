@@ -226,7 +226,11 @@ const App: React.FC = () => {
         setAllUsers(prevUsers => prevUsers.map(user => {
             if (user.id === studentId && user.role === UserRoleEnum.STUDENT) {
                 const student = user as Student;
-                return { ...student, performance: [...student.performance, newPerformance] };
+                const xpGain = Math.max(1, Math.round(score));
+                const badges = Array.isArray(student.badges) ? [...student.badges] : [];
+                if (score === 100 && !badges.includes('Perfect 5')) badges.push('Perfect 5');
+                if (score >= 80 && !badges.includes('High Score')) badges.push('High Score');
+                return { ...student, performance: [...student.performance, newPerformance], xp: (student.xp || 0) + xpGain, badges };
             }
             return user;
         }));

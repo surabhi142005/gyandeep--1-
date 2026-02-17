@@ -149,6 +149,34 @@ export const verifyOtp = async (userId: string, code: string) => {
   return res.json()
 }
 
+// Password Recovery
+export const requestPasswordReset = async (email: string) => {
+  const res = await fetch(`${API_BASE_URL}/api/auth/password/request`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email }) })
+  if (!res.ok) {
+    const j = await res.json().catch(() => ({}))
+    throw new Error(j.error || 'Failed to request password reset')
+  }
+  return res.json()
+}
+
+export const verifyPasswordReset = async (email: string, code: string) => {
+  const res = await fetch(`${API_BASE_URL}/api/auth/password/verify`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email, code }) })
+  if (!res.ok) {
+    const j = await res.json().catch(() => ({}))
+    throw new Error(j.error || 'Failed to verify reset code')
+  }
+  return res.json()
+}
+
+export const completePasswordReset = async (email: string, newPassword: string) => {
+  const res = await fetch(`${API_BASE_URL}/api/auth/password/complete`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email, newPassword }) })
+  if (!res.ok) {
+    const j = await res.json().catch(() => ({}))
+    throw new Error(j.error || 'Failed to complete password reset')
+  }
+  return res.json()
+}
+
 // Admin override audit
 export const adminOverride = async (adminId: string, userId: string, action: string, reason?: string) => {
   const res = await fetch(`${API_BASE_URL}/api/admin/override`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ adminId, userId, action, reason }) })
