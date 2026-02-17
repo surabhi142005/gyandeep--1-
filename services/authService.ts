@@ -1,8 +1,6 @@
 import type { Coordinates } from '../types'
 
-const BASE_URL = typeof window !== 'undefined' && window.location
-  ? `${window.location.protocol}//${window.location.host}/api`
-  : 'http://localhost:3000/api'
+const BASE_URL = 'http://localhost:3000/api'
 
 export const registerFace = async (userId: string, imageDataUrl: string): Promise<{ ok: boolean }> => {
   const res = await fetch(`${BASE_URL}/face/register`, {

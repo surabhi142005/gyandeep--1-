@@ -1,5 +1,7 @@
+const API_BASE_URL = 'http://localhost:3000'
+
 export const bulkImportUsers = async (users: any[]) => {
-  const res = await fetch('/api/users/bulk', {
+  const res = await fetch(`${API_BASE_URL}/api/users/bulk`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(users)
@@ -12,7 +14,7 @@ export const bulkImportUsers = async (users: any[]) => {
 }
 
 export const fetchUsers = async () => {
-  const res = await fetch('/api/users')
+  const res = await fetch(`${API_BASE_URL}/api/users`)
   if (!res.ok) {
     const j = await res.json().catch(() => ({}))
     throw new Error(j.error || 'Failed to fetch users')
@@ -21,7 +23,7 @@ export const fetchUsers = async () => {
 }
 
 export const uploadClassNotes = async (params: { classId: string; subjectId: string; content: string }) => {
-  const res = await fetch('/api/notes/upload', {
+  const res = await fetch(`${API_BASE_URL}/api/notes/upload`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(params)
@@ -34,7 +36,7 @@ export const uploadClassNotes = async (params: { classId: string; subjectId: str
 }
 
 export const listClassNotes = async (params: { classId: string; subjectId: string }) => {
-  const url = `/api/notes/list?classId=${encodeURIComponent(params.classId)}&subjectId=${encodeURIComponent(params.subjectId)}`
+  const url = `${API_BASE_URL}/api/notes/list?classId=${encodeURIComponent(params.classId)}&subjectId=${encodeURIComponent(params.subjectId)}`
   const res = await fetch(url)
   if (!res.ok) {
     const j = await res.json().catch(() => ({}))
@@ -44,7 +46,7 @@ export const listClassNotes = async (params: { classId: string; subjectId: strin
 }
 
 export const fetchClasses = async () => {
-  const res = await fetch('/api/classes')
+  const res = await fetch(`${API_BASE_URL}/api/classes`)
   if (!res.ok) {
     const j = await res.json().catch(() => ({}))
     throw new Error(j.error || 'Failed to fetch classes')
@@ -53,7 +55,7 @@ export const fetchClasses = async () => {
 }
 
 export const saveClasses = async (classes: any[]) => {
-  const res = await fetch('/api/classes', {
+  const res = await fetch(`${API_BASE_URL}/api/classes`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(classes)
@@ -66,7 +68,7 @@ export const saveClasses = async (classes: any[]) => {
 }
 
 export const assignStudentToClass = async (studentId: string, classId: string | null) => {
-  const res = await fetch('/api/classes/assign', {
+  const res = await fetch(`${API_BASE_URL}/api/classes/assign`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ studentId, classId })
@@ -80,7 +82,7 @@ export const assignStudentToClass = async (studentId: string, classId: string | 
 
 // Question Bank
 export const fetchQuestionBank = async () => {
-  const res = await fetch('/api/question-bank')
+  const res = await fetch(`${API_BASE_URL}/api/question-bank`)
   if (!res.ok) {
     const j = await res.json().catch(() => ({}))
     throw new Error(j.error || 'Failed to fetch question bank')
@@ -89,7 +91,7 @@ export const fetchQuestionBank = async () => {
 }
 
 export const addQuestionsToBank = async (questions: any[]) => {
-  const res = await fetch('/api/question-bank/add', {
+  const res = await fetch(`${API_BASE_URL}/api/question-bank/add`, {
     method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ questions })
   })
   if (!res.ok) {
@@ -100,7 +102,7 @@ export const addQuestionsToBank = async (questions: any[]) => {
 }
 
 export const upsertQuizToBank = async (quiz: any[], subject: string) => {
-  const res = await fetch('/api/question-bank/upsert-quiz', {
+  const res = await fetch(`${API_BASE_URL}/api/question-bank/upsert-quiz`, {
     method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ quiz, subject })
   })
   if (!res.ok) {
@@ -111,7 +113,7 @@ export const upsertQuizToBank = async (quiz: any[], subject: string) => {
 }
 
 export const updateQuestionInBank = async (id: string, patch: any) => {
-  const res = await fetch('/api/question-bank/update', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, patch }) })
+  const res = await fetch(`${API_BASE_URL}/api/question-bank/update`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, patch }) })
   if (!res.ok) {
     const j = await res.json().catch(() => ({}))
     throw new Error(j.error || 'Failed to update question')
@@ -120,7 +122,7 @@ export const updateQuestionInBank = async (id: string, patch: any) => {
 }
 
 export const deleteQuestionFromBank = async (id: string) => {
-  const res = await fetch(`/api/question-bank/${id}`, { method: 'DELETE' })
+  const res = await fetch(`${API_BASE_URL}/api/question-bank/${id}`, { method: 'DELETE' })
   if (!res.ok) {
     const j = await res.json().catch(() => ({}))
     throw new Error(j.error || 'Failed to delete question')
@@ -130,7 +132,7 @@ export const deleteQuestionFromBank = async (id: string) => {
 
 // OTP MFA
 export const sendOtp = async (userId: string) => {
-  const res = await fetch('/api/auth/otp/send', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ userId }) })
+  const res = await fetch(`${API_BASE_URL}/api/auth/otp/send`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ userId }) })
   if (!res.ok) {
     const j = await res.json().catch(() => ({}))
     throw new Error(j.error || 'Failed to send OTP')
@@ -139,7 +141,7 @@ export const sendOtp = async (userId: string) => {
 }
 
 export const verifyOtp = async (userId: string, code: string) => {
-  const res = await fetch('/api/auth/otp/verify', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ userId, code }) })
+  const res = await fetch(`${API_BASE_URL}/api/auth/otp/verify`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ userId, code }) })
   if (!res.ok) {
     const j = await res.json().catch(() => ({}))
     throw new Error(j.error || 'Failed to verify OTP')
@@ -149,7 +151,7 @@ export const verifyOtp = async (userId: string, code: string) => {
 
 // Admin override audit
 export const adminOverride = async (adminId: string, userId: string, action: string, reason?: string) => {
-  const res = await fetch('/api/admin/override', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ adminId, userId, action, reason }) })
+  const res = await fetch(`${API_BASE_URL}/api/admin/override`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ adminId, userId, action, reason }) })
   if (!res.ok) {
     const j = await res.json().catch(() => ({}))
     throw new Error(j.error || 'Failed to record override')
@@ -159,7 +161,7 @@ export const adminOverride = async (adminId: string, userId: string, action: str
 
 // Integrations stubs
 export const syncCalendar = async (title: string, start: string, end: string) => {
-  const res = await fetch('/api/integrations/calendar/sync', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title, start, end }) })
+  const res = await fetch(`${API_BASE_URL}/api/integrations/calendar/sync`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title, start, end }) })
   if (!res.ok) {
     const j = await res.json().catch(() => ({}))
     throw new Error(j.error || 'Calendar sync failed')
@@ -168,7 +170,7 @@ export const syncCalendar = async (title: string, start: string, end: string) =>
 }
 
 export const uploadToDrive = async (name: string, url: string) => {
-  const res = await fetch('/api/integrations/drive/upload', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name, url }) })
+  const res = await fetch(`${API_BASE_URL}/api/integrations/drive/upload`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name, url }) })
   if (!res.ok) {
     const j = await res.json().catch(() => ({}))
     throw new Error(j.error || 'Drive upload failed')
@@ -178,7 +180,7 @@ export const uploadToDrive = async (name: string, url: string) => {
 
 // Tag presets
 export const fetchTagPresets = async () => {
-  const res = await fetch('/api/tags-presets')
+  const res = await fetch(`${API_BASE_URL}/api/tags-presets`)
   if (!res.ok) {
     const j = await res.json().catch(() => ({}))
     throw new Error(j.error || 'Failed to fetch tag presets')
@@ -187,7 +189,7 @@ export const fetchTagPresets = async () => {
 }
 
 export const updateTagPresets = async (subject: string, tags: string[]) => {
-  const res = await fetch('/api/tags-presets/update', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ subject, tags }) })
+  const res = await fetch(`${API_BASE_URL}/api/tags-presets/update`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ subject, tags }) })
   if (!res.ok) {
     const j = await res.json().catch(() => ({}))
     throw new Error(j.error || 'Failed to update tag presets')
