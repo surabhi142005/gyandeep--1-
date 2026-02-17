@@ -390,7 +390,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ teacher, students, 
 
   return (
     <>
-      <div className="min-h-screen bg-gray-50">
+      <div className="min-h-screen">
         <header className="bg-white shadow-md p-4 flex justify-between items-center">
           <div>
             <h1 className={`text-2xl font-bold ${colors.text}`}>Teacher Dashboard</h1>

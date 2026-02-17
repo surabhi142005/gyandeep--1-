@@ -174,7 +174,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ admin, users, onUpdateU
   const [editedClassName, setEditedClassName] = useState('');
 
   // UI State
-  const [activeTab, setActiveTab] = useState<'users' | 'subjects' | 'classes' | 'analytics' | 'qbank'>('users');
+  const [activeTab, setActiveTab] = useState<'users' | 'subjects' | 'classes' | 'analytics' | 'qbank' | 'registration' | 'faces'>('users');
   const [bank, setBank] = useState<any[]>([]);
   const [bankSubjectFilter, setBankSubjectFilter] = useState<string>('');
   const [bankTagFilter, setBankTagFilter] = useState<string>('');
@@ -322,6 +322,9 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ admin, users, onUpdateU
     const trimmedName = newUserName.trim();
     const trimmedEmail = newUserEmail.trim();
     const trimmedPassword = newUserPassword.trim();
+
+    // Auto-set role to STUDENT for registration tab
+    const userRole = activeTab === 'registration' ? UserRoleEnum.STUDENT : newUserRole;
   
     if (!trimmedName || !trimmedId) {
       setAddUserError("Name and User ID cannot be empty.");
@@ -342,11 +345,11 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ admin, users, onUpdateU
     }
   
     // ID prefix validation
-    if (newUserRole === UserRoleEnum.STUDENT && !trimmedId.startsWith('s')) {
+    if (userRole === UserRoleEnum.STUDENT && !trimmedId.startsWith('s')) {
       setAddUserError("Invalid Student ID. Must start with 's'.");
       return;
     }
-    if (newUserRole === UserRoleEnum.TEACHER && !trimmedId.startsWith('t')) {
+    if (userRole === UserRoleEnum.TEACHER && !trimmedId.startsWith('t')) {
       setAddUserError("Invalid Teacher ID. Must start with 't'.");
       return;
     }
@@ -370,9 +373,9 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ admin, users, onUpdateU
     const baseNewUser = { id: trimmedId, name: trimmedName, faceImage: null };
     
     let newUser: AnyUser;
-    if (newUserRole === UserRoleEnum.STUDENT) {
-      newUser = { ...baseNewUser, role: UserRoleEnum.STUDENT, performance: [] };
-    } else if (newUserRole === UserRoleEnum.TEACHER) {
+    if (userRole === UserRoleEnum.STUDENT) {
+      newUser = { ...baseNewUser, role: UserRoleEnum.STUDENT, email: trimmedEmail, password: trimmedPassword, performance: [] };
+    } else if (userRole === UserRoleEnum.TEACHER) {
       newUser = { ...baseNewUser, role: UserRoleEnum.TEACHER, email: trimmedEmail, password: trimmedPassword, assignedSubjects: newUserAssignedSubjects };
     } else { // Admin
       newUser = { ...baseNewUser, role: UserRoleEnum.ADMIN, email: trimmedEmail, password: trimmedPassword };
@@ -634,7 +637,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ admin, users, onUpdateU
   };
 
   return (
-    <div className={`min-h-screen bg-gradient-to-br from-slate-50 to-blue-50 ${colors.shadow}`}>
+    <div className={`min-h-screen ${colors.shadow}`}>
       {/* Modern Header */}
       <header className={`${colors.gradient} shadow-2xl backdrop-blur-lg border-b border-white/20`}>
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -685,6 +688,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ admin, users, onUpdateU
           <nav className="flex space-x-1">
             {[
               { id: 'users', label: 'Users', icon: '👥', desc: 'Manage users' },
+              { id: 'registration', label: 'Student Registration', icon: '📝', desc: 'Register new students' },
               { id: 'subjects', label: 'Subjects', icon: '📚', desc: 'Subject management' },
               { id: 'classes', label: 'Classes', icon: '🏫', desc: 'Class organization' },
               { id: 'faces', label: 'Faces', icon: '📷', desc: 'Registered faces' },
@@ -1147,6 +1151,152 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ admin, users, onUpdateU
                       </div>
                     )}
                   </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Student Registration Tab */}
+        {activeTab === 'registration' && (
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            <div className="lg:col-span-2">
+              <div className={`${colors.card} rounded-xl shadow-lg border ${colors.border} p-6`}>
+                <div className="flex items-center justify-between mb-6">
+                  <h2 className="text-xl font-bold text-gray-800">Student Registration</h2>
+                  <span className={`px-3 py-1 text-sm font-medium ${colors.badge} rounded-full`}>
+                    Register New Students
+                  </span>
+                </div>
+
+                <form onSubmit={handleAddNewUser} className="space-y-6">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                      <label htmlFor="studentName" className="block text-sm font-bold text-gray-700 mb-3">Full Name</label>
+                      <input
+                        type="text"
+                        id="studentName"
+                        value={newUserName}
+                        onChange={e => setNewUserName(e.target.value)}
+                        className={`w-full px-4 py-3 border-2 ${colors.border} rounded-lg focus:outline-none ${colors.focus} transition-all duration-200 text-base font-medium shadow-sm hover:shadow-md`}
+                        placeholder="e.g., John Smith"
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label htmlFor="studentId" className="block text-sm font-bold text-gray-700 mb-3">Student ID</label>
+                      <input
+                        type="text"
+                        id="studentId"
+                        value={newUserId}
+                        onChange={e => setNewUserId(e.target.value)}
+                        className={`w-full px-4 py-3 border-2 ${colors.border} rounded-lg focus:outline-none ${colors.focus} transition-all duration-200 text-base font-medium shadow-sm hover:shadow-md`}
+                        placeholder="e.g., s123"
+                        required
+                      />
+                      <p className="text-xs text-gray-500 mt-1">Must start with 's' followed by numbers</p>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                      <label htmlFor="studentEmail" className="block text-sm font-bold text-gray-700 mb-3">Email Address</label>
+                      <input
+                        type="email"
+                        id="studentEmail"
+                        value={newUserEmail}
+                        onChange={e => setNewUserEmail(e.target.value)}
+                        className={`w-full px-4 py-3 border-2 ${colors.border} rounded-lg focus:outline-none ${colors.focus} transition-all duration-200 text-base font-medium shadow-sm hover:shadow-md`}
+                        placeholder="student@email.com"
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label htmlFor="studentPassword" className="block text-sm font-bold text-gray-700 mb-3">Password</label>
+                      <input
+                        type="password"
+                        id="studentPassword"
+                        value={newUserPassword}
+                        onChange={e => setNewUserPassword(e.target.value)}
+                        className={`w-full px-4 py-3 border-2 ${colors.border} rounded-lg focus:outline-none ${colors.focus} transition-all duration-200 text-base font-medium shadow-sm hover:shadow-md`}
+                        placeholder="Enter a secure password"
+                        required
+                      />
+                      <p className="text-xs text-gray-500 mt-1">Minimum 6 characters recommended</p>
+                    </div>
+                  </div>
+
+                  {addUserError && (
+                    <div className="bg-red-50 border-2 border-red-200 rounded-xl p-4">
+                      <div className="flex items-center space-x-2">
+                        <span className="text-red-500">❌</span>
+                        <p className="text-sm font-semibold text-red-600">{addUserError}</p>
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="flex justify-end">
+                    <button
+                      type="submit"
+                      className={`px-8 py-4 ${colors.primary} ${colors.hover} text-white font-bold rounded-xl transition-all duration-300 transform hover:scale-105 shadow-xl hover:shadow-2xl text-lg flex items-center space-x-2`}
+                    >
+                      <span>📝</span>
+                      <span>Register Student</span>
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+
+            <div className="space-y-6">
+              <div className={`${colors.card} rounded-xl shadow-lg border ${colors.border} p-6`}>
+                <h3 className="text-lg font-bold text-gray-800 mb-4">Registration Guidelines</h3>
+                <div className="space-y-3 text-sm text-gray-600">
+                  <div className="flex items-start space-x-3">
+                    <span className="text-green-500 mt-1">✅</span>
+                    <p>Student IDs must start with 's' followed by unique numbers</p>
+                  </div>
+                  <div className="flex items-start space-x-3">
+                    <span className="text-green-500 mt-1">✅</span>
+                    <p>Use valid email addresses for account recovery</p>
+                  </div>
+                  <div className="flex items-start space-x-3">
+                    <span className="text-green-500 mt-1">✅</span>
+                    <p>Create strong passwords (8+ characters recommended)</p>
+                  </div>
+                  <div className="flex items-start space-x-3">
+                    <span className="text-blue-500 mt-1">ℹ️</span>
+                    <p>Students can set up Face ID after registration</p>
+                  </div>
+                </div>
+              </div>
+
+              <div className={`${colors.card} rounded-xl shadow-lg border ${colors.border} p-6`}>
+                <h3 className="text-lg font-bold text-gray-800 mb-4">Recent Registrations</h3>
+                <div className="space-y-3">
+                  {users.filter(u => u.role === UserRoleEnum.STUDENT).slice(-5).reverse().map(student => (
+                    <div key={student.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                      <div className="flex items-center space-x-3">
+                        <div className={`w-8 h-8 rounded-full ${colors.gradient} flex items-center justify-center text-white text-xs font-bold`}>
+                          {student.name.charAt(0)}
+                        </div>
+                        <div>
+                          <p className="text-sm font-semibold text-gray-800">{student.name}</p>
+                          <p className="text-xs text-gray-500">{student.id}</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        {student.faceImage ? (
+                          <span className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded-full">Face ID</span>
+                        ) : (
+                          <span className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded-full">No Face ID</span>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                  {users.filter(u => u.role === UserRoleEnum.STUDENT).length === 0 && (
+                    <p className="text-sm text-gray-500 text-center py-4">No students registered yet</p>
+                  )}
                 </div>
               </div>
             </div>

@@ -108,3 +108,172 @@ export interface ClassConfig {
   id: string;
   name: string;
 }
+
+// ========== Blockchain Types ==========
+
+export interface BlockchainRecord {
+  recordId: number;
+  transactionHash: string;
+  blockNumber: number;
+  timestamp: number;
+  verified: boolean;
+}
+
+export interface AttendanceBlockchainRecord extends BlockchainRecord {
+  studentId: string;
+  classId: string;
+  location: string;
+}
+
+export interface GradeBlockchainRecord extends BlockchainRecord {
+  studentId: string;
+  quizId: string;
+  subject: string;
+  score: number;
+  maxScore: number;
+  teacherId: string;
+}
+
+export interface NFTCertificate {
+  tokenId: number;
+  studentId: string;
+  courseId: string;
+  courseName: string;
+  grade: string;
+  issueDate: number;
+  metadataURI: string;
+  revoked: boolean;
+  owner: string;
+}
+
+export interface WalletInfo {
+  address: string;
+  connected: boolean;
+  chainId: number;
+  balance: string;
+}
+
+// ========== Digital Twin Types ==========
+
+export interface DigitalTwinState {
+  classroomId: string;
+  students: StudentTwinData[];
+  teacher: TeacherTwinData | null;
+  activeSession: boolean;
+  timestamp: number;
+}
+
+export interface StudentTwinData {
+  id: string;
+  name: string;
+  position: { x: number; y: number; z: number };
+  status: 'present' | 'absent' | 'late';
+  engagement: number; // 0-100
+}
+
+export interface TeacherTwinData {
+  id: string;
+  name: string;
+  position: { x: number; y: number; z: number };
+  active: boolean;
+}
+
+export interface LearningTwinData {
+  studentId: string;
+  subjects: SubjectPerformance[];
+  learningPath: LearningNode[];
+  predictedOutcome: number;
+}
+
+export interface SubjectPerformance {
+  subject: string;
+  score: number;
+  trend: 'improving' | 'stable' | 'declining';
+  position: { x: number; y: number; z: number };
+}
+
+export interface LearningNode {
+  id: string;
+  type: 'quiz' | 'assignment' | 'milestone';
+  completed: boolean;
+  score?: number;
+  date: string;
+}
+
+// ========== Real-Time Analytics Types ==========
+
+export interface RealtimeAnalytics {
+  userId: string;
+  userRole: UserRole;
+  performanceData: PerformanceTrend[];
+  attendanceData: AttendanceTrend[];
+  engagementData: EngagementMetric[];
+  timestamp: number;
+}
+
+export interface PerformanceTrend {
+  subject: string;
+  data: { date: string; score: number }[];
+  average: number;
+  trend: 'up' | 'down' | 'stable';
+}
+
+export interface AttendanceTrend {
+  period: string; // 'week' | 'month' | 'year'
+  present: number;
+  absent: number;
+  percentage: number;
+}
+
+export interface EngagementMetric {
+  type: 'quiz' | 'chat' | 'attendance' | 'notes';
+  count: number;
+  timestamp: number;
+}
+
+export interface LiveClassMetrics {
+  sessionCode: string;
+  studentsPresent: number;
+  totalStudents: number;
+  quizParticipation: number;
+  chatActivity: number;
+  averageEngagement: number;
+}
+
+// ========== WebSocket Message Types ==========
+
+export interface WebSocketMessage {
+  type: 'attendance' | 'performance' | 'quiz' | 'session' | 'blockchain' | 'digital-twin' | 'engagement';
+  data: any;
+  timestamp: number;
+  userId?: string;
+}
+
+export interface AttendanceUpdateMessage extends WebSocketMessage {
+  type: 'attendance';
+  data: {
+    studentId: string;
+    status: 'Present' | 'Absent';
+    timestamp: Date;
+    location?: Coordinates;
+  };
+}
+
+export interface PerformanceUpdateMessage extends WebSocketMessage {
+  type: 'performance';
+  data: {
+    studentId: string;
+    subject: string;
+    score: number;
+    quizId: string;
+  };
+}
+
+export interface BlockchainUpdateMessage extends WebSocketMessage {
+  type: 'blockchain';
+  data: {
+    transactionHash: string;
+    recordType: 'attendance' | 'grade' | 'certificate';
+    status: 'pending' | 'confirmed' | 'failed';
+  };
+}

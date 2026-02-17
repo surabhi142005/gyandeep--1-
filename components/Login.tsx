@@ -37,15 +37,47 @@ const Login: React.FC<LoginProps> = ({ onLogin, users, theme }) => {
   const [password, setPassword] = useState('');
   const [isLoggingIn, setIsLoggingIn] = useState(false);
 
+  // Forgot Password State
+  const [showForgotPassword, setShowForgotPassword] = useState(false);
+  const [resetEmail, setResetEmail] = useState('');
+  const [isResetting, setIsResetting] = useState(false);
+  const [resetMessage, setResetMessage] = useState<string | null>(null);
+
   // General State
   const [error, setError] = useState<string | null>(null);
   const [emailError, setEmailError] = useState<string | null>(null);
 
   const colors = useMemo(() => THEME_COLORS[theme] || THEME_COLORS.indigo, [theme]);
 
-  const validateEmail = (email: string): boolean => {
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    return emailRegex.test(email);
+  const handleForgotPassword = async () => {
+    if (!resetEmail.trim()) {
+      setResetMessage('Please enter your email address.');
+      return;
+    }
+
+    if (!validateEmail(resetEmail)) {
+      setResetMessage('Please enter a valid email address.');
+      return;
+    }
+
+    setIsResetting(true);
+    setResetMessage(null);
+
+    try {
+      // Simulate API call delay
+      await new Promise(resolve => setTimeout(resolve, 2000));
+
+      // In a real app, this would send a reset email
+      // For demo purposes, we'll just show a success message
+      setResetMessage('Password reset instructions have been sent to your email. Please check your inbox.');
+      
+      // Clear the form
+      setResetEmail('');
+    } catch (err) {
+      setResetMessage('Failed to send reset email. Please try again.');
+    } finally {
+      setIsResetting(false);
+    }
   };
 
   const handleEmailChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -265,12 +297,67 @@ const Login: React.FC<LoginProps> = ({ onLogin, users, theme }) => {
                     'Login'
                   )}
                 </button>
+                <div className="text-center mt-4">
+                  <button
+                    onClick={() => setShowForgotPassword(true)}
+                    className={`text-sm ${colors.text} hover:underline`}
+                  >
+                    Forgot Password?
+                  </button>
+                </div>
               </div>
             )}
           </div>
         </div>
       </div>
       {showWebcam && <WebcamCapture onCapture={handleFaceCapture} onClose={() => setShowWebcam(false)} theme={theme} title="Face Verification" buttonText="Verify Identity" liveness />}
+
+      {/* Forgot Password Modal */}
+      {showForgotPassword && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-2xl p-6 w-full max-w-md">
+            <h2 className="text-xl font-bold text-gray-800 mb-4">Reset Password</h2>
+            <p className="text-sm text-gray-600 mb-4">Enter your email address and we'll send you instructions to reset your password.</p>
+            <div className="space-y-4">
+              <div>
+                <label htmlFor="reset-email" className="block text-sm font-medium text-gray-700 mb-1">Email Address</label>
+                <input
+                  id="reset-email"
+                  type="email"
+                  value={resetEmail}
+                  onChange={(e) => setResetEmail(e.target.value)}
+                  placeholder="your@email.com"
+                  className="w-full p-3 text-base border border-gray-300 rounded-md shadow-sm focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
+                />
+              </div>
+              {resetMessage && (
+                <div className={`p-3 rounded-md text-sm ${resetMessage.includes('sent') ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>
+                  {resetMessage}
+                </div>
+              )}
+              <div className="flex gap-2">
+                <button
+                  onClick={() => {
+                    setShowForgotPassword(false);
+                    setResetEmail('');
+                    setResetMessage(null);
+                  }}
+                  className="flex-1 px-4 py-2 text-sm font-medium bg-gray-200 hover:bg-gray-300 rounded-lg transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleForgotPassword}
+                  disabled={isResetting}
+                  className={`flex-1 px-4 py-2 text-sm font-medium text-white rounded-lg transition-colors ${colors.primary} ${colors.hover} disabled:opacity-50`}
+                >
+                  {isResetting ? 'Sending...' : 'Send Reset Email'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Google Login Button */}
       <div className="mt-8 text-center">

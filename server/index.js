@@ -15,7 +15,7 @@ dotenv.config({ path: '.env.local' })
 dotenv.config()
 
 const app = express()
-app.use(cors({ origin: 'http://localhost:5173', credentials: true })) // Update CORS for cookie
+app.use(cors({ origin: ['http://localhost:5173', 'http://localhost:5174', 'http://localhost:5175'], credentials: true })) // Update CORS for cookie
 app.use(express.json())
 
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID
@@ -251,9 +251,7 @@ app.post('/api/chat', async (req, res) => {
   }
 })
 
-const dataDir = path.join(process.cwd(), 'server', 'data')
 const storageDir = path.join(process.cwd(), 'server', 'storage')
-const usersFile = path.join(dataDir, 'users.json')
 const notesDir = path.join(storageDir, 'notes')
 const classesFile = path.join(dataDir, 'classes.json')
 const questionBankFile = path.join(dataDir, 'questionBank.json')

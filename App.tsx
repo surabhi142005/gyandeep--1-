@@ -11,7 +11,8 @@ import { setLocale, t } from './services/i18n';
 import AdminSetup from './components/AdminSetup';
 import Spinner from './components/Spinner'; // Import Spinner for Suspense fallback
 import UserProfile from './components/UserProfile';
-import Background3D from './components/Background3D';
+import Enhanced3DBackground from './components/Background3D';
+import { websocketService } from './services/websocketService';
 
 // Lazy load dashboard components
 const TeacherDashboard = lazy(() => import('./components/TeacherDashboard'));
@@ -165,6 +166,10 @@ const App: React.FC = () => {
 
     const handleLogin = (user: AnyUser) => {
         setCurrentUser(user);
+
+        // Initialize WebSocket connection for real-time features
+        websocketService.connect(user.id, user.role);
+
         if (user.role === UserRoleEnum.TEACHER) {
             const currentStudents = allUsers.filter(u => u.role === UserRoleEnum.STUDENT);
             setAttendance(currentStudents.map(s => ({ studentId: s.id, studentName: s.name, status: 'Absent', timestamp: null })));
@@ -195,6 +200,7 @@ const App: React.FC = () => {
     };
 
     const handleLogout = () => {
+        websocketService.disconnect();
         setCurrentUser(null);
         setUserLocation(null);
     };
@@ -330,7 +336,7 @@ const App: React.FC = () => {
 
     return (
         <>
-            <Background3D />
+            <Enhanced3DBackground />
             {notification && (
                 <ToastNotification
                     message={notification.message}
@@ -340,7 +346,14 @@ const App: React.FC = () => {
             )}
             {currentUser && (
                 <>
-                    <div className="fixed top-2 left-2 z-50 flex items-center gap-2 bg-white/80 backdrop-blur rounded-md shadow p-2">
+                    <div className="fixed bottom-2 left-2 z-50 flex flex-col gap-2 bg-white/80 backdrop-blur rounded-md shadow p-2">
+                        <label className="text-xs text-gray-700">{t('Theme')}</label>
+                        <select aria-label="Theme" value={theme} onChange={e => setTheme(e.target.value)} className="text-xs border border-gray-300 rounded px-1 py-0.5">
+                            <option value="indigo">Indigo</option>
+                            <option value="teal">Teal</option>
+                            <option value="crimson">Crimson</option>
+                            <option value="purple">Purple</option>
+                        </select>
                         <label className="text-xs text-gray-700">{t('Locale')}</label>
                         <select aria-label="Locale" onChange={e => setLocale(e.target.value as any)} className="text-xs border border-gray-300 rounded px-1 py-0.5">
                             <option value="en">English</option>
