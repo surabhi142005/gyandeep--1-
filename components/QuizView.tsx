@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import type { QuizQuestion } from '../types';
 
 interface QuizViewProps {
@@ -19,6 +19,7 @@ const QuizView: React.FC<QuizViewProps> = ({ quiz, subject, onSubmit, theme }) =
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [submitted, setSubmitted] = useState(false);
   const [score, setScore] = useState(0);
+  const [error, setError] = useState<string | null>(null);
   const [startTs] = useState<number>(Date.now());
   const totalTime = quiz.length * 20;
   const [timeLeft, setTimeLeft] = useState<number>(totalTime);
@@ -30,16 +31,24 @@ const QuizView: React.FC<QuizViewProps> = ({ quiz, subject, onSubmit, theme }) =
   };
 
   const handleSubmit = () => {
-    let correctAnswers = 0;
-    quiz.forEach(q => {
-      if (answers[q.id] === q.correctAnswer) correctAnswers++;
-    });
-    const finalScore = Math.round((correctAnswers / quiz.length) * 100);
-    const elapsed = Math.max(0, Math.floor((Date.now() - startTs) / 1000));
-    const bonus = Math.max(0, Math.min(totalTime - elapsed, totalTime));
-    setScore(finalScore);
-    setSubmitted(true);
-    onSubmit(finalScore);
+    try {
+      if (!Array.isArray(quiz) || quiz.length === 0) {
+        throw new Error('No quiz available.');
+      }
+      let correctAnswers = 0;
+      for (const q of quiz) {
+        const chosen = answers[q.id];
+        if (typeof chosen === 'string' && chosen === q.correctAnswer) {
+          correctAnswers++;
+        }
+      }
+      const finalScore = Math.round((correctAnswers / quiz.length) * 100);
+      setScore(finalScore);
+      setSubmitted(true);
+      onSubmit(finalScore);
+    } catch (e: any) {
+      setError(e.message || 'Failed to submit quiz.');
+    }
   };
 
   const getOptionBgClass = (question: QuizQuestion, option: string) => {
@@ -55,6 +64,24 @@ const QuizView: React.FC<QuizViewProps> = ({ quiz, subject, onSubmit, theme }) =
     return 'bg-gray-100';
   };
 
+  useEffect(() => {
+    if (submitted) return;
+    const id = setInterval(() => {
+      const elapsed = Math.floor((Date.now() - startTs) / 1000);
+      setTimeLeft(Math.max(0, totalTime - elapsed));
+    }, 500);
+    return () => clearInterval(id);
+  }, [submitted, startTs, totalTime]);
+
+  if (!Array.isArray(quiz) || quiz.length === 0) {
+    return (
+      <div className="bg-white p-6 rounded-lg shadow-md text-center">
+        <h2 className="text-2xl font-bold text-gray-800 mb-2">Quiz Unavailable</h2>
+        <p className="text-gray-600">No questions were provided for {subject}.</p>
+      </div>
+    );
+  }
+
   if (submitted) {
     return (
       <div className="bg-white p-6 rounded-lg shadow-md text-center">
@@ -62,9 +89,8 @@ const QuizView: React.FC<QuizViewProps> = ({ quiz, subject, onSubmit, theme }) =
         <p className="text-lg text-gray-600 mb-4">Subject: {subject}</p>
         <p className={`text-4xl font-bold ${colors.text}`}>{score}%</p>
         <p className="text-gray-500 mt-2">Your performance has been recorded.</p>
-        <div className="mt-4 text-sm text-gray-600">Max streak: {quiz.reduce((max, _, i) => {
-          const run = quiz.slice(i).reduce((r, q, idx) => r + (answers[q.id] === q.correctAnswer ? 1 : 0) * (idx === r ? 1 : 0), 0);
-          return Math.max(max, run);
+        <div className="mt-4 text-sm text-gray-600">Max streak: {quiz.reduce((max, q) => {
+          return Math.max(max, answers[q.id] === q.correctAnswer ? max + 1 : 0);
         }, 0)}</div>
         <div className="mt-6">
           <h3 className="text-xl font-semibold mb-4 text-left">Review Your Answers:</h3>
@@ -91,6 +117,7 @@ const QuizView: React.FC<QuizViewProps> = ({ quiz, subject, onSubmit, theme }) =
         <h2 className="text-2xl font-bold text-gray-800">Quiz Time: {subject}</h2>
         <div className="text-sm font-semibold text-gray-700">Time Left: {timeLeft}s</div>
       </div>
+      {error && <p className="text-red-600 text-sm mb-4 bg-red-50 p-2 rounded-md">{error}</p>}
       {quiz.map((q, index) => (
         <div key={q.id} className="mb-6">
           <p className="font-semibold text-gray-700 mb-2">{index + 1}. {q.question}</p>
@@ -123,11 +150,3 @@ const QuizView: React.FC<QuizViewProps> = ({ quiz, subject, onSubmit, theme }) =
 };
 
 export default QuizView;
-  React.useEffect(() => {
-    if (submitted) return;
-    const id = setInterval(() => {
-      const elapsed = Math.floor((Date.now() - startTs) / 1000);
-      setTimeLeft(Math.max(0, totalTime - elapsed));
-    }, 500);
-    return () => clearInterval(id);
-  }, [submitted, startTs, totalTime]);

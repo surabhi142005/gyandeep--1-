@@ -62,7 +62,7 @@ const Login: React.FC<LoginProps> = ({ onLogin, users, theme }) => {
     setEmail(newEmail);
     setError(null);
 
-    if (newEmail && !validateEmail(newEmail)) {
+    if (newEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(newEmail)) {
       setEmailError('Please enter a valid email address');
     } else {
       setEmailError(null);
@@ -86,7 +86,7 @@ const Login: React.FC<LoginProps> = ({ onLogin, users, theme }) => {
       return;
     }
 
-    if (!validateEmail(email)) {
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
       setEmailError('Please enter a valid email address');
       return;
     }
@@ -291,12 +291,18 @@ const Login: React.FC<LoginProps> = ({ onLogin, users, theme }) => {
           <div className="bg-white rounded-xl shadow-2xl p-6 w-full max-w-md relative">
             <button onClick={() => { setForgotPasswordStep(null); setForgotPasswordEmail(''); setVerificationCode(''); setNewPassword(''); setConfirmNewPassword(''); setModalMessage(null); }} className="absolute top-3 right-3 text-gray-400 hover:text-gray-600 disabled:opacity-50" disabled={isModalLoading}>&times;</button>
             {forgotPasswordStep === 'enterEmail' && (
-              <form onSubmit={async (e) => { e.preventDefault(); setModalMessage(null); if (!validateEmail(forgotPasswordEmail)) { setModalMessage({ type: 'error', text: 'Please enter a valid email address' }); return; } setIsModalLoading(true); try { const { requestPasswordReset } = await import('../services/dataService'); await requestPasswordReset(forgotPasswordEmail); setModalMessage({ type: 'success', text: 'A verification code has been sent to your email.' }); setForgotPasswordStep('enterCode'); } catch (err: any) { setModalMessage({ type: 'error', text: err.message || 'Failed to request reset' }); } finally { setIsModalLoading(false); } }}>
+              <form onSubmit={async (e) => { e.preventDefault(); setModalMessage(null); if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(forgotPasswordEmail)) { setModalMessage({ type: 'error', text: 'Please enter a valid email address' }); return; } setIsModalLoading(true); try { const { requestPasswordReset } = await import('../services/dataService'); await requestPasswordReset(forgotPasswordEmail); setModalMessage({ type: 'success', text: 'A verification code has been sent to your email.' }); setForgotPasswordStep('enterCode'); } catch (err: any) { setModalMessage({ type: 'error', text: err.message || 'Failed to request reset' }); } finally { setIsModalLoading(false); } }}>
                 <h2 className="text-xl font-bold text-gray-800 mb-2">Reset Password</h2>
                 <p className="text-gray-600 mb-4 text-sm">Enter your account email to receive a verification code.</p>
                 {modalMessage && <p className={`mb-4 text-sm p-2 rounded-md ${modalMessage.type === 'error' ? 'bg-red-50 text-red-600' : 'bg-green-50 text-green-600'}`}>{modalMessage.text}</p>}
-                <input type="email" value={forgotPasswordEmail} onChange={e => setForgotPasswordEmail(e.target.value)} required placeholder="Email Address" disabled={isModalLoading} className={`w-full p-3 text-base border rounded-md mb-4 focus:ring-1 ${colors.ring} ${colors.border} disabled:bg-gray-100 ${!validateEmail(forgotPasswordEmail) && forgotPasswordEmail ? 'border-red-500' : 'border-gray-300'}`} />
-                <button type="submit" disabled={isModalLoading || !validateEmail(forgotPasswordEmail)} className={`w-full text-white font-bold py-2.5 rounded-lg ${colors.primary} ${colors.hover} flex items-center justify-center disabled:opacity-50`}>{isModalLoading ? <Spinner /> : 'Send Code'}</button>
+                <input type="email" value={forgotPasswordEmail} onChange={e => setForgotPasswordEmail(e.target.value)} required placeholder="Email Address" disabled={isModalLoading} className={`w-full p-3 text-base border rounded-md mb-4 focus:ring-1 ${colors.ring} ${colors.border} disabled:bg-gray-100 ${forgotPasswordEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(forgotPasswordEmail) ? 'border-red-500' : 'border-gray-300'}`} />
+                <button
+                  type="submit"
+                  disabled={isModalLoading || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(forgotPasswordEmail)}
+                  className={`w-full text-white font-bold py-2.5 rounded-lg ${colors.primary} ${colors.hover} flex items-center justify-center disabled:opacity-50`}
+                >
+                  {isModalLoading ? <Spinner /> : 'Send Code'}
+                </button>
               </form>
             )}
             {forgotPasswordStep === 'enterCode' && (
