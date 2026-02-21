@@ -7,7 +7,7 @@ import Spinner from './Spinner';
 import WebcamCapture from './WebcamCapture';
 import AdminFaceViewer from './AdminFaceViewer';
 import { adminOverride } from '../services/dataService';
-import { registerFace, verifyFace } from '../services/authService';
+import { registerFace, verifyFace, hashPassword } from '../services/authService';
 import { bulkImportUsers } from '../services/dataService';
 import { fetchQuestionBank, updateQuestionInBank, deleteQuestionFromBank, addQuestionsToBank, fetchTagPresets, updateTagPresets } from '../services/dataService';
 import { t } from '../services/i18n';
@@ -36,96 +36,96 @@ const THEMES = [
 ];
 
 const THEME_COLORS: Record<string, Record<string, string>> = {
-    indigo: { 
-      primary: 'bg-indigo-600', 
-      hover: 'hover:bg-indigo-700', 
-      text: 'text-indigo-800',
-      gradient: 'bg-gradient-to-r from-indigo-600 to-purple-600',
-      card: 'bg-white/90 backdrop-blur-sm',
-      border: 'border-indigo-200',
-      light: 'bg-indigo-50',
-      accent: 'accent-indigo-600',
-      shadow: 'shadow-indigo-200',
-      badge: 'bg-indigo-100 text-indigo-800',
-      lightText: 'text-indigo-700',
-      lightHover: 'hover:bg-indigo-100',
-      focus: 'focus:ring-indigo-500 focus:border-indigo-500'
-    },
-    teal: { 
-      primary: 'bg-teal-600', 
-      hover: 'hover:bg-teal-700', 
-      text: 'text-teal-800',
-      gradient: 'bg-gradient-to-r from-teal-600 to-blue-600',
-      card: 'bg-white/90 backdrop-blur-sm',
-      border: 'border-teal-200',
-      light: 'bg-teal-50',
-      accent: 'accent-teal-600',
-      shadow: 'shadow-teal-200',
-      badge: 'bg-teal-100 text-teal-800',
-      lightText: 'text-teal-700',
-      lightHover: 'hover:bg-teal-100',
-      focus: 'focus:ring-teal-500 focus:border-teal-500'
-    },
-    crimson: { 
-      primary: 'bg-red-600', 
-      hover: 'hover:bg-red-700', 
-      text: 'text-red-800',
-      gradient: 'bg-gradient-to-r from-red-600 to-pink-600',
-      card: 'bg-white/90 backdrop-blur-sm',
-      border: 'border-red-200',
-      light: 'bg-red-50',
-      accent: 'accent-red-600',
-      shadow: 'shadow-red-200',
-      badge: 'bg-red-100 text-red-800',
-      lightText: 'text-red-700',
-      lightHover: 'hover:bg-red-100',
-      focus: 'focus:ring-red-500 focus:border-red-500'
-    },
-    purple: { 
-      primary: 'bg-purple-600', 
-      hover: 'hover:bg-purple-700', 
-      text: 'text-purple-800',
-      gradient: 'bg-gradient-to-r from-purple-600 to-indigo-600',
-      card: 'bg-white/90 backdrop-blur-sm',
-      border: 'border-purple-200',
-      light: 'bg-purple-50',
-      accent: 'accent-purple-600',
-      shadow: 'shadow-purple-200',
-      badge: 'bg-purple-100 text-purple-800',
-      lightText: 'text-purple-700',
-      lightHover: 'hover:bg-purple-100',
-      focus: 'focus:ring-purple-500 focus:border-purple-500'
-    },
-    ocean: { 
-      primary: 'bg-cyan-600', 
-      hover: 'hover:bg-cyan-700', 
-      text: 'text-cyan-800',
-      gradient: 'bg-gradient-to-r from-cyan-600 to-blue-600',
-      card: 'bg-white/90 backdrop-blur-sm',
-      border: 'border-cyan-200',
-      light: 'bg-cyan-50',
-      accent: 'accent-cyan-600',
-      shadow: 'shadow-cyan-200',
-      badge: 'bg-cyan-100 text-cyan-800',
-      lightText: 'text-cyan-700',
-      lightHover: 'hover:bg-cyan-100',
-      focus: 'focus:ring-cyan-500 focus:border-cyan-500'
-    },
-    sunset: { 
-      primary: 'bg-orange-600', 
-      hover: 'hover:bg-orange-700', 
-      text: 'text-orange-800',
-      gradient: 'bg-gradient-to-r from-orange-600 to-red-600',
-      card: 'bg-white/90 backdrop-blur-sm',
-      border: 'border-orange-200',
-      light: 'bg-orange-50',
-      accent: 'accent-orange-600',
-      shadow: 'shadow-orange-200',
-      badge: 'bg-orange-100 text-orange-800',
-      lightText: 'text-orange-700',
-      lightHover: 'hover:bg-orange-100',
-      focus: 'focus:ring-orange-500 focus:border-orange-500'
-    },
+  indigo: {
+    primary: 'bg-indigo-600',
+    hover: 'hover:bg-indigo-700',
+    text: 'text-indigo-800',
+    gradient: 'bg-gradient-to-r from-indigo-600 to-purple-600',
+    card: 'bg-white/90 backdrop-blur-sm',
+    border: 'border-indigo-200',
+    light: 'bg-indigo-50',
+    accent: 'accent-indigo-600',
+    shadow: 'shadow-indigo-200',
+    badge: 'bg-indigo-100 text-indigo-800',
+    lightText: 'text-indigo-700',
+    lightHover: 'hover:bg-indigo-100',
+    focus: 'focus:ring-indigo-500 focus:border-indigo-500'
+  },
+  teal: {
+    primary: 'bg-teal-600',
+    hover: 'hover:bg-teal-700',
+    text: 'text-teal-800',
+    gradient: 'bg-gradient-to-r from-teal-600 to-blue-600',
+    card: 'bg-white/90 backdrop-blur-sm',
+    border: 'border-teal-200',
+    light: 'bg-teal-50',
+    accent: 'accent-teal-600',
+    shadow: 'shadow-teal-200',
+    badge: 'bg-teal-100 text-teal-800',
+    lightText: 'text-teal-700',
+    lightHover: 'hover:bg-teal-100',
+    focus: 'focus:ring-teal-500 focus:border-teal-500'
+  },
+  crimson: {
+    primary: 'bg-red-600',
+    hover: 'hover:bg-red-700',
+    text: 'text-red-800',
+    gradient: 'bg-gradient-to-r from-red-600 to-pink-600',
+    card: 'bg-white/90 backdrop-blur-sm',
+    border: 'border-red-200',
+    light: 'bg-red-50',
+    accent: 'accent-red-600',
+    shadow: 'shadow-red-200',
+    badge: 'bg-red-100 text-red-800',
+    lightText: 'text-red-700',
+    lightHover: 'hover:bg-red-100',
+    focus: 'focus:ring-red-500 focus:border-red-500'
+  },
+  purple: {
+    primary: 'bg-purple-600',
+    hover: 'hover:bg-purple-700',
+    text: 'text-purple-800',
+    gradient: 'bg-gradient-to-r from-purple-600 to-indigo-600',
+    card: 'bg-white/90 backdrop-blur-sm',
+    border: 'border-purple-200',
+    light: 'bg-purple-50',
+    accent: 'accent-purple-600',
+    shadow: 'shadow-purple-200',
+    badge: 'bg-purple-100 text-purple-800',
+    lightText: 'text-purple-700',
+    lightHover: 'hover:bg-purple-100',
+    focus: 'focus:ring-purple-500 focus:border-purple-500'
+  },
+  ocean: {
+    primary: 'bg-cyan-600',
+    hover: 'hover:bg-cyan-700',
+    text: 'text-cyan-800',
+    gradient: 'bg-gradient-to-r from-cyan-600 to-blue-600',
+    card: 'bg-white/90 backdrop-blur-sm',
+    border: 'border-cyan-200',
+    light: 'bg-cyan-50',
+    accent: 'accent-cyan-600',
+    shadow: 'shadow-cyan-200',
+    badge: 'bg-cyan-100 text-cyan-800',
+    lightText: 'text-cyan-700',
+    lightHover: 'hover:bg-cyan-100',
+    focus: 'focus:ring-cyan-500 focus:border-cyan-500'
+  },
+  sunset: {
+    primary: 'bg-orange-600',
+    hover: 'hover:bg-orange-700',
+    text: 'text-orange-800',
+    gradient: 'bg-gradient-to-r from-orange-600 to-red-600',
+    card: 'bg-white/90 backdrop-blur-sm',
+    border: 'border-orange-200',
+    light: 'bg-orange-50',
+    accent: 'accent-orange-600',
+    shadow: 'shadow-orange-200',
+    badge: 'bg-orange-100 text-orange-800',
+    lightText: 'text-orange-700',
+    lightHover: 'hover:bg-orange-100',
+    focus: 'focus:ring-orange-500 focus:border-orange-500'
+  },
 };
 
 const AdminDashboard: React.FC<AdminDashboardProps> = ({ admin, users, onUpdateUsers, onLogout, theme, setTheme, onUpdateFaceImage, allSubjects, setAllSubjects, allClasses, setAllClasses }) => {
@@ -133,7 +133,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ admin, users, onUpdateU
   const [locationError, setLocationError] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
-  
+
   // Add User State
   const [newUserName, setNewUserName] = useState('');
   const [newUserId, setNewUserId] = useState('');
@@ -160,7 +160,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ admin, users, onUpdateU
   const [isOverrideSubmitting, setIsOverrideSubmitting] = useState(false);
   const [verifyMessage, setVerifyMessage] = useState<string | null>(null);
   const [verifySuccess, setVerifySuccess] = useState<boolean | null>(null);
-  
+
   // Subject Management State
   const [newSubjectName, setNewSubjectName] = useState('');
   const [subjectError, setSubjectError] = useState<string | null>(null);
@@ -197,15 +197,15 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ admin, users, onUpdateU
   }, []);
 
   useEffect(() => {
-    fetchQuestionBank().then(setBank).catch(() => {});
-    fetchTagPresets().then(setTagPresets).catch(() => {});
+    fetchQuestionBank().then(setBank).catch((err) => { console.error('Failed to load question bank:', err); });
+    fetchTagPresets().then(setTagPresets).catch((err) => { console.error('Failed to load tag presets:', err); });
   }, []);
-  
+
   // Filter users based on search and role filter
   const filteredUsers = useMemo(() => {
     return users.filter(user => {
-      const matchesSearch = user.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                           user.id.toLowerCase().includes(searchTerm.toLowerCase());
+      const matchesSearch = user.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        user.id.toLowerCase().includes(searchTerm.toLowerCase());
       const matchesRole = filterRole === 'all' || user.role === filterRole;
       return matchesSearch && matchesRole;
     });
@@ -218,10 +218,10 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ admin, users, onUpdateU
     const teachers = users.filter(u => u.role === UserRoleEnum.TEACHER).length;
     const admins = users.filter(u => u.role === UserRoleEnum.ADMIN).length;
     const usersWithFace = users.filter(u => u.faceImage).length;
-    
+
     return { totalUsers, students, teachers, admins, usersWithFace };
   }, [users]);
-  
+
   const handleStartEdit = (user: AnyUser) => {
     setEditingUser(user);
     setEditedName(user.name);
@@ -233,7 +233,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ admin, users, onUpdateU
     }
     setEditUserError(null);
   };
-  
+
   const handleCancelEdit = () => {
     setEditingUser(null);
     setEditedName('');
@@ -241,21 +241,21 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ admin, users, onUpdateU
     setEditedAssignedSubjects([]);
     setEditUserError(null);
   };
-  
+
   const handleSaveEdit = (e: React.FormEvent) => {
     e.preventDefault();
     setEditUserError(null);
-  
+
     if (!editingUser) return;
-    
+
     const trimmedName = editedName.trim();
     const trimmedId = editedId.trim().toLowerCase();
-  
+
     if (!trimmedName || !trimmedId) {
       setEditUserError("Name and User ID cannot be empty.");
       return;
     }
-  
+
     if (trimmedId !== editingUser.id && users.some(u => u.id === trimmedId)) {
       setEditUserError("User ID already exists.");
       return;
@@ -275,10 +275,10 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ admin, users, onUpdateU
       return;
     }
     if (!/^[a-z][a-z0-9]*$/.test(trimmedId)) {
-        setEditUserError("Invalid ID format. Must start with a letter and contain only letters or numbers.");
-        return;
+      setEditUserError("Invalid ID format. Must start with a letter and contain only letters or numbers.");
+      return;
     }
-  
+
     const updatedUsers = users.map(u => {
       if (u.id === editingUser.id) {
         const updatedUser = { ...u, name: trimmedName, id: trimmedId };
@@ -289,7 +289,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ admin, users, onUpdateU
       }
       return u;
     });
-  
+
     onUpdateUsers(updatedUsers);
     handleCancelEdit();
   };
@@ -314,8 +314,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ admin, users, onUpdateU
       event.target.value = '';
     }
   };
-  
-  const handleAddNewUser = (e: React.FormEvent) => {
+
+  const handleAddNewUser = async (e: React.FormEvent) => {
     e.preventDefault();
     setAddUserError(null);
     const trimmedId = newUserId.trim().toLowerCase();
@@ -325,25 +325,25 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ admin, users, onUpdateU
 
     // Auto-set role to STUDENT for registration tab
     const userRole = activeTab === 'registration' ? UserRoleEnum.STUDENT : newUserRole;
-  
+
     if (!trimmedName || !trimmedId) {
       setAddUserError("Name and User ID cannot be empty.");
       return;
     }
 
     if (!trimmedEmail || !trimmedPassword) {
-        setAddUserError("Email and Password are required.");
-        return;
+      setAddUserError("Email and Password are required.");
+      return;
     }
     if (trimmedPassword.length < 6) {
-        setAddUserError("Password must be at least 6 characters long.");
-        return;
+      setAddUserError("Password must be at least 6 characters long.");
+      return;
     }
     if (users.some(u => u.email?.toLowerCase() === trimmedEmail.toLowerCase())) {
-        setAddUserError("An account with this email already exists.");
-        return;
+      setAddUserError("An account with this email already exists.");
+      return;
     }
-  
+
     // ID prefix validation
     if (userRole === UserRoleEnum.STUDENT && !trimmedId.startsWith('s')) {
       setAddUserError("Invalid Student ID. Must start with 's'.");
@@ -353,49 +353,54 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ admin, users, onUpdateU
       setAddUserError("Invalid Teacher ID. Must start with 't'.");
       return;
     }
-    if (newUserRole === UserRoleEnum.ADMIN && !trimmedId.startsWith('a')) {
+    if (userRole === UserRoleEnum.ADMIN && !trimmedId.startsWith('a')) {
       setAddUserError("Invalid Administrator ID. Must start with 'a'.");
       return;
     }
 
     // General ID format validation
     if (!/^[a-z][a-z0-9]*$/.test(trimmedId)) {
-        setAddUserError("Invalid ID format. Must start with a letter and contain only letters or numbers.");
-        return;
+      setAddUserError("Invalid ID format. Must start with a letter and contain only letters or numbers.");
+      return;
     }
-  
+
     // ID uniqueness validation
     if (users.some(u => u.id === trimmedId)) {
       setAddUserError("User ID already exists.");
       return;
     }
-  
-    const baseNewUser = { id: trimmedId, name: trimmedName, faceImage: null };
-    
-    let newUser: AnyUser;
-    if (userRole === UserRoleEnum.STUDENT) {
-      newUser = { ...baseNewUser, role: UserRoleEnum.STUDENT, email: trimmedEmail, password: trimmedPassword, performance: [] };
-    } else if (userRole === UserRoleEnum.TEACHER) {
-      newUser = { ...baseNewUser, role: UserRoleEnum.TEACHER, email: trimmedEmail, password: trimmedPassword, assignedSubjects: newUserAssignedSubjects };
-    } else { // Admin
-      newUser = { ...baseNewUser, role: UserRoleEnum.ADMIN, email: trimmedEmail, password: trimmedPassword };
+
+    try {
+      const hashedPassword = await hashPassword(trimmedPassword);
+      const baseNewUser = { id: trimmedId, name: trimmedName, faceImage: null };
+
+      let newUser: AnyUser;
+      if (userRole === UserRoleEnum.STUDENT) {
+        newUser = { ...baseNewUser, role: UserRoleEnum.STUDENT, email: trimmedEmail, password: hashedPassword, performance: [] };
+      } else if (userRole === UserRoleEnum.TEACHER) {
+        newUser = { ...baseNewUser, role: UserRoleEnum.TEACHER, email: trimmedEmail, password: hashedPassword, assignedSubjects: newUserAssignedSubjects };
+      } else { // Admin
+        newUser = { ...baseNewUser, role: UserRoleEnum.ADMIN, email: trimmedEmail, password: hashedPassword };
+      }
+
+      onUpdateUsers([...users, newUser]);
+      setNewUserName('');
+      setNewUserId('');
+      setNewUserEmail('');
+      setNewUserPassword('');
+      setNewUserRole(UserRoleEnum.STUDENT);
+      setNewUserAssignedSubjects([]);
+    } catch (err: any) {
+      setAddUserError("Error securing password: " + err.message);
     }
-    
-    onUpdateUsers([...users, newUser]);
-    setNewUserName('');
-    setNewUserId('');
-    setNewUserEmail('');
-    setNewUserPassword('');
-    setNewUserRole(UserRoleEnum.STUDENT);
-    setNewUserAssignedSubjects([]);
   };
-  
+
   const handleRoleChange = (userId: string, newRole: UserRole) => {
     const updatedUsers = users.map((user): AnyUser => {
       if (user.id !== userId || user.role === newRole) {
         return user;
       }
-  
+
       // From Student to Teacher/Admin
       if (user.role === UserRoleEnum.STUDENT) {
         const { performance, ...rest } = user;
@@ -405,13 +410,13 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ admin, users, onUpdateU
           return { ...rest, role: UserRoleEnum.ADMIN };
         }
       }
-      
+
       // From Teacher/Admin to Student
       if (newRole === UserRoleEnum.STUDENT) {
         const { assignedSubjects, ...rest } = user as Teacher; // Remove assignedSubjects if becoming student
         return { ...rest, role: UserRoleEnum.STUDENT, performance: [] };
       }
-  
+
       // Between Teacher and Admin
       if (user.role === UserRoleEnum.TEACHER && newRole === UserRoleEnum.ADMIN) {
         const { assignedSubjects, ...rest } = user as Teacher; // Remove assignedSubjects if becoming admin
@@ -425,7 +430,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ admin, users, onUpdateU
     });
     onUpdateUsers(updatedUsers);
   };
-  
+
   const handleRemoveUser = (userId: string) => {
     if (window.confirm("Are you sure you want to remove this user?")) {
       onUpdateUsers(users.filter(user => user.id !== userId));
@@ -453,7 +458,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ admin, users, onUpdateU
     }
     setCapturingForUser(null);
   }
-  
+
   const handleAdminFaceRegister = async (imageDataUrl: string) => {
     onUpdateFaceImage(admin.id, imageDataUrl);
     try {
@@ -487,7 +492,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ admin, users, onUpdateU
   }
 
   const getRoleBadgeColor = (role: UserRole) => {
-    switch(role) {
+    switch (role) {
       case UserRoleEnum.ADMIN: return 'bg-purple-100 text-purple-800 border-purple-200';
       case UserRoleEnum.TEACHER: return 'bg-indigo-100 text-indigo-800 border-indigo-200';
       case UserRoleEnum.STUDENT: return 'bg-teal-100 text-teal-800 border-teal-200';
@@ -533,7 +538,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ admin, users, onUpdateU
       return;
     }
 
-    setAllSubjects(allSubjects.map(s => 
+    setAllSubjects(allSubjects.map(s =>
       s.id === editingSubject.id ? { ...s, name: trimmedName } : s
     ));
     setEditingSubject(null);
@@ -596,7 +601,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ admin, users, onUpdateU
       return;
     }
 
-    setAllClasses(allClasses.map((c: any) => 
+    setAllClasses(allClasses.map((c: any) =>
       c.id === editingClass.id ? { ...c, name: trimmedName } : c
     ));
     setEditingClass(null);
@@ -624,14 +629,14 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ admin, users, onUpdateU
 
   // Handler for assigning subjects to new teacher
   const handleNewTeacherSubjectChange = (subjectId: string, isChecked: boolean) => {
-    setNewUserAssignedSubjects(prev => 
+    setNewUserAssignedSubjects(prev =>
       isChecked ? [...prev, subjectId] : prev.filter(id => id !== subjectId)
     );
   };
 
   // Handler for assigning subjects to editing teacher
   const handleEditTeacherSubjectChange = (subjectId: string, isChecked: boolean) => {
-    setEditedAssignedSubjects(prev => 
+    setEditedAssignedSubjects(prev =>
       isChecked ? [...prev, subjectId] : prev.filter(id => id !== subjectId)
     );
   };
@@ -659,17 +664,17 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ admin, users, onUpdateU
                 <span className="text-white/90 text-sm font-medium">Theme</span>
                 <div className="flex space-x-2">
                   {THEMES.map(t => (
-                    <button 
-                      key={t.name} 
-                      onClick={() => setTheme(t.name)} 
+                    <button
+                      key={t.name}
+                      onClick={() => setTheme(t.name)}
                       className={`w-8 h-8 rounded-full ${t.color} transform transition-all duration-300 ${theme === t.name ? 'ring-3 ring-white scale-125 shadow-lg' : 'hover:scale-110 hover:shadow-md'}`}
                       aria-label={`Set theme to ${t.name}`}
                     />
                   ))}
                 </div>
               </div>
-              <button 
-                onClick={onLogout} 
+              <button
+                onClick={onLogout}
                 className="bg-white/20 backdrop-blur-sm text-white font-semibold py-3 px-6 rounded-2xl hover:bg-white/30 transition-all duration-300 flex items-center space-x-3 shadow-lg hover:shadow-xl transform hover:scale-105"
               >
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -698,11 +703,10 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ admin, users, onUpdateU
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id as any)}
-                className={`flex flex-col items-center space-y-1 py-6 px-6 border-b-2 font-medium transition-all duration-300 transform hover:scale-105 ${
-                  activeTab === tab.id 
-                    ? `${colors.border} ${colors.text} border-current bg-gradient-to-b ${colors.light} to-transparent` 
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 hover:bg-gray-50'
-                }`}
+                className={`flex flex-col items-center space-y-1 py-6 px-6 border-b-2 font-medium transition-all duration-300 transform hover:scale-105 ${activeTab === tab.id
+                  ? `${colors.border} ${colors.text} border-current bg-gradient-to-b ${colors.light} to-transparent`
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 hover:bg-gray-50'
+                  }`}
               >
                 <span className="text-2xl">{tab.icon}</span>
                 <span className="text-sm font-semibold">{tab.label}</span>
@@ -734,14 +738,14 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ admin, users, onUpdateU
                     </span>
                   </div>
                 </div>
-                
+
                 <div className="border-t border-gray-200 pt-6">
                   <div className="flex items-center justify-between mb-4">
                     <h4 className="text-sm font-bold text-gray-700 flex items-center space-x-2">
                       <span>🔐</span>
                       <span>Face ID</span>
                     </h4>
-                    <button 
+                    <button
                       onClick={() => setShowFaceRegistration(true)}
                       className={`text-xs font-bold ${colors.primary} ${colors.hover} text-white px-4 py-2 rounded-xl transition-all duration-200 shadow-md hover:shadow-lg transform hover:scale-105`}
                     >
@@ -750,7 +754,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ admin, users, onUpdateU
                   </div>
                   {admin.faceImage ? (
                     <div className="flex items-center space-x-4 p-3 bg-green-50 rounded-xl border border-green-200">
-                      <img src={admin.faceImage} alt="Admin face" className="w-14 h-14 rounded-full object-cover border-3 border-green-400 shadow-md"/>
+                      <img src={admin.faceImage} alt="Admin face" className="w-14 h-14 rounded-full object-cover border-3 border-green-400 shadow-md" />
                       <div>
                         <p className="text-sm font-bold text-green-700 flex items-center space-x-1">
                           <span>✅</span>
@@ -879,36 +883,36 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ admin, users, onUpdateU
                     </label>
                   </div>
                 </div>
-                
+
                 <form onSubmit={handleAddNewUser} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                   <div>
                     <label htmlFor="newUserName" className="block text-sm font-bold text-gray-700 mb-3">Full Name</label>
-                    <input 
-                      type="text" 
-                      id="newUserName" 
-                      value={newUserName} 
-                      onChange={e => setNewUserName(e.target.value)} 
-                      className={`w-full px-5 py-4 border-2 ${colors.border} rounded-xl focus:outline-none ${colors.focus} transition-all duration-200 text-lg font-medium shadow-sm hover:shadow-md`} 
-                      placeholder="e.g., Jane Doe" 
+                    <input
+                      type="text"
+                      id="newUserName"
+                      value={newUserName}
+                      onChange={e => setNewUserName(e.target.value)}
+                      className={`w-full px-5 py-4 border-2 ${colors.border} rounded-xl focus:outline-none ${colors.focus} transition-all duration-200 text-lg font-medium shadow-sm hover:shadow-md`}
+                      placeholder="e.g., Jane Doe"
                     />
                   </div>
                   <div>
                     <label htmlFor="newUserId" className="block text-sm font-bold text-gray-700 mb-3">User ID</label>
-                    <input 
-                      type="text" 
-                      id="newUserId" 
-                      value={newUserId} 
-                      onChange={e => setNewUserId(e.target.value)} 
-                      className={`w-full px-5 py-4 border-2 ${colors.border} rounded-xl focus:outline-none ${colors.focus} transition-all duration-200 text-lg font-medium shadow-sm hover:shadow-md`} 
-                      placeholder="e.g., s4, t2, or a2" 
+                    <input
+                      type="text"
+                      id="newUserId"
+                      value={newUserId}
+                      onChange={e => setNewUserId(e.target.value)}
+                      className={`w-full px-5 py-4 border-2 ${colors.border} rounded-xl focus:outline-none ${colors.focus} transition-all duration-200 text-lg font-medium shadow-sm hover:shadow-md`}
+                      placeholder="e.g., s4, t2, or a2"
                     />
                   </div>
                   <div>
                     <label htmlFor="newUserRole" className="block text-sm font-bold text-gray-700 mb-3">Role</label>
-                    <select 
-                      id="newUserRole" 
-                      value={newUserRole} 
-                      onChange={e => {setNewUserRole(e.target.value as UserRole); setNewUserAssignedSubjects([]);}} 
+                    <select
+                      id="newUserRole"
+                      value={newUserRole}
+                      onChange={e => { setNewUserRole(e.target.value as UserRole); setNewUserAssignedSubjects([]); }}
                       className={`w-full px-5 py-4 border-2 ${colors.border} rounded-xl focus:outline-none ${colors.focus} transition-all duration-200 text-lg font-medium shadow-sm hover:shadow-md bg-white`}
                     >
                       <option value={UserRoleEnum.STUDENT}>👨‍🎓 Student</option>
@@ -972,13 +976,13 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ admin, users, onUpdateU
                         </div>
                       </div>
                     )}
-                    <button 
-                      type="submit" 
+                    <button
+                      type="submit"
                       className={`w-full ${colors.primary} ${colors.hover} text-white font-bold py-4 px-8 rounded-xl transition-all duration-300 transform hover:scale-105 shadow-xl hover:shadow-2xl text-lg`}
                     >
                       <span className="flex items-center justify-center space-x-2">
                         <span>➕</span>
-                      <span>{t('Add New User')}</span>
+                        <span>{t('Add New User')}</span>
                       </span>
                     </button>
                   </div>
@@ -1043,26 +1047,26 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ admin, users, onUpdateU
                                   </span>
                                 </div>
                               </div>
-                              
+
                               <div className="flex flex-wrap items-center gap-2">
                                 {user.role !== UserRoleEnum.ADMIN && (
                                   <>
-                                    <button 
-                                      onClick={() => setCapturingForUser(user)} 
+                                    <button
+                                      onClick={() => setCapturingForUser(user)}
                                       className={`px-3 py-1 text-xs font-medium ${colors.badge} rounded-full hover:shadow-md transition-all duration-200`}
                                     >
                                       {user.faceImage ? '🔄 Update Face' : '👤 Add Face'}
                                     </button>
                                     {user.faceImage && (
-                                      <button 
-                                        onClick={() => setVerifyingForUser(user)} 
+                                      <button
+                                        onClick={() => setVerifyingForUser(user)}
                                         className="px-3 py-1 text-xs font-medium bg-green-100 text-green-800 rounded-full hover:bg-green-200 transition-all duration-200"
                                       >
                                         🔓 Face Login
                                       </button>
                                     )}
-                                    <button 
-                                      onClick={() => setOverrideForUser(user)} 
+                                    <button
+                                      onClick={() => setOverrideForUser(user)}
                                       className="px-3 py-1 text-xs font-medium bg-yellow-100 text-yellow-800 rounded-full hover:bg-yellow-200 transition-all duration-200"
                                     >
                                       🛡️ Override
@@ -1071,14 +1075,14 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ admin, users, onUpdateU
                                 )}
                                 {user.id !== admin.id && (
                                   <>
-                                    <button 
-                                      onClick={() => handleStartEdit(user)} 
+                                    <button
+                                      onClick={() => handleStartEdit(user)}
                                       className="px-3 py-1 text-xs font-medium bg-blue-100 text-blue-800 rounded-full hover:bg-blue-200 transition-all duration-200"
                                     >
                                       ✏️ Edit
                                     </button>
-                                    <button 
-                                      onClick={() => handleRemoveUser(user.id)} 
+                                    <button
+                                      onClick={() => handleRemoveUser(user.id)}
                                       className="px-3 py-1 text-xs font-medium bg-red-100 text-red-800 rounded-full hover:bg-red-200 transition-all duration-200"
                                     >
                                       🗑️ Remove
@@ -1087,20 +1091,20 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ admin, users, onUpdateU
                                 )}
                               </div>
                             </div>
-                            
+
                             <div className="mt-4 pt-4 border-t border-gray-200 grid grid-cols-1 md:grid-cols-3 gap-4">
                               <div>
                                 <p className="text-xs text-gray-500 mb-1">Face ID</p>
                                 {user.faceImage ? (
                                   <div className="flex items-center space-x-2">
-                                    <img src={user.faceImage} alt={`Face of ${user.name}`} className="w-8 h-8 rounded-full object-cover border-2 border-green-400"/>
+                                    <img src={user.faceImage} alt={`Face of ${user.name}`} className="w-8 h-8 rounded-full object-cover border-2 border-green-400" />
                                     <span className="text-sm text-green-700 font-medium">✓ Registered</span>
                                   </div>
                                 ) : (
                                   <span className="text-sm text-gray-500">Not registered</span>
                                 )}
                               </div>
-                              
+
                               <div>
                                 <p className="text-xs text-gray-500 mb-1">{t('Assigned Subjects')}</p>
                                 {user.role === UserRoleEnum.TEACHER && (user as Teacher).assignedSubjects.length > 0 ? (
@@ -1117,7 +1121,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ admin, users, onUpdateU
                                   <span className="text-sm text-gray-400">Not applicable</span>
                                 )}
                               </div>
-                              
+
                               <div>
                                 <p className="text-xs text-gray-500 mb-1">{t('Class Assignment')}</p>
                                 {user.role === UserRoleEnum.STUDENT ? (
@@ -1314,17 +1318,17 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ admin, users, onUpdateU
                     {allSubjects.length} subjects
                   </span>
                 </div>
-                
+
                 <div className="space-y-4">
                   {allSubjects.length > 0 ? (
                     allSubjects.map(subject => (
                       <div key={subject.id} className={`flex items-center justify-between p-4 ${colors.light} rounded-lg border ${colors.border} hover:shadow-md transition-all duration-200`}>
                         {editingSubject?.id === subject.id ? (
                           <form onSubmit={handleSaveEditSubject} className="flex-grow flex items-center space-x-3">
-                            <input 
-                              type="text" 
-                              value={editedSubjectName} 
-                              onChange={e => setEditedSubjectName(e.target.value)} 
+                            <input
+                              type="text"
+                              value={editedSubjectName}
+                              onChange={e => setEditedSubjectName(e.target.value)}
                               className={`flex-grow px-3 py-2 border ${colors.border} rounded-lg focus:outline-none ${colors.focus}`}
                               autoFocus
                             />
@@ -1347,14 +1351,14 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ admin, users, onUpdateU
                               </div>
                             </div>
                             <div className="flex items-center space-x-2">
-                              <button 
-                                onClick={() => handleStartEditSubject(subject)} 
+                              <button
+                                onClick={() => handleStartEditSubject(subject)}
                                 className={`px-3 py-1 text-sm font-medium ${colors.badge} rounded-lg hover:shadow-md transition-all duration-200`}
                               >
                                 ✏️ {t('Edit')}
                               </button>
-                              <button 
-                                onClick={() => handleRemoveSubject(subject.id)} 
+                              <button
+                                onClick={() => handleRemoveSubject(subject.id)}
                                 className="px-3 py-1 text-sm font-medium bg-red-100 text-red-800 rounded-lg hover:bg-red-200 transition-colors"
                               >
                                 🗑️ {t('Delete')}
@@ -1395,11 +1399,11 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ admin, users, onUpdateU
                 <form onSubmit={handleAddSubject} className="space-y-4">
                   <div>
                     <label htmlFor="newSubjectName" className="block text-sm font-medium text-gray-700 mb-2">{t('Subject Name')}</label>
-                    <input 
-                      type="text" 
-                      id="newSubjectName" 
-                      value={newSubjectName} 
-                      onChange={e => setNewSubjectName(e.target.value)} 
+                    <input
+                      type="text"
+                      id="newSubjectName"
+                      value={newSubjectName}
+                      onChange={e => setNewSubjectName(e.target.value)}
                       className={`w-full px-4 py-3 border ${colors.border} rounded-lg focus:outline-none ${colors.focus} transition-colors`}
                       placeholder="e.g., Mathematics, Physics"
                     />
@@ -1409,8 +1413,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ admin, users, onUpdateU
                       <p className="text-sm text-red-600">{subjectError}</p>
                     </div>
                   )}
-                  <button 
-                    type="submit" 
+                  <button
+                    type="submit"
                     className={`w-full ${colors.primary} ${colors.hover} text-white font-bold py-3 px-6 rounded-lg transition-all duration-200 transform hover:scale-105 shadow-lg`}
                   >
                     Add Subject
@@ -1432,7 +1436,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ admin, users, onUpdateU
                     {allClasses.length} classes
                   </span>
                 </div>
-                
+
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {allClasses.length > 0 ? (
                     allClasses.map(cls => {
@@ -1442,15 +1446,15 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ admin, users, onUpdateU
                           <div className="flex items-center justify-between mb-3">
                             <h3 className="font-semibold text-gray-800">{cls.name}</h3>
                             <div className="flex items-center space-x-2">
-                              <button 
-                                onClick={() => handleStartEditClass(cls)} 
+                              <button
+                                onClick={() => handleStartEditClass(cls)}
                                 className={`px-2 py-1 text-xs font-medium ${colors.badge} rounded hover:shadow-md transition-all duration-200`}
                                 title={t('Edit class')}
                               >
                                 ✏️ {t('Edit')}
                               </button>
-                              <button 
-                                onClick={() => handleRemoveClass(cls.id)} 
+                              <button
+                                onClick={() => handleRemoveClass(cls.id)}
                                 className="px-2 py-1 text-xs font-medium bg-red-100 text-red-800 rounded hover:bg-red-200 transition-colors"
                                 title={t('Delete class')}
                               >
@@ -1486,11 +1490,11 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ admin, users, onUpdateU
                 <form onSubmit={handleAddClass} className="space-y-4">
                   <div>
                     <label htmlFor="newClassName" className="block text-sm font-medium text-gray-700 mb-2">Class Name</label>
-                    <input 
-                      type="text" 
-                      id="newClassName" 
-                      value={newClassName} 
-                      onChange={e => setNewClassName(e.target.value)} 
+                    <input
+                      type="text"
+                      id="newClassName"
+                      value={newClassName}
+                      onChange={e => setNewClassName(e.target.value)}
                       className={`w-full px-4 py-3 border ${colors.border} rounded-lg focus:outline-none ${colors.focus} transition-colors`}
                       placeholder="e.g., Class 10A, Science Stream"
                     />
@@ -1500,8 +1504,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ admin, users, onUpdateU
                       <p className="text-sm text-red-600">{classError}</p>
                     </div>
                   )}
-                  <button 
-                    type="submit" 
+                  <button
+                    type="submit"
                     className={`w-full ${colors.primary} ${colors.hover} text-white font-bold py-3 px-6 rounded-lg transition-all duration-200 transform hover:scale-105 shadow-lg`}
                   >
                     Add Class
@@ -1557,7 +1561,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ admin, users, onUpdateU
                 <div className="flex gap-2 mb-4">
                   <button onClick={() => {
                     const filtered = bank.filter(q => !bankSubjectFilter || q.subject === bankSubjectFilter).filter(q => !bankTagFilter || (Array.isArray(q.tags) && q.tags.some((t: string) => t.includes(bankTagFilter))))
-                    const rows: string[][] = [['id','subject','difficulty','tags','question','options']]
+                    const rows: string[][] = [['id', 'subject', 'difficulty', 'tags', 'question', 'options']]
                     filtered.forEach(q => rows.push([q.id, q.subject || '', q.difficulty || 'medium', Array.isArray(q.tags) ? q.tags.join('|') : '', q.question, Array.isArray(q.options) ? q.options.join('|') : '']))
                     const csv = rows.map(r => r.join(',')).join('\n')
                     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
@@ -1565,7 +1569,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ admin, users, onUpdateU
                     const a = document.createElement('a'); a.href = url; a.download = 'question_bank_filtered.csv'; a.click(); URL.revokeObjectURL(url)
                   }} className={`px-3 py-2 text-xs rounded ${colors.lightText} ${colors.lightHover}`}>{t('Export CSV')}</button>
                   <button onClick={() => {
-                    const rows: string[][] = [['id','subject','difficulty','tags','question','options']]
+                    const rows: string[][] = [['id', 'subject', 'difficulty', 'tags', 'question', 'options']]
                     bank.filter(q => selectedQIds.includes(q.id)).forEach(q => rows.push([q.id, q.subject || '', q.difficulty || 'medium', Array.isArray(q.tags) ? q.tags.join('|') : '', q.question, Array.isArray(q.options) ? q.options.join('|') : '']))
                     const csv = rows.map(r => r.join(',')).join('\n')
                     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
@@ -1672,7 +1676,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ admin, users, onUpdateU
                   <h3 className="text-2xl font-bold text-gray-800">{analytics.totalUsers}</h3>
                   <p className="text-sm text-gray-600">{t('Total Users')}</p>
                 </div>
-                
+
                 <div className={`${colors.card} rounded-xl shadow-lg border ${colors.border} p-6 text-center transform hover:scale-105 transition-transform duration-200`}>
                   <div className="w-12 h-12 bg-gradient-to-r from-teal-500 to-blue-500 rounded-full flex items-center justify-center mx-auto mb-4">
                     <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1683,7 +1687,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ admin, users, onUpdateU
                   <h3 className="text-2xl font-bold text-teal-600">{analytics.students}</h3>
                   <p className="text-sm text-gray-600">{t('Students')}</p>
                 </div>
-                
+
                 <div className={`${colors.card} rounded-xl shadow-lg border ${colors.border} p-6 text-center transform hover:scale-105 transition-transform duration-200`}>
                   <div className="w-12 h-12 bg-gradient-to-r from-indigo-500 to-purple-500 rounded-full flex items-center justify-center mx-auto mb-4">
                     <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1693,7 +1697,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ admin, users, onUpdateU
                   <h3 className="text-2xl font-bold text-indigo-600">{analytics.teachers}</h3>
                   <p className="text-sm text-gray-600">{t('Teachers')}</p>
                 </div>
-                
+
                 <div className={`${colors.card} rounded-xl shadow-lg border ${colors.border} p-6 text-center transform hover:scale-105 transition-transform duration-200`}>
                   <div className="w-12 h-12 bg-gradient-to-r from-green-500 to-emerald-500 rounded-full flex items-center justify-center mx-auto mb-4">
                     <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1736,21 +1740,21 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ admin, users, onUpdateU
             <form onSubmit={handleSaveEdit} className="space-y-4">
               <div>
                 <label htmlFor="editName" className="block text-sm font-medium text-gray-700 mb-2">Full Name</label>
-                <input 
-                  type="text" 
-                  id="editName" 
-                  value={editedName} 
-                  onChange={e => setEditedName(e.target.value)} 
+                <input
+                  type="text"
+                  id="editName"
+                  value={editedName}
+                  onChange={e => setEditedName(e.target.value)}
                   className={`w-full px-4 py-3 border ${colors.border} rounded-lg focus:outline-none ${colors.focus} transition-colors`}
                 />
               </div>
               <div>
                 <label htmlFor="editId" className="block text-sm font-medium text-gray-700 mb-2">User ID</label>
-                <input 
-                  type="text" 
-                  id="editId" 
-                  value={editedId} 
-                  onChange={e => setEditedId(e.target.value)} 
+                <input
+                  type="text"
+                  id="editId"
+                  value={editedId}
+                  onChange={e => setEditedId(e.target.value)}
                   className={`w-full px-4 py-3 border ${colors.border} rounded-lg focus:outline-none ${colors.focus} transition-colors`}
                 />
               </div>
@@ -1783,15 +1787,15 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ admin, users, onUpdateU
                 </div>
               )}
               <div className="flex justify-end space-x-3 mt-6">
-                <button 
-                  type="button" 
-                  onClick={handleCancelEdit} 
+                <button
+                  type="button"
+                  onClick={handleCancelEdit}
                   className="px-4 py-2 text-gray-700 bg-gray-200 rounded-lg hover:bg-gray-300 transition-colors"
                 >
                   Cancel
                 </button>
-                <button 
-                  type="submit" 
+                <button
+                  type="submit"
                   className={`px-4 py-2 text-white font-semibold rounded-lg ${colors.primary} ${colors.hover} transition-colors`}
                 >
                   Save Changes
@@ -1801,7 +1805,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ admin, users, onUpdateU
           </div>
         </div>
       )}
-      
+
       {capturingForUser && (
         <WebcamCapture
           onCapture={handleCaptureForUser}
@@ -1811,7 +1815,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ admin, users, onUpdateU
           buttonText="Capture & Save"
         />
       )}
-      
+
       {showFaceRegistration && (
         <WebcamCapture
           onCapture={handleAdminFaceRegister}
@@ -1846,7 +1850,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ admin, users, onUpdateU
                 setOverrideForUser(null);
                 setOverrideReason('');
               } catch (e) {
-                setVerifyMessage('Failed to record override');
+                setVerifyMessage(e instanceof Error ? e.message : 'Failed to record override');
               } finally {
                 setIsOverrideSubmitting(false);
               }

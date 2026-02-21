@@ -20,7 +20,7 @@ RUN npm run build
 # Create data directories
 RUN mkdir -p server/data server/storage python/data/faces
 
-EXPOSE 3000 5001
+EXPOSE 3000 3001 3002 5001
 
-# Start the application
-CMD ["npm", "start"]
+# Run database migration and start the application
+CMD ["sh", "-c", "node server/migrate-users-to-db.js && npm start"]

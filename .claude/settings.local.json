@@ -1,0 +1,19 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx tsc:*)",
+      "Bash(npm install:*)",
+      "Bash(npx vite build)",
+      "Bash(node:*)",
+      "Bash(npx vite:*)",
+      "Bash(cat:*)",
+      "Bash(ls \"C:\\\\Users\\\\SUNIL KORE\\\\Downloads\\\\gyandeep \\(1\\)\\\\public\"\" 2>nul || echo \"no public dir \")",
+      "Bash(ls:*)",
+      "Bash(dir \"C:\\\\Users\\\\SUNIL KORE\\\\Downloads\\\\gyandeep \\(1\\)\\\\components\")",
+      "Bash(dir \"C:\\\\Users\\\\SUNIL KORE\\\\Downloads\\\\gyandeep \\(1\\)\\\\services\")",
+      "Bash(dir \"C:\\\\Users\\\\SUNIL KORE\\\\Downloads\\\\gyandeep \\(1\\)\\\\server\")",
+      "Bash(wc:*)",
+      "Bash(dir:*)"
+    ]
+  }
+}

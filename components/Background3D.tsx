@@ -2,6 +2,7 @@ import React, { useRef, useMemo, useState, useEffect } from 'react';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { Stars, Float, PerspectiveCamera, MeshDistortMaterial, Sphere, Box, Text3D, Center, Environment, Text } from '@react-three/drei';
 import * as THREE from 'three';
+import LightPillar from './LightPillar';
 
 interface Enhanced3DBackgroundProps {
     theme?: string;
@@ -501,6 +502,103 @@ const GridPlane: React.FC = () => {
     );
 };
 
+// Full-screen liquid/chrome shader background
+const LiquidChrome: React.FC<{ colors: string[] }> = ({ colors }) => {
+    const meshRef = useRef<THREE.Mesh>(null);
+    const materialRef = useRef<any>(null);
+
+    const uniforms = useMemo(() => ({
+        u_time: { value: 0 },
+        u_resolution: { value: new THREE.Vector2(window.innerWidth, window.innerHeight) },
+        u_colorA: { value: new THREE.Color(colors[0]) },
+        u_colorB: { value: new THREE.Color(colors[1]) },
+    }), [colors]);
+
+    useEffect(() => {
+        const onResize = () => {
+            if (uniforms.u_resolution) uniforms.u_resolution.value.set(window.innerWidth, window.innerHeight);
+        };
+        window.addEventListener('resize', onResize);
+        return () => window.removeEventListener('resize', onResize);
+    }, [uniforms]);
+
+    useFrame((state) => {
+        if (materialRef.current) {
+            materialRef.current.uniforms.u_time.value = state.clock.elapsedTime;
+        }
+    });
+
+    const vertex = `
+        varying vec2 vUv;
+        void main() {
+            vUv = uv;
+            gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        }
+    `;
+
+    // Simple liquid/chrome-like fragment shader using sin-based noise
+    const fragment = `
+        precision highp float;
+        uniform float u_time;
+        uniform vec2 u_resolution;
+        uniform vec3 u_colorA;
+        uniform vec3 u_colorB;
+        varying vec2 vUv;
+
+        float hash(vec2 p) {
+            return fract(sin(dot(p, vec2(127.1,311.7))) * 43758.5453123);
+        }
+
+        float noise(vec2 p) {
+            vec2 i = floor(p);
+            vec2 f = fract(p);
+            float a = hash(i);
+            float b = hash(i + vec2(1.0, 0.0));
+            float c = hash(i + vec2(0.0, 1.0));
+            float d = hash(i + vec2(1.0, 1.0));
+            vec2 u = f*f*(3.0-2.0*f);
+            return mix(a, b, u.x) + (c - a)*u.y*(1.0 - u.x) + (d - b)*u.x*u.y;
+        }
+
+        void main(){
+            vec2 uv = vUv * vec2(u_resolution.x/u_resolution.y, 1.0);
+            float t = u_time * 0.2;
+            float n = 0.0;
+            n += 0.6 * noise(uv * 3.0 + vec2(t, t*0.7));
+            n += 0.3 * noise(uv * 6.0 - vec2(t*1.5, t*0.5));
+            n *= 1.0;
+
+            // bands and metallic highlights
+            float bands = sin((uv.x + uv.y*0.3 + n*0.8) * 6.0 + t*2.0);
+            float metallic = smoothstep(0.1, 0.6, bands);
+
+            vec3 base = mix(u_colorA, u_colorB, n);
+            vec3 spec = vec3(1.0) * pow(max(0.0, bands), 6.0) * 0.9;
+            vec3 color = mix(base, vec3(0.95), metallic * 0.6) + spec * metallic;
+
+            // vignette
+            float dist = distance(vUv, vec2(0.5));
+            color *= smoothstep(0.9, 0.2, dist);
+
+            gl_FragColor = vec4(color, 1.0 - smoothstep(0.0, 0.8, dist));
+        }
+    `;
+
+    return (
+        <mesh ref={meshRef} position={[0, 0, -30]}>
+            <planeGeometry args={[80, 80, 1, 1]} />
+            <shaderMaterial
+                ref={materialRef}
+                uniforms={uniforms}
+                vertexShader={vertex}
+                fragmentShader={fragment}
+                transparent={true}
+                depthWrite={false}
+            />
+        </mesh>
+    );
+};
+
 // Orbiting geometric shapes
 const OrbitingShapes: React.FC<{ colors: string[] }> = ({ colors }) => {
     const groupRef = useRef<THREE.Group>(null);
@@ -587,6 +685,7 @@ const Enhanced3DBackground: React.FC<Enhanced3DBackgroundProps> = ({
             pointerEvents: 'none',
             background: 'radial-gradient(ellipse at bottom, #1e293b 0%, #0f172a 100%)'
         }}>
+            <LightPillar />
             <Canvas>
                 <PerspectiveCamera makeDefault position={[0, 0, 15]} fov={75} />
 
@@ -601,6 +700,8 @@ const Enhanced3DBackground: React.FC<Enhanced3DBackgroundProps> = ({
 
                 {/* Environment for reflections */}
                 <Environment preset="night" />
+                {/* Liquid/chrome shader background (behind everything) */}
+                <LiquidChrome colors={colors} />
 
                 {/* Deep field stars */}
                 <Stars

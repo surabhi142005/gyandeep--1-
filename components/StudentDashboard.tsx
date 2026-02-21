@@ -7,6 +7,9 @@ import { verifyFace, verifyLocation } from '../services/authService';
 import Spinner from './Spinner';
 import QuizView from './QuizView';
 import PerformanceChart from './PerformanceChart';
+import Leaderboard from './Leaderboard';
+import AnnouncementBoard from './AnnouncementBoard';
+import type { Announcement } from './AnnouncementBoard';
 
 interface StudentDashboardProps {
   student: Student;
@@ -17,25 +20,27 @@ interface StudentDashboardProps {
   onShowNotification: (message: string, type?: 'info' | 'success') => void;
   theme: string;
   onUpdateFaceImage: (studentId: string, faceImage: string) => void;
-  historicalSessions: HistoricalSessionRecord[]; // Add this prop
+  historicalSessions: HistoricalSessionRecord[];
+  allStudents?: Student[];
+  announcements?: Announcement[];
 }
 
 const THEME_COLORS: Record<string, Record<string, string>> = {
-    indigo: { primary: 'bg-indigo-600', hover: 'hover:bg-indigo-700', text: 'text-indigo-800', ring: 'focus:ring-indigo-500', border: 'focus:border-indigo-500' },
-    teal: { primary: 'bg-teal-600', hover: 'hover:bg-teal-700', text: 'text-teal-800', ring: 'focus:ring-teal-500', border: 'focus:border-teal-500' },
-    crimson: { primary: 'bg-red-600', hover: 'hover:bg-red-700', text: 'text-red-800', ring: 'focus:ring-red-500', border: 'focus:border-red-500' },
-    purple: { primary: 'bg-purple-600', hover: 'hover:bg-purple-700', text: 'text-purple-800', ring: 'focus:ring-purple-500', border: 'focus:border-purple-500' },
+  indigo: { primary: 'bg-indigo-600', hover: 'hover:bg-indigo-700', text: 'text-indigo-800', ring: 'focus:ring-indigo-500', border: 'focus:border-indigo-500' },
+  teal: { primary: 'bg-teal-600', hover: 'hover:bg-teal-700', text: 'text-teal-800', ring: 'focus:ring-teal-500', border: 'focus:border-teal-500' },
+  crimson: { primary: 'bg-red-600', hover: 'hover:bg-red-700', text: 'text-red-800', ring: 'focus:ring-red-500', border: 'focus:border-red-500' },
+  purple: { primary: 'bg-purple-600', hover: 'hover:bg-purple-700', text: 'text-purple-800', ring: 'focus:ring-purple-500', border: 'focus:border-purple-500' },
 };
 
 
-const StudentDashboard: React.FC<StudentDashboardProps> = ({ student, classSession, onMarkAttendance, onUpdatePerformance, onLogout, onShowNotification, theme, onUpdateFaceImage, historicalSessions }) => {
+const StudentDashboard: React.FC<StudentDashboardProps> = ({ student, classSession, onMarkAttendance, onUpdatePerformance, onLogout, onShowNotification, theme, onUpdateFaceImage, historicalSessions, allStudents = [], announcements = [] }) => {
   const [code, setCode] = useState('');
   const [showWebcam, setShowWebcam] = useState(false);
   const [isVerifying, setIsVerifying] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error' | 'info'; text: string } | null>(null);
   const [quizTaken, setQuizTaken] = useState(false);
   const [showFaceRegistration, setShowFaceRegistration] = useState(false);
-  // FIX: Explicitly pass undefined to useRef to satisfy stricter TypeScript rules that require an initial value.
+  const [performanceTab, setPerformanceTab] = useState<'current' | 'all'>('current');
   const prevSessionRef = useRef<ClassSession | undefined>(undefined);
   const [selectedPreviousNoteInfo, setSelectedPreviousNoteInfo] = useState<{ id: number; subject: string; date: string } | null>(null);
   const [selectedPreviousNoteText, setSelectedPreviousNoteText] = useState<string | null>(null);
@@ -64,60 +69,77 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ student, classSessi
     // Update the ref to the current session for the next render
     prevSessionRef.current = classSession;
   }, [classSession, onShowNotification]);
-  
+
   const handleAttendanceAttempt = async () => {
     setMessage(null);
     if (!classSession.code || !classSession.expiry || !classSession.teacherLocation) {
-      setMessage({ type: 'error', text: 'The teacher has not started a class session.' });
+      setMessage({ type: 'error', text: 'No active class session. Please wait for your teacher to start a session.' });
       return;
     }
     if (Date.now() > classSession.expiry) {
-        setMessage({ type: 'error', text: 'The class code has expired.' });
-        return;
+      setMessage({ type: 'error', text: 'The class code has expired. Ask your teacher for a new one.' });
+      return;
     }
     if (code !== classSession.code) {
-        setMessage({ type: 'error', text: 'Invalid class code.' });
-        return;
+      setMessage({ type: 'error', text: 'Invalid class code. Please double-check and try again.' });
+      return;
     }
 
     setIsVerifying(true);
     setMessage({ type: 'info', text: 'Checking your location...' });
     try {
-        const studentLocation = await getCurrentPosition();
-        const result = await verifyLocation(studentLocation, classSession.teacherLocation!, classSession.attendanceRadius);
-        if (!result.authenticated) {
-            throw new Error(`Location check failed. You are ${Math.round(result.distance_m)}m away, outside the ${result.radius_m}m radius.`);
-        }
-        setMessage({ type: 'info', text: 'Location confirmed. Please verify your face.' });
-        setShowWebcam(true);
-    } catch (err: any) {
-        setMessage({ type: 'error', text: err.message });
-    } finally {
-        setIsVerifying(false);
-    }
-  };
-  
-  const handleCapture = async (imageDataUrl: string) => {
-    setShowWebcam(false);
-    setIsVerifying(true);
-    setMessage({ type: 'info', text: 'Verifying...' });
-
-    try {
-      const face = await verifyFace(imageDataUrl);
-      if (!face.authenticated) {
-        throw new Error('Face verification failed.');
-      }
-      onMarkAttendance(student.id);
       const studentLocation = await getCurrentPosition();
-      const distance = calculateDistance(studentLocation, classSession.teacherLocation!);
-      setMessage({ type: 'success', text: `Attendance marked! You are ${Math.round(distance)}m from the classroom.` });
+      const result = await verifyLocation(studentLocation, classSession.teacherLocation!, classSession.attendanceRadius);
+      if (!result.authenticated) {
+        throw new Error(`Location check failed. You are ${Math.round(result.distance_m)}m away, outside the ${result.radius_m}m radius.`);
+      }
+      setMessage({ type: 'info', text: 'Location confirmed. Please verify your face.' });
+      setShowWebcam(true);
     } catch (err: any) {
       setMessage({ type: 'error', text: err.message });
     } finally {
       setIsVerifying(false);
     }
   };
-  
+
+  const handleCapture = async (imageDataUrl: string) => {
+    setShowWebcam(false);
+    setIsVerifying(true);
+    setMessage({ type: 'info', text: 'Verifying...' });
+
+    try {
+      const face = await verifyFace(imageDataUrl, student.id);
+      if (!face.authenticated) {
+        throw new Error('Face verification failed. Please try again.');
+      }
+      onMarkAttendance(student.id);
+
+      // --- Streak tracking ---
+      const streakKey = `streak_${student.id}`;
+      const todayStr = new Date().toISOString().split('T')[0];
+      const streakData = JSON.parse(localStorage.getItem(streakKey) || '{"lastDate":"","current":0}');
+      const yesterday = new Date();
+      yesterday.setDate(yesterday.getDate() - 1);
+      const yesterdayStr = yesterday.toISOString().split('T')[0];
+      let newCurrent = 1;
+      if (streakData.lastDate === yesterdayStr) {
+        newCurrent = (streakData.current || 0) + 1;
+      } else if (streakData.lastDate === todayStr) {
+        newCurrent = streakData.current; // Already marked today
+      }
+      localStorage.setItem(streakKey, JSON.stringify({ lastDate: todayStr, current: newCurrent }));
+      // --- End streak tracking ---
+
+      const studentLocation = await getCurrentPosition();
+      const distance = calculateDistance(studentLocation, classSession.teacherLocation!);
+      setMessage({ type: 'success', text: `✅ Attendance marked! You are ${Math.round(distance)}m from the classroom. 🔥 Streak: ${newCurrent} day${newCurrent !== 1 ? 's' : ''}` });
+    } catch (err: any) {
+      setMessage({ type: 'error', text: err.message });
+    } finally {
+      setIsVerifying(false);
+    }
+  };
+
   const handleQuizSubmit = (score: number) => {
     onUpdatePerformance(student.id, classSession.subject, score);
     setQuizTaken(true);
@@ -134,50 +156,50 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ student, classSessi
   const availablePreviousNotes = useMemo(() => {
     // Filter by current subject first, then general if none for subject.
     const notesForSubject = historicalSessions
-        .filter(session => session.subject === classSession.subject && session.notes)
-        .filter(session => {
-          // Show notes from sessions where the student's class matches the session's class
-          if (student.classId && session.classId) {
-            return session.classId === student.classId;
-          }
-          // If no class info in session, show all notes for the subject
-          return true;
-        })
-        .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()); // Newest first
+      .filter(session => session.subject === classSession.subject && session.notes)
+      .filter(session => {
+        // Show notes from sessions where the student's class matches the session's class
+        if (student.classId && session.classId) {
+          return session.classId === student.classId;
+        }
+        // If no class info in session, show all notes for the subject
+        return true;
+      })
+      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()); // Newest first
 
     if (notesForSubject.length > 0) {
-        return notesForSubject;
+      return notesForSubject;
     }
 
     // If no notes for current subject, show general recent notes (e.g., last 5)
     return historicalSessions
-        .filter(session => session.notes)
-        .filter(session => {
-          // Filter by student's class if available
-          if (student.classId && session.classId) {
-            return session.classId === student.classId;
-          }
-          return true;
-        })
-        .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
-        .slice(0, 5); // Show up to 5 most recent notes regardless of subject
+      .filter(session => session.notes)
+      .filter(session => {
+        // Filter by student's class if available
+        if (student.classId && session.classId) {
+          return session.classId === student.classId;
+        }
+        return true;
+      })
+      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+      .slice(0, 5); // Show up to 5 most recent notes regardless of subject
   }, [historicalSessions, classSession.subject, student.classId]);
 
   // Handle selection from dropdown
   const handleSelectPreviousNote = (event: React.ChangeEvent<HTMLSelectElement>) => {
     const sessionId = parseInt(event.target.value, 10);
     if (isNaN(sessionId)) {
-        setSelectedPreviousNoteInfo(null);
-        setSelectedPreviousNoteText(null);
-        return;
+      setSelectedPreviousNoteInfo(null);
+      setSelectedPreviousNoteText(null);
+      return;
     }
     const session = historicalSessions.find(s => s.id === sessionId);
     if (session && session.notes) {
-        setSelectedPreviousNoteInfo({ id: session.id, subject: session.subject, date: session.date });
-        setSelectedPreviousNoteText(session.notes);
+      setSelectedPreviousNoteInfo({ id: session.id, subject: session.subject, date: session.date });
+      setSelectedPreviousNoteText(session.notes);
     } else {
-        setSelectedPreviousNoteInfo(null);
-        setSelectedPreviousNoteText(null);
+      setSelectedPreviousNoteInfo(null);
+      setSelectedPreviousNoteText(null);
     }
   };
 
@@ -194,6 +216,52 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ student, classSessi
             Logout
           </button>
         </header>
+
+        {/* Gamification Stats Bar */}
+        <div className="px-4 md:px-8 pt-4">
+          <div className="bg-white rounded-lg shadow-md p-4 flex flex-wrap items-center gap-4 md:gap-6">
+            <div className="flex items-center gap-2">
+              <span className="text-lg">⭐</span>
+              <div>
+                <p className="text-xs text-gray-500">Level</p>
+                <p className={`text-lg font-bold ${colors.text}`}>{student.level || Math.floor((student.xp || 0) / 100) + 1}</p>
+              </div>
+            </div>
+            <div className="flex-1 min-w-[120px]">
+              <div className="flex items-center justify-between text-xs text-gray-500 mb-1">
+                <span>XP</span>
+                <span>{student.xp || 0} / {(Math.floor((student.xp || 0) / 100) + 1) * 100}</span>
+              </div>
+              <div className="w-full bg-gray-200 rounded-full h-2.5">
+                <div className={`h-2.5 rounded-full ${colors.primary} transition-all`} style={{ width: `${((student.xp || 0) % 100)}%` }} />
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-lg">🪙</span>
+              <div>
+                <p className="text-xs text-gray-500">Coins</p>
+                <p className="text-lg font-bold text-yellow-600">{student.coins || 0}</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-lg">🔥</span>
+              <div>
+                <p className="text-xs text-gray-500">Best Streak</p>
+                <p className="text-lg font-bold text-orange-600">{student.longestStreak || 0}</p>
+              </div>
+            </div>
+            {Array.isArray(student.badges) && student.badges.length > 0 && (
+              <div className="flex items-center gap-1 flex-wrap">
+                {student.badges.slice(0, 5).map(badge => (
+                  <span key={badge} className={`px-2 py-0.5 rounded-full text-xs font-medium ${colors.text} bg-gray-100`}>
+                    {badge === 'Perfect 5' ? '⭐' : badge === 'High Score' ? '🏆' : '🎖️'} {badge}
+                  </span>
+                ))}
+                {student.badges.length > 5 && <span className="text-xs text-gray-400">+{student.badges.length - 5}</span>}
+              </div>
+            )}
+          </div>
+        </div>
 
         <main className="p-4 md:p-8 grid grid-cols-1 md:grid-cols-2 gap-8">
           <div className="space-y-6">
@@ -217,10 +285,9 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ student, classSessi
                 </button>
               </div>
               {message && (
-                <p className={`mt-4 p-3 rounded-md text-sm ${
-                    message.type === 'success' ? 'bg-green-100 text-green-800' : 
-                    message.type === 'error' ? 'bg-red-100 text-red-800' : `bg-blue-100 text-blue-800`
-                }`}>
+                <p className={`mt-4 p-3 rounded-md text-sm ${message.type === 'success' ? 'bg-green-100 text-green-800' :
+                  message.type === 'error' ? 'bg-red-100 text-red-800' : `bg-blue-100 text-blue-800`
+                  }`}>
                   {message.text}
                 </p>
               )}
@@ -247,7 +314,7 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ student, classSessi
                 <p className="text-gray-500">The teacher has not uploaded notes yet for this session.</p>
               )}
             </div>
-            
+
             {/* New section for Previous Notes */}
             <div className="bg-white p-6 rounded-lg shadow-md">
               <h2 className="text-xl font-semibold text-gray-700 mb-4">Previous Class Notes</h2>
@@ -284,47 +351,92 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ student, classSessi
             <div className="bg-white p-6 rounded-lg shadow-md">
               <h2 className="text-xl font-semibold text-gray-700 mb-4">Account Settings</h2>
               <div className="flex items-center justify-between">
-                  <div>
-                      <h3 className="text-md font-semibold text-gray-600">Face ID</h3>
-                      <p className={`text-sm ${student.faceImage ? 'text-green-700' : 'text-gray-500'}`}>
-                          {student.faceImage ? 'Registered' : 'Not registered'}
-                      </p>
-                  </div>
-                  <button onClick={() => setShowFaceRegistration(true)} className={`text-sm font-semibold ${colors.primary} text-white px-4 py-2 rounded-lg ${colors.hover}`}>
-                      {student.faceImage ? 'Update Face ID' : 'Register Now'}
-                  </button>
+                <div>
+                  <h3 className="text-md font-semibold text-gray-600">Face ID</h3>
+                  <p className={`text-sm ${student.faceImage ? 'text-green-700' : 'text-gray-500'}`}>
+                    {student.faceImage ? 'Registered' : 'Not registered'}
+                  </p>
+                </div>
+                <button onClick={() => setShowFaceRegistration(true)} className={`text-sm font-semibold ${colors.primary} text-white px-4 py-2 rounded-lg ${colors.hover}`}>
+                  {student.faceImage ? 'Update Face ID' : 'Register Now'}
+                </button>
               </div>
               {student.faceImage && (
-                  <div className="mt-4 border-t pt-4 flex justify-center">
-                      <img src={student.faceImage} alt="Student's face" className="w-24 h-24 rounded-full object-cover"/>
-                  </div>
+                <div className="mt-4 border-t pt-4 flex justify-center">
+                  <img src={student.faceImage} alt="Student's face" className="w-24 h-24 rounded-full object-cover" />
+                </div>
               )}
             </div>
           </div>
           <div className="space-y-6">
             <div className="bg-white p-6 rounded-lg shadow-md">
-                <h2 className="text-xl font-semibold text-gray-700 mb-4">Quiz</h2>
-                {classSession.quiz && classSession.quizPublished && !quizTaken ? (
-                    <QuizView quiz={classSession.quiz} subject={classSession.subject} onSubmit={handleQuizSubmit} theme={theme}/>
-                ) : quizTaken ? (
-                    <p className="text-green-600 text-center">You have completed the quiz for this session.</p>
-                ) : (
-                    <p className="text-gray-500 text-center">The quiz is not yet available.</p>
-                )}
-            </div>
-             {/* Always show performance chart for the current subject */}
-            <div className="bg-white p-6 rounded-lg shadow-md">
-              <h2 className="text-xl font-semibold text-gray-700 mb-4">Your Performance in {classSession.subject}</h2>
-              {studentPerformanceForSubject.length > 0 ? (
-                <PerformanceChart 
-                    data={studentPerformanceForSubject} 
-                    title="" // Title is already in h2
-                    theme={theme}
-                />
+              <h2 className="text-xl font-semibold text-gray-700 mb-4">Quiz</h2>
+              {classSession.quiz && classSession.quizPublished && !quizTaken ? (
+                <QuizView quiz={classSession.quiz} subject={classSession.subject} onSubmit={handleQuizSubmit} theme={theme} />
+              ) : quizTaken ? (
+                <p className="text-green-600 text-center">✅ You have completed the quiz for this session.</p>
               ) : (
-                <p className="text-gray-500 text-center">No performance data for {classSession.subject} yet.</p>
+                <p className="text-gray-500 text-center">The quiz is not yet available.</p>
               )}
             </div>
+            {/* Performance section with subject tabs */}
+            <div className="bg-white p-6 rounded-lg shadow-md">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-xl font-semibold text-gray-700">Performance</h2>
+                <div className="flex bg-gray-100 rounded-lg p-0.5 gap-0.5">
+                  <button
+                    onClick={() => setPerformanceTab('current')}
+                    className={`px-3 py-1 text-xs font-semibold rounded-md transition-all ${performanceTab === 'current' ? `${colors.primary} text-white shadow` : 'text-gray-600 hover:bg-gray-200'
+                      }`}
+                  >
+                    {classSession.subject}
+                  </button>
+                  <button
+                    onClick={() => setPerformanceTab('all')}
+                    className={`px-3 py-1 text-xs font-semibold rounded-md transition-all ${performanceTab === 'all' ? `${colors.primary} text-white shadow` : 'text-gray-600 hover:bg-gray-200'
+                      }`}
+                  >
+                    All Subjects
+                  </button>
+                </div>
+              </div>
+              {performanceTab === 'current' ? (
+                studentPerformanceForSubject.length > 0 ? (
+                  <PerformanceChart data={studentPerformanceForSubject} title="" theme={theme} />
+                ) : (
+                  <p className="text-gray-500 text-center">No performance data for {classSession.subject} yet.</p>
+                )
+              ) : (
+                student.performance.length > 0 ? (
+                  <div className="space-y-4">
+                    {Array.from(new Set(student.performance.map(p => p.subject))).map(subject => {
+                      const subjectData = student.performance.filter(p => p.subject === subject);
+                      const avg = Math.round(subjectData.reduce((s, p) => s + p.score, 0) / subjectData.length);
+                      return (
+                        <div key={subject} className="border rounded-lg p-3">
+                          <div className="flex justify-between items-center mb-2">
+                            <span className="font-semibold text-gray-700 text-sm">{subject}</span>
+                            <span className={`text-sm font-bold px-2 py-0.5 rounded-full ${avg >= 80 ? 'bg-green-100 text-green-700' : avg >= 60 ? 'bg-yellow-100 text-yellow-700' : 'bg-red-100 text-red-700'
+                              }`}>{avg}% avg</span>
+                          </div>
+                          <PerformanceChart data={subjectData} title="" theme={theme} />
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <p className="text-gray-500 text-center">No performance data available yet.</p>
+                )
+              )}
+            </div>
+
+            {/* Leaderboard */}
+            {allStudents.length > 0 && (
+              <Leaderboard students={allStudents} currentStudentId={student.id} theme={theme} />
+            )}
+
+            {/* Announcements */}
+            <AnnouncementBoard announcements={announcements} canPost={false} theme={theme} />
           </div>
         </main>
       </div>
@@ -332,9 +444,10 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ student, classSessi
       {showFaceRegistration && (
         <StudentFaceRegistration
           userId={student.id}
+          onCapture={handleFaceRegister}
           onSuccess={() => {
             setShowFaceRegistration(false);
-            onShowNotification('Face registered successfully!', 'success');
+            onShowNotification('Face ID registered successfully! You can now use Face ID for attendance.', 'success');
           }}
           onClose={() => setShowFaceRegistration(false)}
         />

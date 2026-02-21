@@ -40,7 +40,10 @@ const UserProfile: React.FC<UserProfileProps> = ({ user, onUpdateUser, onClose, 
                 setMessage({ text: data.error || 'Failed to update profile', type: 'error' });
             }
         } catch (error: any) {
-            setMessage({ text: error.message || 'Error saving profile', type: 'error' });
+            const msg = error instanceof TypeError && error.message === 'Failed to fetch'
+                ? 'Unable to connect to the server. Please check your connection.'
+                : (error.message || 'Error saving profile');
+            setMessage({ text: msg, type: 'error' });
         } finally {
             setSaving(false);
         }

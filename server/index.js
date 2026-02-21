@@ -8,7 +8,11 @@ import fs from 'fs'
 import path from 'path'
 import session from 'express-session'
 import passport from 'passport'
+import jwt from 'jsonwebtoken'
+import bcrypt from 'bcryptjs'
 import { Strategy as GoogleStrategy } from 'passport-google-oauth20'
+import { sendPasswordResetEmail, sendEmailVerification } from './emailService.js'
+import { initDB, setupSchema, all as dbAll, run as dbRun } from './database.js'
 
 
 dotenv.config({ path: '.env.local' })
@@ -16,7 +20,7 @@ dotenv.config()
 
 const app = express()
 app.use(cors({ origin: ['http://localhost:5173', 'http://localhost:5174', 'http://localhost:5175'], credentials: true })) // Update CORS for cookie
-app.use(express.json())
+app.use(express.json({ limit: '10mb' }))
 
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID
 const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET
@@ -30,13 +34,12 @@ if (GOOGLE_CLIENT_ID && GOOGLE_CLIENT_SECRET) {
     clientSecret: GOOGLE_CLIENT_SECRET,
     callbackURL: "/auth/google/callback"
   },
-    (accessToken, refreshToken, profile, done) => {
+    async (accessToken, refreshToken, profile, done) => {
       try {
         const ensureDataDir = () => { try { if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true }) } catch { } }
         ensureDataDir()
 
-        const usersRaw = fs.existsSync(usersFile) ? fs.readFileSync(usersFile, 'utf8') : '[]'
-        const users = JSON.parse(usersRaw || '[]')
+        const users = await readUsers()
 
         let user = users.find(u => u.googleId === profile.id || (u.email && profile.emails && u.email === profile.emails[0].value))
 
@@ -52,13 +55,13 @@ if (GOOGLE_CLIENT_ID && GOOGLE_CLIENT_SECRET) {
             history: []
           }
           users.push(user)
-          fs.writeFileSync(usersFile, JSON.stringify(users, null, 2))
+          await writeUsers(users)
         } else if (!user.googleId) {
           // Link existing
           user.googleId = profile.id
           const idx = users.findIndex(u => u.id === user.id)
           users[idx] = user
-          fs.writeFileSync(usersFile, JSON.stringify(users, null, 2))
+          await writeUsers(users)
         }
 
         return done(null, user)
@@ -74,18 +77,15 @@ passport.serializeUser((user, done) => {
 })
 
 passport.deserializeUser((id, done) => {
-  try {
-    if (!fs.existsSync(usersFile)) return done(null, null)
-    const usersRaw = fs.readFileSync(usersFile, 'utf8')
-    const users = JSON.parse(usersRaw || '[]')
-    const user = users.find(u => u.id === id)
-    done(null, user)
-  } catch (err) {
-    done(err)
-  }
+  readUsers().then(users => {
+    const user = (users || []).find(u => u.id === id)
+    done(null, user || null)
+  }).catch(err => done(err))
 })
 
-app.use(session({ secret: 'gyandeep-secret-key', resave: false, saveUninitialized: false }))
+const SESSION_SECRET = process.env.SESSION_SECRET || 'gyandeep-secret-key'
+const JWT_SECRET = process.env.JWT_SECRET || (process.env.SESSION_SECRET || 'gyandeep-jwt-secret')
+app.use(session({ secret: SESSION_SECRET, resave: false, saveUninitialized: false }))
 app.use(passport.initialize())
 app.use(passport.session())
 
@@ -257,6 +257,11 @@ const classesFile = path.join(dataDir, 'classes.json')
 const questionBankFile = path.join(dataDir, 'questionBank.json')
 const auditLogFile = path.join(dataDir, 'audit.json')
 const tagsPresetsFile = path.join(dataDir, 'tagsPresets.json')
+const gradesFile = path.join(dataDir, 'grades.json')
+const timetableFile = path.join(dataDir, 'timetable.json')
+const ticketsFile = path.join(dataDir, 'tickets.json')
+const webhooksFile = path.join(dataDir, 'webhooks.json')
+const notificationsFile = path.join(dataDir, 'notifications.json')
 
 const ensureDirs = () => {
   try { if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true }) } catch { }
@@ -267,26 +272,89 @@ const ensureDirs = () => {
 ensureDirs()
 app.use('/storage', express.static(storageDir))
 
+// Helper functions to read/write users using DB when available, otherwise fall back to file
+async function readUsers() {
+  try {
+    // Try DB first
+    const rows = await dbAll(`SELECT * FROM users`)
+    if (Array.isArray(rows) && rows.length > 0) {
+      return rows.map(r => ({
+        id: r.id,
+        name: r.name,
+        email: r.email,
+        role: r.role,
+        password: r.password,
+        googleId: r.googleId,
+        faceImage: r.faceImage,
+        preferences: r.preferences ? JSON.parse(r.preferences) : {},
+        history: r.history ? JSON.parse(r.history) : [],
+        assignedSubjects: r.assignedSubjects ? JSON.parse(r.assignedSubjects) : [],
+        performance: r.performance ? JSON.parse(r.performance) : [],
+        classId: r.classId
+      }))
+    }
+  } catch (err) {
+    // DB not available or table empty - fall through to file
+  }
+  try {
+    if (!fs.existsSync(usersFile)) return []
+    const raw = fs.readFileSync(usersFile, 'utf8')
+    return JSON.parse(raw || '[]')
+  } catch (err) {
+    return []
+  }
+}
+
+async function writeUsers(users) {
+  try {
+    // If DB available, replace contents
+    await dbRun(`DELETE FROM users`, [])
+    for (const u of users) {
+      await dbRun(`INSERT OR REPLACE INTO users (id, name, email, role, password, googleId, faceImage, preferences, history, assignedSubjects, performance, classId) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, [
+        u.id,
+        u.name || null,
+        u.email || null,
+        u.role || null,
+        u.password || u.passwordHash || null,
+        u.googleId || null,
+        u.faceImage || null,
+        JSON.stringify(u.preferences || {}),
+        JSON.stringify(u.history || []),
+        JSON.stringify(u.assignedSubjects || []),
+        JSON.stringify(u.performance || []),
+        u.classId || null
+      ])
+    }
+    return true
+  } catch (err) {
+    // fallback to file write
+    try {
+      fs.writeFileSync(usersFile, JSON.stringify(users, null, 2), 'utf8')
+      return true
+    } catch (e) {
+      return false
+    }
+  }
+}
+
 app.get('/api/users', (req, res) => {
   try {
-    if (!fs.existsSync(usersFile)) return res.json([])
-    const raw = fs.readFileSync(usersFile, 'utf8')
-    const users = JSON.parse(raw || '[]')
-    return res.json(users)
+    readUsers().then(users => res.json(users || [])).catch(err => res.status(500).json({ error: err && err.message ? err.message : 'Unknown error' }))
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown error'
     return res.status(500).json({ error: message })
   }
 })
 
-app.post('/api/users/bulk', (req, res) => {
+app.post('/api/users/bulk', requireAuth, async (req, res) => {
   try {
     const users = req.body
     if (!Array.isArray(users)) {
       return res.status(400).json({ error: 'Expected an array of users' })
     }
     ensureDirs()
-    fs.writeFileSync(usersFile, JSON.stringify(users, null, 2), 'utf8')
+    const ok = await writeUsers(users)
+    if (!ok) return res.status(500).json({ error: 'Failed to persist users' })
     return res.json({ ok: true, count: users.length })
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown error'
@@ -294,7 +362,57 @@ app.post('/api/users/bulk', (req, res) => {
   }
 })
 
-app.post('/api/notes/upload', (req, res) => {
+// Simple JWT auth endpoints (email/password) stored in users.json for self-hosted deployments.
+app.post('/api/auth/register', async (req, res) => {
+  try {
+    const { email, password, name } = req.body || {}
+    if (!email || !password) return res.status(400).json({ error: 'email and password are required' })
+    ensureDirs()
+    const users = await readUsers()
+    if ((users || []).find((u) => u.email === email)) return res.status(409).json({ error: 'User already exists' })
+    const hashed = await bcrypt.hash(password, 10)
+    const user = { id: `u-${Date.now()}`, email, name: name || email.split('@')[0], passwordHash: hashed, role: 'student' }
+    users.push(user)
+    const ok = await writeUsers(users)
+    if (!ok) return res.status(500).json({ error: 'Failed to persist user' })
+    const token = jwt.sign({ id: user.id, email: user.email, role: user.role }, JWT_SECRET, { expiresIn: '7d' })
+    return res.json({ token, user: { id: user.id, email: user.email, name: user.name, role: user.role } })
+  } catch (err) {
+    return res.status(500).json({ error: (err && err.message) || 'Unknown error' })
+  }
+})
+
+app.post('/api/auth/login', async (req, res) => {
+  try {
+    const { email, password } = req.body || {}
+    if (!email || !password) return res.status(400).json({ error: 'email and password are required' })
+    const users = await readUsers()
+    const user = (users || []).find((u) => u.email === email)
+    if (!user || !user.passwordHash) return res.status(401).json({ error: 'Invalid credentials' })
+    const ok = await bcrypt.compare(password, user.passwordHash)
+    if (!ok) return res.status(401).json({ error: 'Invalid credentials' })
+    const token = jwt.sign({ id: user.id, email: user.email, role: user.role }, JWT_SECRET, { expiresIn: '7d' })
+    return res.json({ token, user: { id: user.id, email: user.email, name: user.name, role: user.role } })
+  } catch (err) {
+    return res.status(500).json({ error: (err && err.message) || 'Unknown error' })
+  }
+})
+
+// Middleware to protect API routes via Bearer token
+function requireAuth(req, res, next) {
+  try {
+    const auth = req.headers.authorization || ''
+    if (!auth.startsWith('Bearer ')) return res.status(401).json({ error: 'Missing token' })
+    const token = auth.slice(7)
+    const payload = jwt.verify(token, JWT_SECRET)
+    req.user = payload
+    return next()
+  } catch (err) {
+    return res.status(401).json({ error: 'Invalid token' })
+  }
+}
+
+app.post('/api/notes/upload', requireAuth, (req, res) => {
   try {
     const { classId, subjectId, content } = req.body || {}
     if (!content || !subjectId || !classId) {
@@ -333,8 +451,15 @@ app.get('/api/notes/list', (req, res) => {
 })
 
 const port = process.env.PORT ? Number(process.env.PORT) : 3001
-app.listen(port, () => {
-  process.stdout.write(`Backend running on http://localhost:${port}\n`)
+
+// Initialize database (optional - SQLite) and schema
+initDB().then(() => setupSchema()).catch((err) => {
+  console.warn('DB initialization failed, continuing with file-storage fallback:', err && err.message ? err.message : err)
+}).finally(() => {
+  app.listen(port, () => {
+    process.stdout.write(`Backend running on http://localhost:${port}\n`)
+    process.stdout.flush()
+  })
 })
 
 app.post('/api/auth/face', async (req, res) => {
@@ -379,7 +504,7 @@ app.get('/api/classes', (req, res) => {
   }
 })
 
-app.post('/api/classes', (req, res) => {
+app.post('/api/classes', requireAuth, (req, res) => {
   try {
     const classes = req.body
     if (!Array.isArray(classes)) {
@@ -481,14 +606,28 @@ app.post('/api/question-bank/upsert-quiz', (req, res) => {
 
 // --- OTP MFA ---
 const otpStore = new Map()
-app.post('/api/auth/otp/send', (req, res) => {
+app.post('/api/auth/otp/send', async (req, res) => {
   try {
-    const { userId } = req.body || {}
+    const { userId, email } = req.body || {}
     if (!userId) return res.status(400).json({ error: 'userId is required' })
     const code = String(Math.floor(100000 + Math.random() * 900000))
     const expires = Date.now() + 5 * 60 * 1000
     otpStore.set(userId, { code, expires })
     console.log(`OTP for ${userId}: ${code}`)
+    // Send OTP via email if email provided or look up user email
+    let targetEmail = email
+    if (!targetEmail) {
+      const users = fs.existsSync(usersFile) ? JSON.parse(fs.readFileSync(usersFile, 'utf8') || '[]') : []
+      const user = users.find(u => u.id === userId)
+      targetEmail = user?.email
+    }
+    if (targetEmail) {
+      try {
+        await sendEmailVerification(targetEmail, code)
+      } catch (emailErr) {
+        console.error('Failed to send OTP email:', emailErr.message)
+      }
+    }
     return res.json({ ok: true, expires })
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown error'
@@ -518,7 +657,7 @@ app.post('/api/auth/otp/verify', (req, res) => {
 
 // --- Password Recovery ---
 const resetStore = new Map()
-app.post('/api/auth/password/request', (req, res) => {
+app.post('/api/auth/password/request', async (req, res) => {
   try {
     const { email } = req.body || {}
     if (!email) return res.status(400).json({ error: 'email is required' })
@@ -529,6 +668,11 @@ app.post('/api/auth/password/request', (req, res) => {
     const expires = Date.now() + 10 * 60 * 1000
     resetStore.set(String(email).toLowerCase(), { code, expires })
     console.log(`Password reset code for ${email}: ${code}`)
+    try {
+      await sendPasswordResetEmail(email, code)
+    } catch (emailErr) {
+      console.error('Failed to send password reset email:', emailErr.message)
+    }
     return res.json({ ok: true, expires })
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown error'
@@ -563,6 +707,52 @@ app.post('/api/auth/password/complete', (req, res) => {
     users[idx].password = String(newPassword)
     fs.writeFileSync(usersFile, JSON.stringify(users, null, 2))
     resetStore.delete(String(email).toLowerCase())
+    return res.json({ ok: true })
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown error'
+    return res.status(500).json({ error: message })
+  }
+})
+
+// --- Email Verification ---
+const emailVerifyStore = new Map()
+app.post('/api/auth/email/verify-send', async (req, res) => {
+  try {
+    const { email } = req.body || {}
+    if (!email) return res.status(400).json({ error: 'email is required' })
+    const code = String(Math.floor(100000 + Math.random() * 900000))
+    const expires = Date.now() + 10 * 60 * 1000
+    emailVerifyStore.set(String(email).toLowerCase(), { code, expires })
+    console.log(`Email verification code for ${email}: ${code}`)
+    try {
+      await sendEmailVerification(email, code)
+    } catch (emailErr) {
+      console.error('Failed to send verification email:', emailErr.message)
+    }
+    return res.json({ ok: true, expires })
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown error'
+    return res.status(500).json({ error: message })
+  }
+})
+
+app.post('/api/auth/email/verify-check', (req, res) => {
+  try {
+    const { email, code } = req.body || {}
+    if (!email || !code) return res.status(400).json({ error: 'email and code are required' })
+    const rec = emailVerifyStore.get(String(email).toLowerCase())
+    const ok = !!rec && rec.code === String(code) && rec.expires > Date.now()
+    if (!ok) return res.status(401).json({ error: 'invalid or expired code' })
+    // Mark user as email verified
+    if (fs.existsSync(usersFile)) {
+      const users = JSON.parse(fs.readFileSync(usersFile, 'utf8') || '[]')
+      const idx = users.findIndex(u => (u.email || '').toLowerCase() === String(email).toLowerCase())
+      if (idx !== -1) {
+        users[idx].emailVerified = true
+        fs.writeFileSync(usersFile, JSON.stringify(users, null, 2))
+      }
+    }
+    emailVerifyStore.delete(String(email).toLowerCase())
     return res.json({ ok: true })
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown error'
@@ -684,14 +874,16 @@ app.get('/api/users/profile', (req, res) => {
     const { password, ...safeUser } = user
     return res.json(safeUser)
   } catch (error) {
-    return res.status(500).json({ error: error.message })
+    const message = error instanceof Error ? error.message : 'Unknown error'
+    return res.status(500).json({ error: message })
   }
 })
 
 app.put('/api/users/profile', (req, res) => {
   try {
-    const { userId, updates } = req.body
+    const { userId, updates } = req.body || {}
     if (!userId) return res.status(400).json({ error: 'UserId required' })
+    if (!updates || typeof updates !== 'object') return res.status(400).json({ error: 'updates object is required' })
 
     if (!fs.existsSync(usersFile)) return res.status(404).json({ error: 'No users' })
     const raw = fs.readFileSync(usersFile, 'utf8')
@@ -708,6 +900,296 @@ app.put('/api/users/profile', (req, res) => {
     fs.writeFileSync(usersFile, JSON.stringify(users, null, 2))
     return res.json({ ok: true, user: users[idx] })
   } catch (error) {
-    return res.status(500).json({ error: error.message })
+    const message = error instanceof Error ? error.message : 'Unknown error'
+    return res.status(500).json({ error: message })
   }
+})
+
+// --- Grade Book ---
+app.get('/api/grades', (req, res) => {
+  try {
+    if (!fs.existsSync(gradesFile)) return res.json([])
+    const raw = fs.readFileSync(gradesFile, 'utf8')
+    return res.json(JSON.parse(raw || '[]'))
+  } catch (error) {
+    return res.status(500).json({ error: error.message || 'Unknown error' })
+  }
+})
+
+app.post('/api/grades', (req, res) => {
+  try {
+    const { studentId, subject, category, title, score, maxScore, weight, date, teacherId } = req.body || {}
+    if (!studentId || !subject || !category || !title || score === undefined || !maxScore) {
+      return res.status(400).json({ error: 'studentId, subject, category, title, score, maxScore required' })
+    }
+    ensureDirs()
+    const existing = fs.existsSync(gradesFile) ? JSON.parse(fs.readFileSync(gradesFile, 'utf8') || '[]') : []
+    const entry = {
+      id: `gr-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      studentId, subject, category, title,
+      score: Number(score), maxScore: Number(maxScore),
+      weight: Number(weight || 1), date: date || new Date().toISOString().split('T')[0],
+      teacherId: teacherId || null, createdAt: Date.now()
+    }
+    existing.push(entry)
+    fs.writeFileSync(gradesFile, JSON.stringify(existing, null, 2))
+    return res.json({ ok: true, grade: entry })
+  } catch (error) {
+    return res.status(500).json({ error: error.message || 'Unknown error' })
+  }
+})
+
+app.post('/api/grades/bulk', (req, res) => {
+  try {
+    const { grades } = req.body || {}
+    if (!Array.isArray(grades)) return res.status(400).json({ error: 'grades array required' })
+    ensureDirs()
+    const existing = fs.existsSync(gradesFile) ? JSON.parse(fs.readFileSync(gradesFile, 'utf8') || '[]') : []
+    const entries = grades.map(g => ({
+      id: `gr-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      studentId: g.studentId, subject: g.subject, category: g.category, title: g.title,
+      score: Number(g.score), maxScore: Number(g.maxScore),
+      weight: Number(g.weight || 1), date: g.date || new Date().toISOString().split('T')[0],
+      teacherId: g.teacherId || null, createdAt: Date.now()
+    }))
+    const merged = existing.concat(entries)
+    fs.writeFileSync(gradesFile, JSON.stringify(merged, null, 2))
+    return res.json({ ok: true, count: entries.length })
+  } catch (error) {
+    return res.status(500).json({ error: error.message || 'Unknown error' })
+  }
+})
+
+app.delete('/api/grades/:id', (req, res) => {
+  try {
+    const { id } = req.params
+    const existing = fs.existsSync(gradesFile) ? JSON.parse(fs.readFileSync(gradesFile, 'utf8') || '[]') : []
+    const filtered = existing.filter(g => g.id !== id)
+    fs.writeFileSync(gradesFile, JSON.stringify(filtered, null, 2))
+    return res.json({ ok: true })
+  } catch (error) {
+    return res.status(500).json({ error: error.message || 'Unknown error' })
+  }
+})
+
+// --- Timetable ---
+app.get('/api/timetable', (req, res) => {
+  try {
+    if (!fs.existsSync(timetableFile)) return res.json([])
+    const raw = fs.readFileSync(timetableFile, 'utf8')
+    return res.json(JSON.parse(raw || '[]'))
+  } catch (error) {
+    return res.status(500).json({ error: error.message || 'Unknown error' })
+  }
+})
+
+app.post('/api/timetable', (req, res) => {
+  try {
+    const entries = req.body
+    if (!Array.isArray(entries)) return res.status(400).json({ error: 'Expected array of timetable entries' })
+    ensureDirs()
+    fs.writeFileSync(timetableFile, JSON.stringify(entries, null, 2))
+    return res.json({ ok: true, count: entries.length })
+  } catch (error) {
+    return res.status(500).json({ error: error.message || 'Unknown error' })
+  }
+})
+
+app.post('/api/timetable/entry', (req, res) => {
+  try {
+    const { day, startTime, endTime, subject, teacherId, classId, room } = req.body || {}
+    if (!day || !startTime || !endTime || !subject) {
+      return res.status(400).json({ error: 'day, startTime, endTime, subject required' })
+    }
+    ensureDirs()
+    const existing = fs.existsSync(timetableFile) ? JSON.parse(fs.readFileSync(timetableFile, 'utf8') || '[]') : []
+    const entry = {
+      id: `tt-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      day, startTime, endTime, subject, teacherId: teacherId || null,
+      classId: classId || null, room: room || null
+    }
+    existing.push(entry)
+    fs.writeFileSync(timetableFile, JSON.stringify(existing, null, 2))
+    return res.json({ ok: true, entry })
+  } catch (error) {
+    return res.status(500).json({ error: error.message || 'Unknown error' })
+  }
+})
+
+app.delete('/api/timetable/:id', (req, res) => {
+  try {
+    const { id } = req.params
+    const existing = fs.existsSync(timetableFile) ? JSON.parse(fs.readFileSync(timetableFile, 'utf8') || '[]') : []
+    fs.writeFileSync(timetableFile, JSON.stringify(existing.filter(e => e.id !== id), null, 2))
+    return res.json({ ok: true })
+  } catch (error) {
+    return res.status(500).json({ error: error.message || 'Unknown error' })
+  }
+})
+
+// --- Analytics ---
+app.post('/api/analytics/insights', async (req, res) => {
+  try {
+    const { studentData, type } = req.body || {}
+    if (!studentData) return res.status(400).json({ error: 'studentData required' })
+    const prompt = type === 'at-risk'
+      ? `Analyze the following student performance data and identify students who are at risk of falling behind. For each at-risk student, explain why and suggest interventions. Return JSON with format: { "atRiskStudents": [{ "studentId": string, "studentName": string, "riskLevel": "high"|"medium"|"low", "reasons": string[], "suggestions": string[] }] }\n\nData:\n${JSON.stringify(studentData)}`
+      : `Analyze this educational data and provide insights as a JSON object with: { "summary": string, "trends": string[], "recommendations": string[], "highlights": string[] }\n\nData:\n${JSON.stringify(studentData)}`
+    const response = await ai.models.generateContent({
+      model: 'gemini-2.5-flash',
+      contents: prompt,
+      config: { responseMimeType: 'application/json' }
+    })
+    return res.json(JSON.parse(response.text))
+  } catch (error) {
+    return res.status(500).json({ error: error.message || 'AI analytics error' })
+  }
+})
+
+// --- Tickets / Help Desk ---
+app.get('/api/tickets', (req, res) => {
+  try {
+    if (!fs.existsSync(ticketsFile)) return res.json([])
+    return res.json(JSON.parse(fs.readFileSync(ticketsFile, 'utf8') || '[]'))
+  } catch (error) {
+    return res.status(500).json({ error: error.message || 'Unknown error' })
+  }
+})
+
+app.post('/api/tickets', (req, res) => {
+  try {
+    const { userId, userName, subject, message, category } = req.body || {}
+    if (!userId || !subject || !message) return res.status(400).json({ error: 'userId, subject, message required' })
+    ensureDirs()
+    const existing = fs.existsSync(ticketsFile) ? JSON.parse(fs.readFileSync(ticketsFile, 'utf8') || '[]') : []
+    const ticket = {
+      id: `tk-${Date.now()}`,
+      userId, userName: userName || 'Unknown', subject, message,
+      category: category || 'general',
+      status: 'open', createdAt: Date.now(), replies: []
+    }
+    existing.push(ticket)
+    fs.writeFileSync(ticketsFile, JSON.stringify(existing, null, 2))
+    return res.json({ ok: true, ticket })
+  } catch (error) {
+    return res.status(500).json({ error: error.message || 'Unknown error' })
+  }
+})
+
+app.post('/api/tickets/:id/reply', (req, res) => {
+  try {
+    const { id } = req.params
+    const { userId, userName, message } = req.body || {}
+    if (!message) return res.status(400).json({ error: 'message required' })
+    const existing = fs.existsSync(ticketsFile) ? JSON.parse(fs.readFileSync(ticketsFile, 'utf8') || '[]') : []
+    const idx = existing.findIndex(t => t.id === id)
+    if (idx === -1) return res.status(404).json({ error: 'Ticket not found' })
+    existing[idx].replies.push({ userId, userName, message, createdAt: Date.now() })
+    fs.writeFileSync(ticketsFile, JSON.stringify(existing, null, 2))
+    return res.json({ ok: true })
+  } catch (error) {
+    return res.status(500).json({ error: error.message || 'Unknown error' })
+  }
+})
+
+app.post('/api/tickets/:id/close', (req, res) => {
+  try {
+    const { id } = req.params
+    const existing = fs.existsSync(ticketsFile) ? JSON.parse(fs.readFileSync(ticketsFile, 'utf8') || '[]') : []
+    const idx = existing.findIndex(t => t.id === id)
+    if (idx === -1) return res.status(404).json({ error: 'Ticket not found' })
+    existing[idx].status = 'closed'
+    fs.writeFileSync(ticketsFile, JSON.stringify(existing, null, 2))
+    return res.json({ ok: true })
+  } catch (error) {
+    return res.status(500).json({ error: error.message || 'Unknown error' })
+  }
+})
+
+// --- Notifications ---
+app.get('/api/notifications', (req, res) => {
+  try {
+    const userId = req.query.userId
+    if (!fs.existsSync(notificationsFile)) return res.json([])
+    const all = JSON.parse(fs.readFileSync(notificationsFile, 'utf8') || '[]')
+    return res.json(userId ? all.filter(n => n.userId === userId || n.userId === 'all') : all)
+  } catch (error) {
+    return res.status(500).json({ error: error.message || 'Unknown error' })
+  }
+})
+
+app.post('/api/notifications', (req, res) => {
+  try {
+    const { userId, title, message, type } = req.body || {}
+    if (!title || !message) return res.status(400).json({ error: 'title and message required' })
+    ensureDirs()
+    const existing = fs.existsSync(notificationsFile) ? JSON.parse(fs.readFileSync(notificationsFile, 'utf8') || '[]') : []
+    const notif = { id: `n-${Date.now()}`, userId: userId || 'all', title, message, type: type || 'info', read: false, createdAt: Date.now() }
+    existing.push(notif)
+    fs.writeFileSync(notificationsFile, JSON.stringify(existing, null, 2))
+
+    // Send email notification if user has email
+    if (userId && userId !== 'all') {
+      const users = fs.existsSync(usersFile) ? JSON.parse(fs.readFileSync(usersFile, 'utf8') || '[]') : []
+      const user = users.find(u => u.id === userId)
+      if (user?.email) {
+        sendEmailVerification(user.email, title).catch(() => {})
+      }
+    }
+    return res.json({ ok: true, notification: notif })
+  } catch (error) {
+    return res.status(500).json({ error: error.message || 'Unknown error' })
+  }
+})
+
+// --- Webhooks ---
+app.get('/api/webhooks', (req, res) => {
+  try {
+    if (!fs.existsSync(webhooksFile)) return res.json([])
+    return res.json(JSON.parse(fs.readFileSync(webhooksFile, 'utf8') || '[]'))
+  } catch (error) {
+    return res.status(500).json({ error: error.message || 'Unknown error' })
+  }
+})
+
+app.post('/api/webhooks', (req, res) => {
+  try {
+    const { url, events, name } = req.body || {}
+    if (!url || !events) return res.status(400).json({ error: 'url and events required' })
+    ensureDirs()
+    const existing = fs.existsSync(webhooksFile) ? JSON.parse(fs.readFileSync(webhooksFile, 'utf8') || '[]') : []
+    const hook = { id: `wh-${Date.now()}`, url, events: Array.isArray(events) ? events : [events], name: name || url, active: true, createdAt: Date.now() }
+    existing.push(hook)
+    fs.writeFileSync(webhooksFile, JSON.stringify(existing, null, 2))
+    return res.json({ ok: true, webhook: hook })
+  } catch (error) {
+    return res.status(500).json({ error: error.message || 'Unknown error' })
+  }
+})
+
+app.delete('/api/webhooks/:id', (req, res) => {
+  try {
+    const { id } = req.params
+    const existing = fs.existsSync(webhooksFile) ? JSON.parse(fs.readFileSync(webhooksFile, 'utf8') || '[]') : []
+    fs.writeFileSync(webhooksFile, JSON.stringify(existing.filter(w => w.id !== id), null, 2))
+    return res.json({ ok: true })
+  } catch (error) {
+    return res.status(500).json({ error: error.message || 'Unknown error' })
+  }
+})
+
+// Global error handler - catches unhandled errors in routes
+app.use((err, req, res, _next) => {
+  console.error('Unhandled server error:', err)
+  const message = err instanceof Error ? err.message : 'Internal server error'
+  res.status(500).json({ error: message })
+})
+
+// Handle uncaught exceptions to prevent silent crashes
+process.on('uncaughtException', (err) => {
+  console.error('Uncaught Exception:', err)
+})
+
+process.on('unhandledRejection', (reason) => {
+  console.error('Unhandled Rejection:', reason)
 })

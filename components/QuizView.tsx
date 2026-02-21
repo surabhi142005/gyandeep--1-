@@ -23,11 +23,31 @@ const QuizView: React.FC<QuizViewProps> = ({ quiz, subject, onSubmit, theme }) =
   const [startTs] = useState<number>(Date.now());
   const totalTime = quiz.length * 20;
   const [timeLeft, setTimeLeft] = useState<number>(totalTime);
+  const [currentStreak, setCurrentStreak] = useState(0);
+  const [bestStreak, setBestStreak] = useState(0);
+  const [xpEarned, setXpEarned] = useState(0);
+  const [coinsEarned, setCoinsEarned] = useState(0);
+  const [earnedBadges, setEarnedBadges] = useState<string[]>([]);
   
   const colors = useMemo(() => THEME_COLORS[theme] || THEME_COLORS.indigo, [theme]);
 
   const handleAnswerChange = (questionId: string, answer: string) => {
-    setAnswers(prev => ({ ...prev, [questionId]: answer }));
+    const newAnswers = { ...answers, [questionId]: answer };
+    setAnswers(newAnswers);
+
+    // Calculate live streak
+    let streak = 0;
+    for (const q of quiz) {
+      const chosen = newAnswers[q.id];
+      if (chosen === undefined) break;
+      if (chosen === q.correctAnswer) {
+        streak++;
+      } else {
+        streak = 0;
+      }
+    }
+    setCurrentStreak(streak);
+    if (streak > bestStreak) setBestStreak(streak);
   };
 
   const handleSubmit = () => {
@@ -36,13 +56,39 @@ const QuizView: React.FC<QuizViewProps> = ({ quiz, subject, onSubmit, theme }) =
         throw new Error('No quiz available.');
       }
       let correctAnswers = 0;
+      let streak = 0;
+      let maxStreak = 0;
       for (const q of quiz) {
         const chosen = answers[q.id];
         if (typeof chosen === 'string' && chosen === q.correctAnswer) {
           correctAnswers++;
+          streak++;
+          if (streak > maxStreak) maxStreak = streak;
+        } else {
+          streak = 0;
         }
       }
       const finalScore = Math.round((correctAnswers / quiz.length) * 100);
+
+      // Calculate gamification rewards
+      const baseXp = Math.max(1, Math.round(finalScore));
+      const streakBonus = maxStreak >= 3 ? maxStreak * 5 : 0;
+      const timeBonus = timeLeft > 0 ? Math.round(timeLeft / totalTime * 20) : 0;
+      const totalXp = baseXp + streakBonus + timeBonus;
+      const coins = Math.floor(correctAnswers * 2) + (finalScore === 100 ? 10 : 0);
+
+      // Determine earned badges
+      const badges: string[] = [];
+      if (finalScore === 100) badges.push('Perfect Score');
+      if (maxStreak >= quiz.length) badges.push('Unstoppable');
+      if (maxStreak >= 3) badges.push('Hot Streak');
+      if (timeLeft > totalTime * 0.5) badges.push('Speed Demon');
+      if (finalScore >= 80) badges.push('High Achiever');
+
+      setBestStreak(maxStreak);
+      setXpEarned(totalXp);
+      setCoinsEarned(coins);
+      setEarnedBadges(badges);
       setScore(finalScore);
       setSubmitted(true);
       onSubmit(finalScore);
@@ -86,12 +132,40 @@ const QuizView: React.FC<QuizViewProps> = ({ quiz, subject, onSubmit, theme }) =
     return (
       <div className="bg-white p-6 rounded-lg shadow-md text-center">
         <h2 className="text-2xl font-bold text-gray-800 mb-2">Quiz Completed!</h2>
-        <p className="text-lg text-gray-600 mb-4">Subject: {subject}</p>
-        <p className={`text-4xl font-bold ${colors.text}`}>{score}%</p>
-        <p className="text-gray-500 mt-2">Your performance has been recorded.</p>
-        <div className="mt-4 text-sm text-gray-600">Max streak: {quiz.reduce((max, q) => {
-          return Math.max(max, answers[q.id] === q.correctAnswer ? max + 1 : 0);
-        }, 0)}</div>
+        <p className="text-lg text-gray-600 mb-2">Subject: {subject}</p>
+        <p className={`text-5xl font-bold ${colors.text}`}>{score}%</p>
+
+        {/* Gamification Rewards */}
+        <div className="mt-4 grid grid-cols-3 gap-3">
+          <div className={`p-3 rounded-lg ${colors.lightBg}`}>
+            <p className="text-xs text-gray-500 uppercase tracking-wide">XP Earned</p>
+            <p className={`text-2xl font-bold ${colors.text}`}>+{xpEarned}</p>
+          </div>
+          <div className={`p-3 rounded-lg bg-yellow-50`}>
+            <p className="text-xs text-gray-500 uppercase tracking-wide">Coins</p>
+            <p className="text-2xl font-bold text-yellow-600">+{coinsEarned}</p>
+          </div>
+          <div className={`p-3 rounded-lg bg-orange-50`}>
+            <p className="text-xs text-gray-500 uppercase tracking-wide">Best Streak</p>
+            <p className="text-2xl font-bold text-orange-600">{bestStreak}</p>
+          </div>
+        </div>
+
+        {/* Earned Badges */}
+        {earnedBadges.length > 0 && (
+          <div className="mt-4">
+            <p className="text-sm text-gray-500 mb-2">Badges Earned</p>
+            <div className="flex flex-wrap justify-center gap-2">
+              {earnedBadges.map(badge => (
+                <span key={badge} className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold ${colors.lightBg} ${colors.text}`}>
+                  {badge === 'Perfect Score' ? '⭐' : badge === 'Hot Streak' ? '🔥' : badge === 'Speed Demon' ? '⚡' : badge === 'Unstoppable' ? '💪' : '🏆'} {badge}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <p className="text-gray-400 text-xs mt-3">Your performance has been recorded.</p>
         <div className="mt-6">
           <h3 className="text-xl font-semibold mb-4 text-left">Review Your Answers:</h3>
           {quiz.map((q) => (
@@ -113,9 +187,25 @@ const QuizView: React.FC<QuizViewProps> = ({ quiz, subject, onSubmit, theme }) =
 
   return (
     <div className="bg-white p-6 rounded-lg shadow-md">
-      <div className="flex items-center justify-between mb-4">
+      <div className="flex items-center justify-between mb-2">
         <h2 className="text-2xl font-bold text-gray-800">Quiz Time: {subject}</h2>
-        <div className="text-sm font-semibold text-gray-700">Time Left: {timeLeft}s</div>
+        <div className="flex items-center gap-3">
+          {currentStreak >= 2 && (
+            <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-bold bg-orange-100 text-orange-700 animate-pulse">
+              🔥 {currentStreak} streak
+            </span>
+          )}
+          <span className={`text-sm font-bold px-3 py-1 rounded-full ${timeLeft <= 10 ? 'bg-red-100 text-red-700 animate-pulse' : 'bg-gray-100 text-gray-700'}`}>
+            ⏱ {timeLeft}s
+          </span>
+        </div>
+      </div>
+      {/* Progress bar */}
+      <div className="w-full bg-gray-200 rounded-full h-2 mb-4">
+        <div
+          className={`h-2 rounded-full transition-all duration-300 ${colors.primary}`}
+          style={{ width: `${(Object.keys(answers).length / quiz.length) * 100}%` }}
+        />
       </div>
       {error && <p className="text-red-600 text-sm mb-4 bg-red-50 p-2 rounded-md">{error}</p>}
       {quiz.map((q, index) => (

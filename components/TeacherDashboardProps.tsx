@@ -1,4 +1,5 @@
 import type { Teacher, Student, AttendanceRecord, ClassSession, HistoricalSessionRecord, SubjectConfig } from '@/types';
+import type { Announcement } from './AnnouncementBoard';
 
 export interface TeacherDashboardProps {
   teacher: Teacher;
@@ -11,6 +12,8 @@ export interface TeacherDashboardProps {
   onUpdateFaceImage: (teacherId: string, faceImage: string) => void;
   historicalRecords: HistoricalSessionRecord[];
   onUpdateHistoricalRecords: (records: HistoricalSessionRecord[]) => void;
-  allSubjects: SubjectConfig[]; // New prop
+  allSubjects: SubjectConfig[];
   allClasses: { id: string; name: string; }[];
+  announcements?: Announcement[];
+  onPostAnnouncement?: (text: string) => void;
 }

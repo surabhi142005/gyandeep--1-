@@ -1,6 +1,6 @@
 import React from 'react';
 import Dashboard3D from './Dashboard3D';
-import Enhanced3DBackground from './Background3D';
+import Iridescence from './Iridescence';
 import type { AnyUser, Student } from '../types';
 
 interface Dashboard3DWrapperProps {
@@ -20,8 +20,8 @@ const Dashboard3DWrapper: React.FC<Dashboard3DWrapperProps> = ({
 }) => {
     return (
         <div className="fixed inset-0 z-50 overflow-hidden">
-            {/* Enhanced 3D Background */}
-            <Enhanced3DBackground theme={theme} intensity={1.2} />
+            {/* Iridescence Background */}
+            <Iridescence color={[0.7, 0.5, 0.9]} mouseReact amplitude={0.2} speed={1.3} />
 
             {/* Dashboard Content */}
             <div className="relative z-10">

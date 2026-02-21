@@ -65,7 +65,16 @@ export const generateQuizFromNotes = async ({ notesText, subject, enableThinking
       config: config
     });
 
-    const jsonResponse = JSON.parse(response.text);
+    const responseText = response.text;
+    if (!responseText) {
+      throw new Error("AI returned an empty response. Please try again.");
+    }
+    let jsonResponse: any;
+    try {
+      jsonResponse = JSON.parse(responseText);
+    } catch {
+      throw new Error("AI returned an invalid response format. Please try again.");
+    }
     if (!jsonResponse.quiz || jsonResponse.quiz.length === 0) {
       throw new Error("AI failed to generate a valid quiz.");
     }
@@ -122,7 +131,7 @@ export const getChatbotResponse = async ({ prompt, location, model }: ChatbotReq
       config: config,
     });
 
-    const text = response.text;
+    const text = response.text || 'Sorry, I could not generate a response. Please try again.';
     const groundingChunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
     
     const sources = groundingChunks

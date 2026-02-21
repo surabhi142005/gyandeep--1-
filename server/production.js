@@ -8,6 +8,7 @@ import fs from 'fs'
 import path from 'path'
 import { fileURLToPath } from 'url'
 import { faceAuthHandler, faceRegisterHandler, locationAuthHandler, getFacesListHandler, getFaceImageHandler, checkFaceRegisteredHandler, deleteFaceHandler } from './apis.js'
+import { sendPasswordResetEmail, sendEmailVerification } from './emailService.js'
 
 // Load environment variables
 dotenv.config({ path: '.env.local' })
@@ -444,9 +445,224 @@ app.post('/api/tags-presets/update', (req, res) => {
   }
 })
 
+// --- OTP MFA ---
+const otpStore = new Map()
+app.post('/api/auth/otp/send', async (req, res) => {
+  try {
+    const { userId, email } = req.body || {}
+    if (!userId) return res.status(400).json({ error: 'userId is required' })
+    const code = String(Math.floor(100000 + Math.random() * 900000))
+    const expires = Date.now() + 5 * 60 * 1000
+    otpStore.set(userId, { code, expires })
+    console.log(`OTP for ${userId}: ${code}`)
+    let targetEmail = email
+    if (!targetEmail) {
+      const users = fs.existsSync(usersFile) ? JSON.parse(fs.readFileSync(usersFile, 'utf8') || '[]') : []
+      const user = users.find(u => u.id === userId)
+      targetEmail = user?.email
+    }
+    if (targetEmail) {
+      try { await sendEmailVerification(targetEmail, code) } catch (e) { console.error('OTP email failed:', e.message) }
+    }
+    return res.json({ ok: true, expires })
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown error'
+    return res.status(500).json({ error: message })
+  }
+})
+
+app.post('/api/auth/otp/verify', (req, res) => {
+  try {
+    const { userId, code } = req.body || {}
+    if (!userId || !code) return res.status(400).json({ error: 'userId and code are required' })
+    const rec = otpStore.get(userId)
+    const ok = !!rec && rec.code === String(code) && rec.expires > Date.now()
+    const auditLogFile = path.join(dataDir, 'audit.json')
+    const logEntry = { ts: Date.now(), type: 'otp_verify', userId, ok }
+    fs.mkdirSync(dataDir, { recursive: true })
+    const existing = fs.existsSync(auditLogFile) ? JSON.parse(fs.readFileSync(auditLogFile, 'utf8') || '[]') : []
+    existing.push(logEntry)
+    fs.writeFileSync(auditLogFile, JSON.stringify(existing, null, 2))
+    if (!ok) return res.status(401).json({ error: 'invalid or expired code' })
+    return res.json({ ok: true })
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown error'
+    return res.status(500).json({ error: message })
+  }
+})
+
+// --- Password Recovery ---
+const resetStore = new Map()
+app.post('/api/auth/password/request', async (req, res) => {
+  try {
+    const { email } = req.body || {}
+    if (!email) return res.status(400).json({ error: 'email is required' })
+    const users = fs.existsSync(usersFile) ? JSON.parse(fs.readFileSync(usersFile, 'utf8') || '[]') : []
+    const exists = users.some(u => (u.email || '').toLowerCase() === String(email).toLowerCase())
+    if (!exists) return res.status(404).json({ error: 'No account with that email' })
+    const code = String(Math.floor(100000 + Math.random() * 900000))
+    const expires = Date.now() + 10 * 60 * 1000
+    resetStore.set(String(email).toLowerCase(), { code, expires })
+    console.log(`Password reset code for ${email}: ${code}`)
+    try { await sendPasswordResetEmail(email, code) } catch (e) { console.error('Reset email failed:', e.message) }
+    return res.json({ ok: true, expires })
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown error'
+    return res.status(500).json({ error: message })
+  }
+})
+
+app.post('/api/auth/password/verify', (req, res) => {
+  try {
+    const { email, code } = req.body || {}
+    if (!email || !code) return res.status(400).json({ error: 'email and code are required' })
+    const rec = resetStore.get(String(email).toLowerCase())
+    const ok = !!rec && rec.code === String(code) && rec.expires > Date.now()
+    if (!ok) return res.status(401).json({ error: 'invalid or expired code' })
+    return res.json({ ok: true })
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown error'
+    return res.status(500).json({ error: message })
+  }
+})
+
+app.post('/api/auth/password/complete', (req, res) => {
+  try {
+    const { email, newPassword } = req.body || {}
+    if (!email || !newPassword) return res.status(400).json({ error: 'email and newPassword are required' })
+    const rec = resetStore.get(String(email).toLowerCase())
+    if (!rec || rec.expires <= Date.now()) return res.status(401).json({ error: 'invalid or expired code' })
+    if (!fs.existsSync(usersFile)) return res.status(404).json({ error: 'No users' })
+    const users = JSON.parse(fs.readFileSync(usersFile, 'utf8') || '[]')
+    const idx = users.findIndex(u => (u.email || '').toLowerCase() === String(email).toLowerCase())
+    if (idx === -1) return res.status(404).json({ error: 'User not found' })
+    users[idx].password = String(newPassword)
+    fs.writeFileSync(usersFile, JSON.stringify(users, null, 2))
+    resetStore.delete(String(email).toLowerCase())
+    return res.json({ ok: true })
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown error'
+    return res.status(500).json({ error: message })
+  }
+})
+
+// --- Email Verification ---
+const emailVerifyStore = new Map()
+app.post('/api/auth/email/verify-send', async (req, res) => {
+  try {
+    const { email } = req.body || {}
+    if (!email) return res.status(400).json({ error: 'email is required' })
+    const code = String(Math.floor(100000 + Math.random() * 900000))
+    const expires = Date.now() + 10 * 60 * 1000
+    emailVerifyStore.set(String(email).toLowerCase(), { code, expires })
+    console.log(`Email verification code for ${email}: ${code}`)
+    try { await sendEmailVerification(email, code) } catch (e) { console.error('Verification email failed:', e.message) }
+    return res.json({ ok: true, expires })
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown error'
+    return res.status(500).json({ error: message })
+  }
+})
+
+app.post('/api/auth/email/verify-check', (req, res) => {
+  try {
+    const { email, code } = req.body || {}
+    if (!email || !code) return res.status(400).json({ error: 'email and code are required' })
+    const rec = emailVerifyStore.get(String(email).toLowerCase())
+    const ok = !!rec && rec.code === String(code) && rec.expires > Date.now()
+    if (!ok) return res.status(401).json({ error: 'invalid or expired code' })
+    if (fs.existsSync(usersFile)) {
+      const users = JSON.parse(fs.readFileSync(usersFile, 'utf8') || '[]')
+      const idx = users.findIndex(u => (u.email || '').toLowerCase() === String(email).toLowerCase())
+      if (idx !== -1) {
+        users[idx].emailVerified = true
+        fs.writeFileSync(usersFile, JSON.stringify(users, null, 2))
+      }
+    }
+    emailVerifyStore.delete(String(email).toLowerCase())
+    return res.json({ ok: true })
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown error'
+    return res.status(500).json({ error: message })
+  }
+})
+
+// --- Admin Override ---
+app.post('/api/admin/override', (req, res) => {
+  try {
+    const { adminId, userId, action, reason } = req.body || {}
+    if (!adminId || !userId || !action) return res.status(400).json({ error: 'adminId, userId, action are required' })
+    const auditLogFile = path.join(dataDir, 'audit.json')
+    const entry = { ts: Date.now(), type: 'admin_override', adminId, userId, action, reason: reason || '' }
+    fs.mkdirSync(dataDir, { recursive: true })
+    const existing = fs.existsSync(auditLogFile) ? JSON.parse(fs.readFileSync(auditLogFile, 'utf8') || '[]') : []
+    existing.push(entry)
+    fs.writeFileSync(auditLogFile, JSON.stringify(existing, null, 2))
+    return res.json({ ok: true })
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown error'
+    return res.status(500).json({ error: message })
+  }
+})
+
+// --- User Profile ---
+app.get('/api/users/profile', (req, res) => {
+  try {
+    const userId = req.query.userId
+    if (!userId) return res.status(400).json({ error: 'UserId required' })
+    if (!fs.existsSync(usersFile)) return res.json({})
+    const raw = fs.readFileSync(usersFile, 'utf8')
+    const users = JSON.parse(raw || '[]')
+    const user = users.find(u => u.id === userId)
+    if (!user) return res.status(404).json({ error: 'User not found' })
+    const { password, ...safeUser } = user
+    return res.json(safeUser)
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown error'
+    return res.status(500).json({ error: message })
+  }
+})
+
+app.put('/api/users/profile', (req, res) => {
+  try {
+    const { userId, updates } = req.body || {}
+    if (!userId) return res.status(400).json({ error: 'UserId required' })
+    if (!updates || typeof updates !== 'object') return res.status(400).json({ error: 'updates object is required' })
+    if (!fs.existsSync(usersFile)) return res.status(404).json({ error: 'No users' })
+    const users = JSON.parse(fs.readFileSync(usersFile, 'utf8') || '[]')
+    const idx = users.findIndex(u => u.id === userId)
+    if (idx === -1) return res.status(404).json({ error: 'User not found' })
+    const safe = { ...updates }
+    delete safe.id; delete safe.role; delete safe.password
+    users[idx] = { ...users[idx], ...safe }
+    fs.writeFileSync(usersFile, JSON.stringify(users, null, 2))
+    const { password, ...safeUser } = users[idx]
+    return res.json(safeUser)
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown error'
+    return res.status(500).json({ error: message })
+  }
+})
+
+// Global error handler - catches unhandled errors in routes
+app.use((err, req, res, _next) => {
+  console.error('Unhandled server error:', err)
+  const message = err instanceof Error ? err.message : 'Internal server error'
+  res.status(500).json({ error: message })
+})
+
 // Catch-all handler for SPA routing
 app.use((req, res) => {
   res.sendFile(path.join(__dirname, '../dist/index.html'))
+})
+
+// Handle uncaught exceptions to prevent silent crashes
+process.on('uncaughtException', (err) => {
+  console.error('Uncaught Exception:', err)
+})
+
+process.on('unhandledRejection', (reason) => {
+  console.error('Unhandled Rejection:', reason)
 })
 
 const port = process.env.PORT ? Number(process.env.PORT) : 3000

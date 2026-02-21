@@ -1,449 +1,316 @@
-# Gyandeep - AI-Powered Classroom System
+# Gyandeep Deployment Guide 🚀
 
-## ✨ Fully Web-Based Architecture
+Gyandeep is a comprehensive AI-powered smart classroom system designed for modern education. This guide covers deploying the application with real-time data, authentication, and database persistence in production.
 
-This is now a **completely web-based system** with no desktop dependencies. All services run in the browser and on the Node.js backend.
+## 🏛 Architecture Overview
 
-### Key Features
+Gyandeep uses a multi-layered, scalable architecture:
 
-- ✅ **100% Web-Based** - Works purely in the browser
-- ✅ **No Python Required** - All services converted to web APIs
-- ✅ **Cloud-Ready** - Deploy anywhere (Vercel, Netlify, AWS, Azure, etc.)
-- ✅ **Face Recognition** - Web-based image comparison
-- ✅ **Location Verification** - Haversine formula for distance calculation
-- ✅ **AI Integration** - Google Gemini for quizzes and chat
+1. **Frontend (React + Vite)**: Responsive, high-performance UI served statically.
+2. **Backend API (Node.js/Express)**: REST endpoints for auth, users, notes, classes, AI features.
+3. **WebSocket Server (Socket.IO)**: Real-time updates (attendance, performance, blockchain, digital twin).
+4. **SQLite Database**: Persistent storage (users, courses, notes, grades, audit logs).
+5. **Face Recognition Engine** (Optional): Web-based or Python Flask microservice.
+6. **Blockchain Layer** (Optional): Immutable attendance records and NFT certificates.
 
-## Deployment Guide
+---
 
-### Quick Start (Production)
+## 🛠 Prerequisites
+
+- **Node.js**: v18.0.0 or higher
+- **npm**: v9.0.0 or higher
+- **Docker & Docker Compose** (recommended for containerized deployment)
+- **Python 3.9+** (only for advanced face recognition mode)
+- **Hardware**: Minimum 1GB RAM (2GB recommended for AI features)
+- **SQLite 3+** (included with most systems)
+
+---
+
+## 🚀 Quick Start
+
+### Option A: Docker Compose (Recommended)
+
+See [DEPLOYMENT_DOCKER.md](./DEPLOYMENT_DOCKER.md) for full Docker setup.
 
 ```bash
-# Build and start the server
-npm run host
+# 1. Create .env file
+cp .env.example .env
+# Edit .env with your secrets and API keys
 
-# OR build separately then run
-npm run build
-npm start
+# 2. Start all services
+docker-compose up -d --build
+
+# 3. Migrate users (auto-runs in Docker startup)
+# Backend API: http://localhost:3001
+# WebSocket: ws://localhost:3002
+# Frontend: served at root
 ```
 
-The application will be available at `http://localhost:3000` (or the port specified in the `PORT` environment variable).
+### Option B: Manual Node.js + npm
 
-### Environment Variables
+```bash
+# 1. Install dependencies
+npm install
 
-Create a `.env.local` file or set these environment variables:
+# 2. Create .env file
+cp .env.example .env
+# Edit .env with secrets and API keys
+
+# 3. Build frontend
+npm run build
+
+# 4. Run database migration
+node server/migrate-users-to-db.js
+
+# 5. Start backend (development)
+npm start
+
+# 6. In another terminal, start websocket server
+npm run websocket
+
+# Frontend: http://localhost:5173 (dev)
+# Backend API: http://localhost:3001
+# WebSocket: ws://localhost:3002
+```
+
+---
+
+## 🔐 Authentication & Security
+
+### Authentication Flow
+
+1. **Register** — User submits email/password
+   - Backend hashes password with bcrypt
+   - Stores user in SQLite database
+   - Returns JWT token (valid 7 days)
+   - Token stored in browser localStorage
+
+2. **Login** — User authenticates with email/password
+   - Backend verifies password hash
+   - Signs JWT token
+   - Client stores token locally
+
+3. **API Access** — JWT required for protected endpoints
+   ```
+   Authorization: Bearer <token>
+   ```
+
+4. **Real-Time Updates** — WebSocket requires JWT in handshake
+   ```javascript
+   socket.connect('ws://localhost:3002', {
+     auth: { token: localStorage.getItem('gyandeep_token') }
+   });
+   ```
+
+### Environment Secrets
+
+**Critical variables** (must be set in production):
 
 ```env
-# Required: Google Gemini API Key for AI features
-GEMINI_API_KEY=your_gemini_api_key_here
-
-# Optional: Port (default: 3000)
-PORT=3000
-
-# Optional: Node environment
 NODE_ENV=production
+PORT=3001
+WEBSOCKET_PORT=3002
+
+# Strong secrets (generate 32+ random characters)
+SESSION_SECRET=your-strong-session-secret
+JWT_SECRET=your-strong-jwt-secret
+
+GEMINI_API_KEY=your-google-genai-api-key
+GOOGLE_CLIENT_ID=optional-oauth-client-id
+GOOGLE_CLIENT_SECRET=optional-oauth-client-secret
+
+VITE_API_URL=https://your-domain.com
 ```
 
-### Requirements
+**Never commit `.env` to version control.** Use secret management:
 
-- **Node.js 16+** ✅ (Only requirement now!)
-- 500MB disk space minimum
+- GitHub Actions: Repository secrets
+- Docker: Image registry secrets
+- Self-hosted: Encrypted vaults (HashiCorp Vault, AWS Secrets Manager)
 
-### Installation
+---
 
-1. **Install Node.js dependencies:**
+## 📊 Database
+
+### Schema
+
+SQLite database (`server/data/gyandeep.db`) includes tables for:
+
+- **users** — User profiles, roles, preferences
+- **otp** — One-time passwords for password resets
+- **audit_logs** — System audit trail
+- **classes** — Class configurations
+- **question_bank** — Quiz questions
+- **tags_presets** — Subject-specific tags
+
+### Migration
+
+Run on first startup to migrate legacy `users.json` to SQLite:
+
 ```bash
-npm install
+node server/migrate-users-to-db.js
 ```
 
-2. **Set environment variables:**
+In Docker, this runs automatically.
+
+### Backup & Recovery
+
 ```bash
-# Linux/Mac
-export GEMINI_API_KEY=your_api_key_here
+# Full backup
+sqlite3 server/data/gyandeep.db ".dump" > backup.sql
 
-# Windows (PowerShell)
-$env:GEMINI_API_KEY="your_api_key_here"
+# Restore
+sqlite3 server/data/gyandeep.db < backup.sql
 
-# Or create .env.local file
-echo "GEMINI_API_KEY=your_api_key_here" > .env.local
+# Or use filesystem backups
+rsync -av server/data/ /backup/gyandeep-data/
 ```
 
-3. **Build the project:**
-```bash
-npm run build
+---
+
+## 🌐 Production Configuration
+
+### Reverse Proxy (nginx)
+
+```nginx
+upstream api {
+  server localhost:3001;
+}
+
+upstream websocket {
+  server localhost:3002;
+}
+
+server {
+  listen 443 ssl http2;
+  server_name your-domain.com;
+
+  ssl_certificate /etc/letsencrypt/live/your-domain.com/fullchain.pem;
+  ssl_certificate_key /etc/letsencrypt/live/your-domain.com/privkey.pem;
+
+  add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
+
+  # API endpoints
+  location /api/ {
+    proxy_pass http://api;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+  }
+
+  # WebSocket (real-time)
+  location /socket.io/ {
+    proxy_pass http://websocket;
+    proxy_http_version 1.1;
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection "upgrade";
+  }
+
+  # Frontend
+  location / {
+    root /path/to/gyandeep/dist;
+    try_files $uri $uri/ /index.html;
+  }
+}
 ```
 
-4. **Start the server:**
-```bash
-npm start
-```
+### Process Manager (PM2)
 
-Access the application at `http://localhost:3000`
-
-## API Endpoints
-
-### Face Authentication (Web-Based)
-- **POST** `/api/auth/face` - Verify or register a face
-- **POST** `/api/face/register` - Register user's face
-
-### Location Verification (Web-Based)
-- **POST** `/api/auth/location` - Verify user location
-
-### Quiz Generation
-- **POST** `/api/quiz` - Generate quiz from class notes
-
-### Chat Service
-- **POST** `/api/chat` - AI chatbot with location awareness
-
-### User Management
-- **GET** `/api/users` - Fetch all users
-- **POST** `/api/users/bulk` - Bulk upload users
-
-### Class Management
-- **GET** `/api/classes` - Fetch all classes
-- **POST** `/api/classes` - Create/update classes
-- **POST** `/api/classes/assign` - Assign student to class
-
-### Question Bank
-- **GET** `/api/question-bank` - Fetch question bank
-- **POST** `/api/question-bank/add` - Add questions
-- **POST** `/api/question-bank/upsert-quiz` - Add generated quiz questions
-- **POST** `/api/question-bank/update` - Update a question
-- **DELETE** `/api/question-bank/:id` - Delete a question
-
-### Notes Management
-- **POST** `/api/notes/upload` - Upload class notes
-- **GET** `/api/notes/list` - List notes for a class/subject
-
-## Cloud Deployment
-
-### Vercel (Recommended)
-```bash
-npm install -g vercel
-vercel login
-vercel --prod
-```
-
-Set environment variables in Vercel dashboard: `Settings > Environment Variables`
-
-### Netlify
-```bash
-npm install -g netlify-cli
-netlify deploy --prod --dir=dist
-```
-
-### AWS/Azure/GCP
-1. Build the project: `npm run build`
-2. Deploy the `dist` folder to your hosting service
-3. Set up environment variables in your hosting platform
-4. Ensure Node.js backend runs on your server
-
-### Docker
-
-```dockerfile
-# Use provided Dockerfile
-docker build -t gyandeep .
-docker run -p 3000:3000 -e GEMINI_API_KEY=your_key gyandeep
-```
-
-## Architecture
-
-### Frontend (React + TypeScript)
-- Components for Student, Teacher, Admin dashboards
-- Quiz system with AI generation
-- Attendance tracking
-- Performance analytics
-- Real-time chatbot
-
-### Backend (Node.js + Express)
-- REST API for all services
-- File storage for user data and faces
-- Quiz question bank management
-- Session management
-
-### Web-Based Services (No Desktop Dependencies)
-- **Face Recognition**: Image comparison and validation
-- **Location Verification**: GPS coordinate validation
-- **AI Services**: Google Gemini integration
-
-## Data Storage
-
-- **Users**: `server/data/users.json`
-- **Classes**: `server/data/classes.json`
-- **Question Bank**: `server/data/questionBank.json`
-- **Stored Faces**: `server/data/faces/` (Base64 encoded images)
-- **Notes**: `server/storage/notes/`
-
-## Features
-
-### For Students
-- 👤 Face ID registration and verification
-- 📍 Location-based attendance
-- 📚 Quiz generation from class notes
-- 📊 Performance tracking
-- 💬 AI Chatbot assistance
-
-### For Teachers
-- 📋 Class management
-- 👥 Student attendance tracking
-- 📊 Performance analytics
-- 🎯 Quiz creation and distribution
-- 📝 Notes management
-
-### For Administrators
-- 🔧 System setup and configuration
-- 👨‍💼 User management
-- 📚 Question bank management
-- 📊 Analytics and reports
-
-## Troubleshooting
-
-### Port Already in Use
-```bash
-# Windows
-netstat -ano | findstr :3000
-taskkill /PID <PID> /F
-
-# Linux/Mac
-lsof -i :3000
-kill -9 <PID>
-```
-
-### GEMINI_API_KEY Not Found
-- Ensure `.env.local` exists in root directory
-- Or set environment variable: `export GEMINI_API_KEY=your_key`
-- Restart the server after setting
-
-### Face Recognition Not Working
-- Ensure camera permissions are granted in browser
-- Check that image data is valid base64
-- Face must be clearly visible in the image
-
-### Location Verification Issues
-- Ensure GPS is enabled in device
-- Check browser geolocation permissions
-- Verify coordinates are in correct format (lat/lng)
-
-## Support & Documentation
-
-For more information, see:
-- [README.md](README.md)
-- API documentation in inline comments
-- Component documentation in TypeScript files
-
-## Migration from Python Backend
-
-If you were using the Python backend previously:
-
-1. **Python services are now web-based** - No need to install Python
-2. **Face data format unchanged** - Existing face images are compatible
-3. **Database format unchanged** - User and class data remain the same
-4. **API endpoints compatible** - Same request/response format
-
-Simply stop the Python service and use the Node.js server instead.
-
-3. **Create environment file:**
-```bash
-cp .env.local.example .env.local
-# Edit .env.local and add your GEMINI_API_KEY
-```
-
-4. **Build the frontend:**
-```bash
-npm run build
-```
-
-5. **Start the production server:**
-```bash
-npm start
-```
-
-### Architecture
-
-**Frontend:**
-- React 19 with Vite bundler
-- TypeScript for type safety
-- Tailwind CSS for styling
-- Lazy-loaded dashboard components
-
-**Backend:**
-- Express.js REST API
-- File-based storage (users, classes, notes)
-- Google Gemini AI integration
-- CORS-enabled for cross-origin requests
-
-**Face Recognition (Separate Service):**
-- Python Flask service on port 5001
-- OpenCV for face detection
-- Multi-algorithm face verification
-- Histogram, ORB, and template matching
-
-### File Structure
-
-```
-gyandeep/
-├── dist/                    # Production build (auto-generated)
-├── components/              # React components
-├── services/               # API services
-├── server/
-│   ├── production.js       # Production server
-│   ├── index.js           # Development server
-│   └── data/              # JSON data files
-├── python/
-│   ├── app.py             # Flask face recognition service
-│   ├── data/faces/        # Stored face images
-│   └── requirements.txt
-├── package.json
-└── vite.config.ts
-```
-
-### Running Multiple Services
-
-**Option 1: All-in-One (Recommended for Single Machine)**
-```bash
-# Terminal 1: Start production server
-npm start
-
-# Terminal 2: Start Python face recognition service
-cd python && python app.py
-```
-
-**Option 2: Development Mode**
-```bash
-# Terminal 1: Vite dev server (with hot reload)
-npm run dev
-
-# Terminal 2: Node backend API
-node server/index.js
-
-# Terminal 3: Python face recognition
-cd python && python app.py
-```
-
-### Features
-
-✅ **User Management**
-- Admin, Teacher, and Student roles
-- Email/Password login
-- Face ID authentication
-
-✅ **Classroom Management**
-- Class creation and student assignment
-- Subject configuration
-- Attendance tracking with multiple verification methods
-
-✅ **AI-Powered Features**
-- Quiz generation from class notes
-- AI chatbot with location awareness
-- Performance analytics
-
-✅ **Face Recognition**
-- Face registration during setup
-- Multi-frame liveness detection
-- Histogram + ORB + Template matching
-
-✅ **Accessibility**
-- High contrast mode
-- Adjustable font scaling
-- Multi-language support (English, Hindi, Marathi)
-- i18n ready
-
-### API Endpoints
-
-**Authentication:**
-- `POST /api/auth/otp/send` - Send OTP
-- `POST /api/auth/otp/verify` - Verify OTP
-- `POST /api/auth/face` - Face recognition login
-- `POST /face/register` - Register face
-
-**Users:**
-- `GET /api/users` - Get all users
-- `POST /api/users/bulk` - Bulk update users
-
-**Classes:**
-- `GET /api/classes` - Get classes
-- `POST /api/classes` - Update classes
-- `POST /api/classes/assign` - Assign student to class
-
-**Notes:**
-- `POST /api/notes/upload` - Upload class notes
-- `GET /api/notes/list` - List notes
-
-**Quiz Generation:**
-- `POST /api/quiz` - Generate quiz from notes
-
-**AI Chat:**
-- `POST /api/chat` - Chat with AI assistant
-
-### Performance Considerations
-
-1. **Frontend Optimization:**
-   - Lazy loading of dashboard components
-   - Code splitting by route
-   - Gzip compression enabled
-
-2. **Backend Optimization:**
-   - File-based storage (can be replaced with DB)
-   - Static file serving from dist
-   - CORS configured for efficiency
-
-3. **Face Recognition:**
-   - Efficient face detection with Haar cascades
-   - Frame compression for API calls
-   - Normalized face storage
-
-### Deployment to Cloud
-
-**Heroku:**
-```bash
-heroku create gyandeep-app
-heroku config:set GEMINI_API_KEY=your_key
-git push heroku main
-```
-
-**AWS:**
-Use Elastic Beanstalk or EC2 with PM2:
 ```bash
 npm install -g pm2
-pm2 start npm --name "gyandeep" -- start
+
+pm2 start server/index.js --name "gyandeep-api"
+pm2 start server/websocket-server.js --name "gyandeep-websocket"
 pm2 save
 pm2 startup
 ```
 
-**Docker:**
-```dockerfile
-FROM node:18-alpine
-WORKDIR /app
-COPY . .
-RUN npm install && npm run build
-EXPOSE 3000
-CMD ["npm", "start"]
-```
+### Firewall Rules
 
-### Troubleshooting
+Allow:
 
-**Port Already in Use:**
-```bash
-# Change port
-PORT=8080 npm start
-
-# Or kill existing process
-lsof -ti:3000 | xargs kill -9
-```
-
-**Missing GEMINI_API_KEY:**
-- Add to `.env.local` file
-- Or set as environment variable
-- Quiz and chat features will fail without it
-
-**Face Recognition Not Working:**
-- Ensure Python service is running on port 5001
-- Check Python dependencies installed
-- Verify webcam permissions granted
-
-### Support
-
-For issues and feature requests, visit the GitHub repository.
+- Port 80 (HTTP, redirect to HTTPS)
+- Port 443 (HTTPS)
+- Port 3001 (Backend, internal only if behind proxy)
+- Port 3002 (WebSocket, internal only if behind proxy)
 
 ---
 
-**Made with ❤️ for educators and learners**
+## 📈 Scaling
+
+### Multi-Process Backend
+
+Environment variable `NODE_ENV=production` enables clustering (optional).
+
+### Multi-Instance WebSocket
+
+For > 1000 concurrent users, use Redis adapter:
+
+```bash
+npm install socket.io-redis
+```
+
+Configure in `server/websocket-server.js`:
+
+```javascript
+import { createAdapter } from '@socket.io/redis-adapter';
+io.adapter(createAdapter(pubClient, subClient));
+```
+
+### Load Balancing
+
+Use nginx or AWS Load Balancer to distribute traffic across multiple app instances.
+
+---
+
+## 🔍 Monitoring & Logging
+
+### Health Checks
+
+```bash
+# API health
+curl http://localhost:3001/api/users
+
+# WebSocket health
+curl http://localhost:3002/health
+```
+
+### Logs
+
+```bash
+# Docker
+docker-compose logs -f gyandeep
+
+# PM2
+pm2 logs
+
+# File-based (configure in docker-compose.yml)
+docker-compose exec gyandeep tail -f /var/log/gyandeep/app.log
+```
+
+### Metrics
+
+Monitor:
+
+- CPU usage
+- Memory usage
+- Database disk I/O
+- WebSocket connection count
+- API response times
+- Error rates
+
+---
+
+## 🚨 Troubleshooting
+
+| Issue | Solution |
+|-------|----------|
+| Port already in use | Change port in `.env` or `docker-compose.yml` |
+| Database locked | Ensure only one backend process; check file permissions |
+| WebSocket fails | Verify port 3002 is open; check `Upgrade` header in proxy |
+| Login fails | Check `JWT_SECRET` is consistent; clear localStorage |
+| High memory usage | Profile with `node --inspect`; check for memory leaks |
+
+---
+*Made with ❤️ for educators and learners.*
+

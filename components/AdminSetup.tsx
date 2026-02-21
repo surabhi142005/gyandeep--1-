@@ -2,6 +2,7 @@ import React, { useState, useMemo } from 'react';
 import type { Admin } from '../types';
 import { UserRole as UserRoleEnum } from '../types';
 import Spinner from './Spinner';
+import { hashPassword } from '../services/authService';
 
 interface AdminSetupProps {
   onSetupComplete: (adminData: Omit<Admin, 'faceImage'>) => void;
@@ -9,10 +10,10 @@ interface AdminSetupProps {
 }
 
 const THEME_COLORS: Record<string, Record<string, string>> = {
-    indigo: { primary: 'bg-indigo-600', hover: 'hover:bg-indigo-700', text: 'text-indigo-600', ring: 'focus:ring-indigo-500', border: 'border-indigo-500' },
-    teal: { primary: 'bg-teal-600', hover: 'hover:bg-teal-700', text: 'text-teal-600', ring: 'focus:ring-teal-500', border: 'border-teal-500' },
-    crimson: { primary: 'bg-red-600', hover: 'hover:bg-red-700', text: 'text-red-600', ring: 'focus:ring-red-500', border: 'border-red-500' },
-    purple: { primary: 'bg-purple-600', hover: 'hover:bg-purple-700', text: 'text-purple-600', ring: 'focus:ring-purple-500', border: 'border-purple-500' },
+  indigo: { primary: 'bg-indigo-600', hover: 'hover:bg-indigo-700', text: 'text-indigo-600', ring: 'focus:ring-indigo-500', border: 'border-indigo-500' },
+  teal: { primary: 'bg-teal-600', hover: 'hover:bg-teal-700', text: 'text-teal-600', ring: 'focus:ring-teal-500', border: 'border-teal-500' },
+  crimson: { primary: 'bg-red-600', hover: 'hover:bg-red-700', text: 'text-red-600', ring: 'focus:ring-red-500', border: 'border-red-500' },
+  purple: { primary: 'bg-purple-600', hover: 'hover:bg-purple-700', text: 'text-purple-600', ring: 'focus:ring-purple-500', border: 'border-purple-500' },
 };
 
 const AdminSetup: React.FC<AdminSetupProps> = ({ onSetupComplete, theme }) => {
@@ -45,18 +46,24 @@ const AdminSetup: React.FC<AdminSetupProps> = ({ onSetupComplete, theme }) => {
     }
 
     setIsLoading(true);
-    // Simulate API call for admin creation
-    setTimeout(() => {
-      const newAdmin: Omit<Admin, 'faceImage'> = {
-        id: 'a1', // Default ID for the first admin
-        name: adminName.trim(),
-        role: UserRoleEnum.ADMIN,
-        email: adminEmail.trim(),
-        password: adminPassword.trim(),
-      };
-      onSetupComplete(newAdmin);
-      setIsLoading(false);
-    }, 1000);
+    // Hash password and then complete setup
+    (async () => {
+      try {
+        const hashed = await hashPassword(adminPassword);
+        const newAdmin: Omit<Admin, 'faceImage'> = {
+          id: 'a1', // Default ID for the first admin
+          name: adminName.trim(),
+          role: UserRoleEnum.ADMIN,
+          email: adminEmail.trim(),
+          password: hashed,
+        };
+        onSetupComplete(newAdmin);
+      } catch (err: any) {
+        setError("Error securing password: " + err.message);
+      } finally {
+        setIsLoading(false);
+      }
+    })();
   };
 
   return (

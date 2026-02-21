@@ -9,7 +9,7 @@ class WebSocketService {
     /**
      * Connect to WebSocket server
      */
-    connect(userId: string, userRole: string): void {
+    connect(userId: string, userRole: string, token?: string): void {
         if (this.socket?.connected) {
             console.log('Already connected to WebSocket');
             return;
@@ -17,6 +17,9 @@ class WebSocketService {
 
         this.socket = io('http://localhost:3002', {
             transports: ['websocket'],
+            auth: {
+                token: token || undefined
+            },
             reconnection: true,
             reconnectionDelay: 1000,
             reconnectionAttempts: 5
@@ -37,6 +40,17 @@ class WebSocketService {
 
         this.socket.on('connect_error', (error) => {
             console.error('WebSocket connection error:', error);
+            this.notifyListeners('connection-error', { message: 'Failed to connect to real-time server.' });
+        });
+
+        this.socket.on('reconnect_failed', () => {
+            console.error('WebSocket reconnection failed after all attempts');
+            this.connected = false;
+            this.notifyListeners('connection-error', { message: 'Lost connection to real-time server. Please refresh the page.' });
+        });
+
+        this.socket.on('reconnect_attempt', (attempt: number) => {
+            console.log(`WebSocket reconnection attempt ${attempt}`);
         });
 
         // Set up event listeners

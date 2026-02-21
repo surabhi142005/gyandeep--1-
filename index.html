@@ -2,39 +2,51 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🕯️</text></svg>" />
     <meta name="theme-color" content="#4f46e5" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Gyandeep</title>
+    <meta name="description" content="Gyandeep - AI-Powered Smart Classroom System with face recognition, AI quizzes, and gamified learning" />
+    <title>Gyandeep - AI Smart Classroom</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="manifest" href="/manifest.json" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="Gyandeep" />
     <style>
-      /* Custom scrollbar for a more modern look */
-      ::-webkit-scrollbar {
-        width: 8px;
-      }
-      ::-webkit-scrollbar-track {
-        background: #f1f1f1;
-      }
-      ::-webkit-scrollbar-thumb {
-        background: #888;
-        border-radius: 4px;
-      }
-      ::-webkit-scrollbar-thumb:hover {
-        background: #555;
-      }
+      /* Custom scrollbar */
+      ::-webkit-scrollbar { width: 8px; }
+      ::-webkit-scrollbar-track { background: #f1f1f1; }
+      ::-webkit-scrollbar-thumb { background: #888; border-radius: 4px; }
+      ::-webkit-scrollbar-thumb:hover { background: #555; }
       @keyframes slide-down {
-        from {
-          opacity: 0;
-          transform: translateY(-20px);
-        }
-        to {
-          opacity: 1;
-          transform: translateY(0);
-        }
+        from { opacity: 0; transform: translateY(-20px); }
+        to { opacity: 1; transform: translateY(0); }
       }
-      .animate-slide-down {
-        animation: slide-down 0.5s ease-out forwards;
-      }
+      .animate-slide-down { animation: slide-down 0.5s ease-out forwards; }
+
+      /* Dark Mode */
+      [data-dark-mode="1"] { color-scheme: dark; }
+      [data-dark-mode="1"] body { background-color: #111827; color: #f3f4f6; }
+      [data-dark-mode="1"] .bg-white { background-color: #1f2937 !important; }
+      [data-dark-mode="1"] .bg-gray-50 { background-color: #111827 !important; }
+      [data-dark-mode="1"] .bg-gray-100 { background-color: #1f2937 !important; }
+      [data-dark-mode="1"] .bg-gray-200 { background-color: #374151 !important; }
+      [data-dark-mode="1"] .text-gray-800, [data-dark-mode="1"] .text-gray-700, [data-dark-mode="1"] .text-gray-900 { color: #f3f4f6 !important; }
+      [data-dark-mode="1"] .text-gray-600, [data-dark-mode="1"] .text-gray-500 { color: #9ca3af !important; }
+      [data-dark-mode="1"] .text-gray-400 { color: #6b7280 !important; }
+      [data-dark-mode="1"] .border-gray-300, [data-dark-mode="1"] .border-gray-200 { border-color: #374151 !important; }
+      [data-dark-mode="1"] .shadow-md, [data-dark-mode="1"] .shadow-lg, [data-dark-mode="1"] .shadow-2xl { box-shadow: 0 4px 6px -1px rgba(0,0,0,0.4), 0 2px 4px -2px rgba(0,0,0,0.3) !important; }
+      [data-dark-mode="1"] .bg-white\/80, [data-dark-mode="1"] .bg-white\/85 { background-color: rgba(31,41,55,0.85) !important; }
+      [data-dark-mode="1"] input, [data-dark-mode="1"] select, [data-dark-mode="1"] textarea { background-color: #374151; color: #f3f4f6; border-color: #4b5563; }
+      [data-dark-mode="1"] .bg-green-100 { background-color: #064e3b !important; }
+      [data-dark-mode="1"] .bg-red-100 { background-color: #7f1d1d !important; }
+      [data-dark-mode="1"] .bg-blue-100 { background-color: #1e3a5f !important; }
+      [data-dark-mode="1"] .bg-yellow-50 { background-color: #78350f !important; }
+      [data-dark-mode="1"] .bg-orange-50 { background-color: #7c2d12 !important; }
+      [data-dark-mode="1"] .bg-red-50 { background-color: #450a0a !important; }
+      [data-dark-mode="1"] .bg-green-50 { background-color: #052e16 !important; }
+      [data-dark-mode="1"] ::-webkit-scrollbar-track { background: #1f2937; }
+      [data-dark-mode="1"] ::-webkit-scrollbar-thumb { background: #4b5563; }
     </style>
   <script type="importmap">
 {
@@ -48,11 +60,14 @@
 }
 </script>
 <script>
-    // Script to apply theme from localStorage before React loads to prevent FOUC
+    // Apply theme + dark mode from localStorage before React loads to prevent FOUC
     (function() {
       try {
-        const theme = localStorage.getItem('gyandeep-theme') || 'indigo';
+        var theme = localStorage.getItem('gyandeep-theme') || 'indigo';
         document.documentElement.setAttribute('data-theme', theme);
+        var darkRaw = localStorage.getItem('gyandeep-dark-mode');
+        var dark = darkRaw ? JSON.parse(darkRaw) : false;
+        document.documentElement.setAttribute('data-dark-mode', dark ? '1' : '0');
       } catch (e) {
         console.error('Failed to apply theme from localStorage', e);
       }

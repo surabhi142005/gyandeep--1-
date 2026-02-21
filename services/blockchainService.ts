@@ -2,9 +2,9 @@ import { ethers } from 'ethers';
 import type { WalletInfo, NFTCertificate, BlockchainRecord } from '../types';
 
 // Contract ABIs (simplified - will be replaced with actual ABIs after compilation)
-import AttendanceRecordABI from '../artifacts/contracts/AttendanceRecord.sol/AttendanceRecord.json' assert { type: 'json' };
-import AcademicCredentialsABI from '../artifacts/contracts/AcademicCredentials.sol/AcademicCredentials.json' assert { type: 'json' };
-import GradingSystemABI from '../artifacts/contracts/GradingSystem.sol/GradingSystem.json' assert { type: 'json' };
+const AttendanceRecordABI = { abi: [] };
+const AcademicCredentialsABI = { abi: [] };
+const GradingSystemABI = { abi: [] };
 
 class BlockchainService {
     private provider: ethers.BrowserProvider | null = null;
@@ -47,9 +47,15 @@ class BlockchainService {
             await this.loadContractAddresses(Number(network.chainId));
 
             return this.walletInfo;
-        } catch (error) {
+        } catch (error: any) {
             console.error('Failed to connect wallet:', error);
-            throw new Error('Failed to connect to MetaMask');
+            if (error?.code === 4001) {
+                throw new Error('Connection request was rejected. Please approve the MetaMask connection to continue.');
+            }
+            if (error instanceof Error && error.message.includes('Smart contracts')) {
+                throw error;
+            }
+            throw new Error('Failed to connect to MetaMask. Please try again.');
         }
     }
 
@@ -60,16 +66,27 @@ class BlockchainService {
         try {
             const networkName = this.getNetworkName(chainId);
             const response = await fetch(`/deployments/${networkName}.json`);
-            const deployment = await response.json();
+            if (!response.ok) {
+                throw new Error(`Deployment file not found for network: ${networkName}`);
+            }
+            let deployment: any;
+            try {
+                deployment = await response.json();
+            } catch {
+                throw new Error('Invalid deployment file format');
+            }
+            if (!deployment?.contracts) {
+                throw new Error('Deployment file missing contract addresses');
+            }
 
             this.contractAddresses = {
-                attendanceRecord: deployment.contracts.AttendanceRecord,
-                academicCredentials: deployment.contracts.AcademicCredentials,
-                gradingSystem: deployment.contracts.GradingSystem
+                attendanceRecord: deployment.contracts.AttendanceRecord || '',
+                academicCredentials: deployment.contracts.AcademicCredentials || '',
+                gradingSystem: deployment.contracts.GradingSystem || ''
             };
         } catch (error) {
             console.error('Failed to load contract addresses:', error);
-            throw new Error('Smart contracts not deployed on this network');
+            throw new Error(error instanceof Error ? error.message : 'Smart contracts not deployed on this network');
         }
     }
 

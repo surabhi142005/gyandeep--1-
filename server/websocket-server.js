@@ -2,6 +2,7 @@ import express from 'express';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
 import cors from 'cors';
+import jwt from 'jsonwebtoken';
 
 const app = express();
 app.use(cors({ origin: 'http://localhost:5173', credentials: true }));
@@ -12,6 +13,21 @@ const io = new Server(httpServer, {
         origin: 'http://localhost:5173',
         methods: ['GET', 'POST'],
         credentials: true
+    }
+});
+
+const JWT_SECRET = process.env.JWT_SECRET || process.env.SESSION_SECRET || 'gyandeep-jwt-secret';
+
+// Authenticate socket connections using a Bearer JWT sent in `socket.handshake.auth.token`
+io.use((socket, next) => {
+    try {
+        const token = socket.handshake.auth && socket.handshake.auth.token
+        if (!token) return next(new Error('Authentication error: token required'))
+        const payload = jwt.verify(token, JWT_SECRET)
+        socket.user = payload
+        return next()
+    } catch (err) {
+        return next(new Error('Authentication error'))
     }
 });
 
@@ -114,4 +130,13 @@ const PORT = process.env.WEBSOCKET_PORT || 3002;
 httpServer.listen(PORT, () => {
     console.log(`WebSocket server running on http://localhost:${PORT}`);
     console.log('Ready to accept connections...');
+});
+
+// Handle uncaught exceptions to prevent silent crashes
+process.on('uncaughtException', (err) => {
+    console.error('WebSocket server uncaught exception:', err);
+});
+
+process.on('unhandledRejection', (reason) => {
+    console.error('WebSocket server unhandled rejection:', reason);
 });

@@ -6,13 +6,16 @@ import ToastNotification from './components/ToastNotification';
 import { getCurrentPosition } from './services/locationService';
 import Chatbot from './components/Chatbot';
 import { fetchUsers, fetchClasses } from './services/dataService';
-import { setLocale, t } from './services/i18n';
-
-import AdminSetup from './components/AdminSetup';
-import Spinner from './components/Spinner'; // Import Spinner for Suspense fallback
-import UserProfile from './components/UserProfile';
-import Enhanced3DBackground from './components/Background3D';
 import { websocketService } from './services/websocketService';
+import { setLocale, t } from './services/i18n';
+import AdminSetup from './components/AdminSetup';
+import Spinner from './components/Spinner';
+import UserProfile from './components/UserProfile';
+import Iridescence from './components/Iridescence';
+import AccessibilityPanel from './components/AccessibilityPanel';
+import { voiceService } from './services/voiceService';
+import LandingPage from './components/LandingPage';
+import type { Announcement } from './components/AnnouncementBoard';
 
 // Lazy load dashboard components
 const TeacherDashboard = lazy(() => import('./components/TeacherDashboard'));
@@ -27,7 +30,7 @@ function useLocalStorage<T>(key: string, initialValue: T): [T, React.Dispatch<Re
             return item ? JSON.parse(item) : initialValue;
         } catch (error) {
             console.error(error);
-            return initialValue
+            return initialValue;
         }
     });
 
@@ -44,32 +47,7 @@ function useLocalStorage<T>(key: string, initialValue: T): [T, React.Dispatch<Re
     return [storedValue, setValue];
 }
 
-// Fix: Add a global declaration for the hypothetical `window.ai` object to resolve TypeScript errors.
-declare global {
-    interface Window {
-        ai?: {
-            permissions?: {
-                request: (permissions: string[]) => Promise<void>;
-            };
-        };
-    }
-}
-
 const App: React.FC = () => {
-    // --- Permissions Request on Load ---
-    useEffect(() => {
-        const requestAppPermissions = async () => {
-            try {
-                if (window.ai && window.ai.permissions && typeof window.ai.permissions.request === 'function') {
-                    await window.ai.permissions.request(['camera', 'geolocation']);
-                }
-            } catch (error) {
-                console.error("Error requesting permissions on load:", error);
-            }
-        };
-        requestAppPermissions();
-    }, []);
-
     // --- State Management ---
     const [theme, setTheme] = useLocalStorage('gyandeep-theme', 'indigo');
     const [highContrast, setHighContrast] = useLocalStorage('gyandeep-high-contrast', false);
@@ -87,8 +65,13 @@ const App: React.FC = () => {
     const [notification, setNotification] = useState<{ message: string; type: 'info' | 'success' } | null>(null);
     const [userLocation, setUserLocation] = useState<Coordinates | null>(null);
     const [showProfile, setShowProfile] = useState(false);
+    const [reducedMotion, setReducedMotion] = useLocalStorage('gyandeep-reduced-motion', false);
+    const [screenReaderHints, setScreenReaderHints] = useLocalStorage('gyandeep-screen-reader-hints', false);
+    const [voiceEnabled, setVoiceEnabled] = useLocalStorage('gyandeep-voice-enabled', false);
+    const [darkMode, setDarkMode] = useLocalStorage('gyandeep-dark-mode', false);
+    const [showLanding, setShowLanding] = useState(true);
+    const [announcements, setAnnouncements] = useLocalStorage<Announcement[]>('gyandeep-announcements', []);
 
-    // State for historical attendance records, moved up to App.tsx
     const [historicalRecords, setHistoricalRecords] = useLocalStorage<HistoricalSessionRecord[]>(`attendanceHistory_${currentUser?.id || 'default'}`, []);
 
     const students = useMemo(() => allUsers.filter(u => u.role === UserRoleEnum.STUDENT) as Student[], [allUsers]);
@@ -100,12 +83,12 @@ const App: React.FC = () => {
         notes: null,
         quiz: null,
         quizPublished: false,
-        subject: allSubjects[0]?.name || 'Math', // Default to first subject or 'Math'
+        subject: allSubjects[0]?.name || 'Math',
         teacherLocation: null,
         attendanceRadius: 100,
     });
 
-    // --- Theme Effect ---
+    // --- Theme Effects ---
     useEffect(() => {
         document.documentElement.setAttribute('data-theme', theme);
     }, [theme]);
@@ -120,34 +103,39 @@ const App: React.FC = () => {
     }, [fontScale]);
 
     useEffect(() => {
+        document.documentElement.setAttribute('data-reduced-motion', reducedMotion ? '1' : '0');
+        if (reducedMotion) {
+            document.documentElement.style.setProperty('--animation-duration', '0s');
+        } else {
+            document.documentElement.style.removeProperty('--animation-duration');
+        }
+    }, [reducedMotion]);
+
+    useEffect(() => {
+        voiceService.setTTSEnabled(voiceEnabled);
+    }, [voiceEnabled]);
+
+    useEffect(() => {
+        document.documentElement.setAttribute('data-dark-mode', darkMode ? '1' : '0');
+    }, [darkMode]);
+
+    useEffect(() => {
         fetchUsers().then((users) => {
             if (Array.isArray(users) && users.length > 0) {
-                setAllUsers(users)
-                setIsSetupComplete(true)
+                setAllUsers(users);
+                setIsSetupComplete(true);
             }
-        }).catch(() => { })
+        }).catch((err) => {
+            console.error('Failed to fetch users:', err);
+        });
         fetchClasses().then((classes) => {
             if (Array.isArray(classes)) {
-                setAllClasses(classes)
+                setAllClasses(classes);
             }
-        }).catch(() => { })
-    }, [])
-
-    // Check for login success from Google OAuth redirect
-    useEffect(() => {
-        const params = new URLSearchParams(window.location.search);
-        if (params.get('login_success') === 'true') {
-            fetch('http://localhost:3001/api/auth/current_user')
-                .then(res => res.json())
-                .then(user => {
-                    if (user && user.id) {
-                        handleLogin(user as AnyUser)
-                        window.history.replaceState({}, document.title, window.location.pathname);
-                    }
-                })
-                .catch(err => console.error("Failed to fetch current user", err));
-        }
-    }, [])
+        }).catch((err) => {
+            console.error('Failed to fetch classes:', err);
+        });
+    }, []);
 
     // --- Handlers ---
     const showNotification = (message: string, type: 'info' | 'success' = 'info') => {
@@ -167,8 +155,13 @@ const App: React.FC = () => {
     const handleLogin = (user: AnyUser) => {
         setCurrentUser(user);
 
-        // Initialize WebSocket connection for real-time features
-        websocketService.connect(user.id, user.role);
+            // Connect to realtime server with JWT if available
+            try {
+                const token = window.localStorage.getItem('gyandeep_token') || undefined;
+                websocketService.connect(user.id, user.role, token || undefined);
+            } catch (e: any) {
+                console.warn('Could not read token from storage', e && e.message ? e.message : e);
+            }
 
         if (user.role === UserRoleEnum.TEACHER) {
             const currentStudents = allUsers.filter(u => u.role === UserRoleEnum.STUDENT);
@@ -187,22 +180,20 @@ const App: React.FC = () => {
                 teacherLocation: null,
                 attendanceRadius: 100
             });
-        } else if (user.role === UserRoleEnum.STUDENT) {
-            // Reset student-specific states on login if needed
         }
 
         getCurrentPosition()
             .then(setUserLocation)
             .catch(err => {
                 console.error("Could not get user location:", err.message);
-                showNotification("Could not get your location. Location-based AI features may be limited.", "info");
+                showNotification("Could not get your location. Check your internet connection or enable GPS.", "info");
             });
     };
 
     const handleLogout = () => {
-        websocketService.disconnect();
         setCurrentUser(null);
         setUserLocation(null);
+        try { websocketService.disconnect() } catch (e:any) { console.warn('Failed to disconnect websocket', e && e.message ? e.message : e) }
     };
 
     const handleUpdateSession = (sessionUpdate: Partial<ClassSession>) => {
@@ -221,7 +212,7 @@ const App: React.FC = () => {
         const newPerformance: PerformanceData = {
             subject,
             score,
-            date: new Date().toISOString().split('T')[0] // YYYY-MM-DD
+            date: new Date().toISOString().split('T')[0]
         };
         setAllUsers(prevUsers => prevUsers.map(user => {
             if (user.id === studentId && user.role === UserRoleEnum.STUDENT) {
@@ -272,6 +263,16 @@ const App: React.FC = () => {
         return userFound;
     };
 
+    const handlePostAnnouncement = (text: string) => {
+        if (!currentUser) return;
+        const newAnnouncement: Announcement = {
+            id: Date.now().toString(),
+            text,
+            author: currentUser.name,
+            timestamp: new Date().toISOString(),
+        };
+        setAnnouncements(prev => [newAnnouncement, ...prev]);
+    };
 
     // --- Render Logic ---
     const renderContent = () => {
@@ -280,12 +281,12 @@ const App: React.FC = () => {
         }
 
         if (!currentUser) {
-            return <Login onLogin={handleLogin} users={allUsers} theme={theme} />;
+            return <Login onLogin={handleLogin} users={allUsers} theme={theme} onPasswordReset={handlePasswordReset} />;
         }
 
         return (
             <Suspense fallback={
-                <div className="flex flex-col items-center justify-center min-h-screen bg-gray-50">
+                <div className="flex flex-col items-center justify-center min-h-screen">
                     <Spinner size="w-12 h-12" color="text-gray-600" />
                     <p className="mt-4 text-xl text-gray-700">Loading Dashboard...</p>
                 </div>
@@ -302,8 +303,10 @@ const App: React.FC = () => {
                         onUpdateFaceImage={handleUpdateFaceImage}
                         historicalRecords={historicalRecords}
                         onUpdateHistoricalRecords={setHistoricalRecords}
-                        allSubjects={allSubjects} // Pass allSubjects
-                        allClasses={allClasses} // Pass allClasses
+                        allSubjects={allSubjects}
+                        allClasses={allClasses}
+                        announcements={announcements}
+                        onPostAnnouncement={handlePostAnnouncement}
                     />
                 )}
                 {currentUser.role === UserRoleEnum.STUDENT && (
@@ -317,6 +320,8 @@ const App: React.FC = () => {
                         onShowNotification={showNotification}
                         onUpdateFaceImage={handleUpdateFaceImage}
                         historicalSessions={historicalRecords.filter(rec => rec.notes)}
+                        allStudents={students}
+                        announcements={announcements}
                     />
                 )}
                 {currentUser.role === UserRoleEnum.ADMIN && (
@@ -328,8 +333,8 @@ const App: React.FC = () => {
                         theme={theme}
                         setTheme={setTheme}
                         onUpdateFaceImage={handleUpdateFaceImage}
-                        allSubjects={allSubjects} // Pass allSubjects
-                        setAllSubjects={setAllSubjects} // Pass setter for subjects
+                        allSubjects={allSubjects}
+                        setAllSubjects={setAllSubjects}
                         allClasses={allClasses}
                         setAllClasses={setAllClasses}
                     />
@@ -338,54 +343,94 @@ const App: React.FC = () => {
         );
     };
 
+    // Show landing page if not logged in and landing is visible
+    const showLandingPage = showLanding && !currentUser && isSetupComplete;
+
     return (
         <>
-            <Enhanced3DBackground />
-            {notification && (
-                <ToastNotification
-                    message={notification.message}
-                    type={notification.type}
-                    onClose={() => setNotification(null)}
-                />
-            )}
-            {currentUser && (
-                <>
-                    <div className="fixed bottom-2 left-2 z-50 flex flex-col gap-2 bg-white/80 backdrop-blur rounded-md shadow p-2">
-                        <label className="text-xs text-gray-700">{t('Theme')}</label>
-                        <select aria-label="Theme" value={theme} onChange={e => setTheme(e.target.value)} className="text-xs border border-gray-300 rounded px-1 py-0.5">
-                            <option value="indigo">Indigo</option>
-                            <option value="teal">Teal</option>
-                            <option value="crimson">Crimson</option>
-                            <option value="purple">Purple</option>
-                        </select>
-                        <label className="text-xs text-gray-700">{t('Locale')}</label>
-                        <select aria-label="Locale" onChange={e => setLocale(e.target.value as any)} className="text-xs border border-gray-300 rounded px-1 py-0.5">
-                            <option value="en">English</option>
-                            <option value="hi">Hindi</option>
-                            <option value="mr">Marathi</option>
-                        </select>
-                    </div>
-                    <div className="fixed top-2 right-2 z-50 flex items-center gap-2 bg-white/80 backdrop-blur rounded-md shadow p-2">
-                        <button
-                            onClick={() => setShowProfile(true)}
-                            className="p-1 rounded-full hover:bg-gray-200 transition-colors mr-2"
-                            title={t('Profile')}
-                        >
-                            {currentUser.faceImage ? (
-                                <img src={currentUser.faceImage} alt="Profile" className="w-6 h-6 rounded-full object-cover" />
-                            ) : (
-                                <svg className="w-5 h-5 text-gray-700" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
-                            )}
-                        </button>
-                        <label className="text-xs text-gray-700">High Contrast</label>
-                        <input type="checkbox" aria-label="Toggle high contrast" checked={!!highContrast} onChange={e => setHighContrast(e.target.checked)} />
-                        <label className="text-xs text-gray-700 ml-2">Font Scale</label>
-                        <input type="range" aria-label="Adjust font scale" min={0.9} max={1.4} step={0.05} value={Number(fontScale)} onChange={e => setFontScale(Number(e.target.value))} />
-                    </div>
-                </>
-            )}
-            {renderContent()}
-            {currentUser && <Chatbot theme={theme} userLocation={userLocation} />}
+            <Iridescence color={currentUser ? [0.6, 0.4, 0.8] : [0.5, 0.6, 0.8]} mouseReact amplitude={currentUser ? 0.15 : 0.1} speed={currentUser ? 1.2 : 1} />
+            <div className="relative z-10">
+                {notification && (
+                    <ToastNotification
+                        message={notification.message}
+                        type={notification.type}
+                        onClose={() => setNotification(null)}
+                    />
+                )}
+                {currentUser && (
+                    <>
+                        <div className="fixed bottom-2 left-2 z-50 flex flex-col gap-2 bg-white/80 backdrop-blur rounded-md shadow p-2">
+                            <label className="text-xs text-gray-700">{t('Theme')}</label>
+                            <select aria-label="Theme" value={theme} onChange={e => setTheme(e.target.value)} className="text-xs border border-gray-300 rounded px-1 py-0.5">
+                                <option value="indigo">Indigo</option>
+                                <option value="teal">Teal</option>
+                                <option value="crimson">Crimson</option>
+                                <option value="purple">Purple</option>
+                            </select>
+                            <label className="text-xs text-gray-700">{t('Locale')}</label>
+                            <select aria-label="Locale" onChange={e => setLocale(e.target.value as any)} className="text-xs border border-gray-300 rounded px-1 py-0.5">
+                                <option value="en">English</option>
+                                <option value="hi">Hindi</option>
+                                <option value="mr">Marathi</option>
+                            </select>
+                        </div>
+                        <div className="fixed top-2 right-2 z-50 flex items-center gap-2 bg-white/80 backdrop-blur rounded-md shadow p-2">
+                            {/* Dark mode toggle in header */}
+                            <button
+                                onClick={() => setDarkMode(!darkMode)}
+                                className="p-1.5 rounded-full hover:bg-gray-200 transition-colors"
+                                title={darkMode ? 'Switch to light mode' : 'Switch to dark mode'}
+                            >
+                                {darkMode ? (
+                                    <svg className="w-5 h-5 text-yellow-500" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 2a1 1 0 011 1v1a1 1 0 11-2 0V3a1 1 0 011-1zm4 8a4 4 0 11-8 0 4 4 0 018 0zm-.464 4.95l.707.707a1 1 0 001.414-1.414l-.707-.707a1 1 0 00-1.414 1.414zm2.12-10.607a1 1 0 010 1.414l-.706.707a1 1 0 11-1.414-1.414l.707-.707a1 1 0 011.414 0zM17 11a1 1 0 100-2h-1a1 1 0 100 2h1zm-7 4a1 1 0 011 1v1a1 1 0 11-2 0v-1a1 1 0 011-1zM5.05 6.464A1 1 0 106.465 5.05l-.708-.707a1 1 0 00-1.414 1.414l.707.707zm1.414 8.486l-.707.707a1 1 0 01-1.414-1.414l.707-.707a1 1 0 011.414 1.414zM4 11a1 1 0 100-2H3a1 1 0 000 2h1z" clipRule="evenodd" /></svg>
+                                ) : (
+                                    <svg className="w-5 h-5 text-gray-700" fill="currentColor" viewBox="0 0 20 20"><path d="M17.293 13.293A8 8 0 016.707 2.707a8.001 8.001 0 1010.586 10.586z" /></svg>
+                                )}
+                            </button>
+                            <button
+                                onClick={() => setShowProfile(true)}
+                                className="p-1 rounded-full hover:bg-gray-200 transition-colors"
+                                title={t('Profile')}
+                            >
+                                {currentUser.faceImage ? (
+                                    <img src={currentUser.faceImage} alt="Profile" className="w-6 h-6 rounded-full object-cover" />
+                                ) : (
+                                    <svg className="w-5 h-5 text-gray-700" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
+                                )}
+                            </button>
+                        </div>
+                        <AccessibilityPanel
+                            highContrast={!!highContrast}
+                            setHighContrast={setHighContrast}
+                            fontScale={Number(fontScale)}
+                            setFontScale={setFontScale}
+                            reducedMotion={reducedMotion}
+                            setReducedMotion={setReducedMotion}
+                            screenReaderHints={screenReaderHints}
+                            setScreenReaderHints={setScreenReaderHints}
+                            voiceEnabled={voiceEnabled}
+                            setVoiceEnabled={setVoiceEnabled}
+                            darkMode={darkMode}
+                            setDarkMode={setDarkMode}
+                            theme={theme}
+                        />
+                    </>
+                )}
+                {showProfile && currentUser && (
+                    <UserProfile
+                        user={currentUser}
+                        onUpdateUser={handleUpdateUser}
+                        onClose={() => setShowProfile(false)}
+                        theme={theme}
+                    />
+                )}
+                {showLandingPage ? (
+                    <LandingPage onGetStarted={() => setShowLanding(false)} theme={theme} />
+                ) : (
+                    renderContent()
+                )}
+                {currentUser && <Chatbot theme={theme} userLocation={userLocation} />}
+            </div>
         </>
     );
 };

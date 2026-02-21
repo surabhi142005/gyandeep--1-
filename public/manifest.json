@@ -1,13 +1,15 @@
 {
-  "name": "Gyandeep",
+  "name": "Gyandeep - AI Smart Classroom",
   "short_name": "Gyandeep",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#ffffff",
   "theme_color": "#4f46e5",
-  "description": "AI-powered classroom system",
+  "description": "AI-Powered Smart Classroom System with face recognition, AI quizzes, real-time attendance, and gamified learning",
+  "orientation": "any",
+  "categories": ["education"],
   "icons": [
-    { "src": "/vite.svg", "sizes": "192x192", "type": "image/svg+xml" },
-    { "src": "/vite.svg", "sizes": "512x512", "type": "image/svg+xml" }
+    { "src": "/vite.svg", "sizes": "192x192", "type": "image/svg+xml", "purpose": "any maskable" },
+    { "src": "/vite.svg", "sizes": "512x512", "type": "image/svg+xml", "purpose": "any maskable" }
   ]
 }

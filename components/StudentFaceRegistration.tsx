@@ -1,13 +1,16 @@
 import React, { useState, useRef, useEffect } from 'react'
 import Spinner from './Spinner'
+import { registerFace } from '../services/authService'
 
 interface StudentFaceRegistrationProps {
   userId: string
+  /** Called with the captured image data URL so the parent can persist the face image */
+  onCapture?: (imageDataUrl: string) => void
   onSuccess?: () => void
   onClose?: () => void
 }
 
-const StudentFaceRegistration: React.FC<StudentFaceRegistrationProps> = ({ userId, onSuccess, onClose }) => {
+const StudentFaceRegistration: React.FC<StudentFaceRegistrationProps> = ({ userId, onCapture, onSuccess, onClose }) => {
   const videoRef = useRef<HTMLVideoElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const [loading, setLoading] = useState(false)
@@ -19,22 +22,9 @@ const StudentFaceRegistration: React.FC<StudentFaceRegistrationProps> = ({ userI
   const [isRegistered, setIsRegistered] = useState(false)
 
   useEffect(() => {
-    checkIfRegistered()
+    // In offline mode, registration status is determined by whether faceImage is set on the user object
+    // (managed by the parent component). No API call needed.
   }, [userId])
-
-  const checkIfRegistered = async () => {
-    try {
-      const response = await fetch('/api/face/check', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ user_id: userId })
-      })
-      const data = await response.json()
-      setIsRegistered(data.registered)
-    } catch (error) {
-      console.error('Error checking face registration:', error)
-    }
-  }
 
   const startCamera = async () => {
     try {
@@ -79,7 +69,7 @@ const StudentFaceRegistration: React.FC<StudentFaceRegistrationProps> = ({ userI
     setRegistrationStatus('idle')
   }
 
-  const registerFace = async () => {
+  const handleRegisterFace = async () => {
     if (!capturedImage) {
       setErrorMessage('Please capture an image first')
       return
@@ -90,26 +80,15 @@ const StudentFaceRegistration: React.FC<StudentFaceRegistrationProps> = ({ userI
     setErrorMessage('')
 
     try {
-      const response = await fetch('/api/face/register', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          user_id: userId,
-          image: capturedImage
-        })
-      })
-
-      const data = await response.json()
-
-      if (!response.ok) {
-        throw new Error(data.error || 'Registration failed')
-      }
-
+      // Try to register with backend; falls back to local storage via authService
+      await registerFace(userId, capturedImage)
+      // Pass the captured image to the parent so it can persist it
+      onCapture?.(capturedImage)
       setRegistrationStatus('success')
       setIsRegistered(true)
       setTimeout(() => {
         onSuccess?.()
-      }, 1500)
+      }, 1200)
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : 'Failed to register face'
       setErrorMessage(errorMsg)
@@ -197,11 +176,11 @@ const StudentFaceRegistration: React.FC<StudentFaceRegistrationProps> = ({ userI
                   Retake
                 </button>
                 <button
-                  onClick={registerFace}
+                  onClick={handleRegisterFace}
                   disabled={loading}
                   className="flex-1 bg-green-600 hover:bg-green-700 disabled:bg-gray-400 text-white font-semibold py-2 px-4 rounded-lg transition flex items-center justify-center gap-2"
                 >
-                  {loading ? <Spinner size={4} /> : '✓'} Register
+                  {loading ? <Spinner size="w-4 h-4" /> : '✓'} Register
                 </button>
               </div>
             </div>

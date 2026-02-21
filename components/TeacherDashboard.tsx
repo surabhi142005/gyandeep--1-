@@ -10,14 +10,15 @@ import AttendanceChart from './AttendanceChart';
 import WebcamCapture from './WebcamCapture';
 import { uploadClassNotes } from '../services/dataService';
 import { TeacherDashboardProps } from './TeacherDashboardProps';
+import AnnouncementBoard from './AnnouncementBoard';
 
 const CODE_DURATION = 10 * 60; // 10 minutes in seconds
 
 const THEME_COLORS: Record<string, Record<string, string>> = {
-    indigo: { primary: 'bg-indigo-600', hover: 'hover:bg-indigo-700', text: 'text-indigo-800', ring: 'focus:ring-indigo-500', border: 'focus:border-indigo-500', lightBg: 'bg-indigo-50', lightText: 'text-indigo-700', lightHover: 'hover:bg-indigo-100', accent: 'accent-indigo-600' },
-    teal: { primary: 'bg-teal-600', hover: 'hover:bg-teal-700', text: 'text-teal-800', ring: 'focus:ring-teal-500', border: 'focus:border-teal-500', lightBg: 'bg-teal-50', lightText: 'text-teal-700', lightHover: 'hover:bg-teal-100', accent: 'accent-teal-600' },
-    crimson: { primary: 'bg-red-600', hover: 'hover:bg-red-700', text: 'text-red-800', ring: 'focus:ring-red-500', border: 'focus:border-red-500', lightBg: 'bg-red-50', lightText: 'text-red-700', lightHover: 'hover:bg-red-100', accent: 'accent-red-600' },
-    purple: { primary: 'bg-purple-600', hover: 'hover:bg-purple-700', text: 'text-purple-800', ring: 'focus:ring-purple-500', border: 'focus:border-purple-500', lightBg: 'bg-purple-50', lightText: 'text-purple-700', lightHover: 'hover:bg-purple-100', accent: 'accent-purple-600' },
+  indigo: { primary: 'bg-indigo-600', hover: 'hover:bg-indigo-700', text: 'text-indigo-800', ring: 'focus:ring-indigo-500', border: 'focus:border-indigo-500', lightBg: 'bg-indigo-50', lightText: 'text-indigo-700', lightHover: 'hover:bg-indigo-100', accent: 'accent-indigo-600' },
+  teal: { primary: 'bg-teal-600', hover: 'hover:bg-teal-700', text: 'text-teal-800', ring: 'focus:ring-teal-500', border: 'focus:border-teal-500', lightBg: 'bg-teal-50', lightText: 'text-teal-700', lightHover: 'hover:bg-teal-100', accent: 'accent-teal-600' },
+  crimson: { primary: 'bg-red-600', hover: 'hover:bg-red-700', text: 'text-red-800', ring: 'focus:ring-red-500', border: 'focus:border-red-500', lightBg: 'bg-red-50', lightText: 'text-red-700', lightHover: 'hover:bg-red-100', accent: 'accent-red-600' },
+  purple: { primary: 'bg-purple-600', hover: 'hover:bg-purple-700', text: 'text-purple-800', ring: 'focus:ring-purple-500', border: 'focus:border-purple-500', lightBg: 'bg-purple-50', lightText: 'text-purple-700', lightHover: 'hover:bg-purple-100', accent: 'accent-purple-600' },
 };
 
 function usePrevious<T>(value: T): T | undefined {
@@ -26,7 +27,7 @@ function usePrevious<T>(value: T): T | undefined {
   return ref.current;
 }
 
-const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ teacher, students, attendance, classSession, onUpdateSession, onLogout, theme, onUpdateFaceImage, historicalRecords, onUpdateHistoricalRecords, allSubjects, allClasses }) => {
+const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ teacher, students, attendance, classSession, onUpdateSession, onLogout, theme, onUpdateFaceImage, historicalRecords, onUpdateHistoricalRecords, allSubjects, allClasses, announcements = [], onPostAnnouncement }) => {
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [timeLeft, setTimeLeft] = useState(0);
@@ -44,7 +45,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ teacher, students, 
   const [isGeneratingQuiz, setIsGeneratingQuiz] = useState(false);
   const [isPublishingQuiz, setIsPublishingQuiz] = useState(false);
   const [quizThinkingMode, setQuizThinkingMode] = useState(false);
-  const [weeklyAttendance, setWeeklyAttendance] = useState<{date: string; present: number}[]>([]);
+  const [weeklyAttendance, setWeeklyAttendance] = useState<{ date: string; present: number }[]>([]);
   const [justUpdatedStudentId, setJustUpdatedStudentId] = useState<string | null>(null);
   const [selectedAttendanceIds, setSelectedAttendanceIds] = useState<string[]>([]);
   const [selectedPerformanceIds, setSelectedPerformanceIds] = useState<string[]>([]);
@@ -64,15 +65,16 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ teacher, students, 
   };
   const [tagPresets, setTagPresets] = useState<Record<string, string[]>>({});
   const [notesText, setNotesText] = useState(classSession.notes || '');
-  useEffect(() => { fetchTagPresets().then(setTagPresets).catch(() => {}) }, []);
+  const [expiryWarning, setExpiryWarning] = useState<string | null>(null);
+  useEffect(() => { fetchTagPresets().then(setTagPresets).catch((err) => { console.error('Failed to load tag presets:', err); }) }, []);
   useEffect(() => setNotesText(classSession.notes || ''), [classSession.notes]);
   const fallbackPresets: Record<string, string[]> = {
-    Mathematics: ['algebra','geometry','trigonometry','calculus','practice'],
-    Science: ['physics','chemistry','biology','lab','experiment'],
-    History: ['timeline','event','figure','cause','effect'],
-    English: ['grammar','vocabulary','reading','writing','comprehension']
+    Mathematics: ['algebra', 'geometry', 'trigonometry', 'calculus', 'practice'],
+    Science: ['physics', 'chemistry', 'biology', 'lab', 'experiment'],
+    History: ['timeline', 'event', 'figure', 'cause', 'effect'],
+    English: ['grammar', 'vocabulary', 'reading', 'writing', 'comprehension']
   };
-  const tagOptions = useMemo(() => (tagPresets[selectedSubject] || fallbackPresets[selectedSubject] || ['revision','exam','homework','unit']), [selectedSubject, tagPresets]);
+  const tagOptions = useMemo(() => (tagPresets[selectedSubject] || fallbackPresets[selectedSubject] || ['revision', 'exam', 'homework', 'unit']), [selectedSubject, tagPresets]);
 
   const colors = useMemo(() => THEME_COLORS[theme] || THEME_COLORS.indigo, [theme]);
 
@@ -86,10 +88,12 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ teacher, students, 
           if (perm === 'granted') new Notification(title, { body });
         });
       }
-    } catch {}
+    } catch (err) {
+      console.error('Notification error:', err);
+    }
   };
   const prevAttendance = usePrevious(attendance);
-  
+
   // Filter subjects based on teacher's assigned subjects
   const availableSubjects = useMemo(() => {
     return allSubjects.filter(subject => teacher.assignedSubjects.includes(subject.id));
@@ -108,7 +112,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ teacher, students, 
       }
     }
   }, [attendance, prevAttendance]);
-  
+
   // Removed local storage loading for historicalRecords, now managed by App.tsx
   // useEffect(() => {
   //   const savedRecordsRaw = localStorage.getItem(`attendanceHistory_${teacher.id}`);
@@ -130,34 +134,34 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ teacher, students, 
   // errors when accessing properties on the calculated summary object.
   const summaryBySubject = useMemo(() => {
     type SubjectSummary = Record<string, {
-        totalSessions: number;
-        totalPresent: number;
-        totalPossible: number;
-        averageAttendance?: number;
+      totalSessions: number;
+      totalPresent: number;
+      totalPossible: number;
+      averageAttendance?: number;
     }>;
 
     const subjectData = historicalRecords.reduce((acc: SubjectSummary, record) => {
-        const subject = record.subject;
-        if (!acc[subject]) {
-            acc[subject] = { totalSessions: 0, totalPresent: 0, totalPossible: 0 };
-        }
-        acc[subject].totalSessions += 1;
-        acc[subject].totalPresent += record.attendance.filter(r => r.status === 'Present').length;
-        acc[subject].totalPossible += record.attendance.length;
-        return acc;
+      const subject = record.subject;
+      if (!acc[subject]) {
+        acc[subject] = { totalSessions: 0, totalPresent: 0, totalPossible: 0 };
+      }
+      acc[subject].totalSessions += 1;
+      acc[subject].totalPresent += record.attendance.filter(r => r.status === 'Present').length;
+      acc[subject].totalPossible += record.attendance.length;
+      return acc;
     }, {} as SubjectSummary);
 
     Object.values(subjectData).forEach((data) => {
-        data.averageAttendance = (data.totalPossible > 0)
-            ? (data.totalPresent / data.totalPossible) * 100
-            : 0;
+      data.averageAttendance = (data.totalPossible > 0)
+        ? (data.totalPresent / data.totalPossible) * 100
+        : 0;
     });
     return subjectData;
   }, [historicalRecords]);
 
   // const subjects = ['Math', 'Science', 'History', 'English']; // Replaced by allSubjects
   const clearMessages = () => { setError(null); setSuccessMessage(null); };
-  
+
   const calculateTimeLeft = useCallback(() => {
     if (classSession.expiry) {
       const left = Math.round((classSession.expiry - Date.now()) / 1000);
@@ -167,76 +171,96 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ teacher, students, 
     }
   }, [classSession.expiry]);
 
+  // Compute real weekly attendance from historicalRecords
   useEffect(() => {
     const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
     const today = new Date();
-    setWeeklyAttendance(Array(7).fill(0).map((_, i) => {
-        const date = new Date();
-        date.setDate(today.getDate() - (6 - i));
-        return {
-            date: days[date.getDay()],
-            present: students.length > 0 ? Math.floor(Math.random() * (students.length + 1)) : 0,
-        };
-    }));
-  }, [students.length]);
-  
+    const result = Array(7).fill(0).map((_, i) => {
+      const date = new Date();
+      date.setDate(today.getDate() - (6 - i));
+      const dayLabel = days[date.getDay()];
+      const dateStr = date.toISOString().split('T')[0];
+      // Count present students in sessions that happened on this date
+      const presentCount = historicalRecords
+        .filter(r => r.date.startsWith(dateStr))
+        .reduce((sum, r) => sum + r.attendance.filter(a => a.status === 'Present').length, 0);
+      return { date: dayLabel, present: presentCount };
+    });
+    setWeeklyAttendance(result);
+  }, [historicalRecords]);
+
+  // Timer and session expiry warning
   useEffect(() => {
     calculateTimeLeft();
-    const timer = setInterval(calculateTimeLeft, 1000);
+    const timer = setInterval(() => {
+      calculateTimeLeft();
+      if (classSession.expiry) {
+        const left = Math.round((classSession.expiry - Date.now()) / 1000);
+        if (left === 120) {
+          setExpiryWarning('⚠️ Session code expires in 2 minutes!');
+          notify('Session Expiring', 'Your session code expires in 2 minutes.');
+        } else if (left === 60) {
+          setExpiryWarning('🚨 Session code expires in 1 minute!');
+          notify('Session Expiring Soon', 'Your session code expires in 1 minute.');
+        } else if (left <= 0) {
+          setExpiryWarning(null);
+        }
+      }
+    }, 1000);
     return () => clearInterval(timer);
-  }, [calculateTimeLeft]);
+  }, [calculateTimeLeft, classSession.expiry]);
 
   const handleFetchCurrentLocation = async () => {
     setIsFetchingLocation(true);
     clearMessages();
     try {
-        const location = await getCurrentPosition();
-        setTeacherLocation(location);
-        setManualLat(location.lat.toString());
-        setManualLng(location.lng.toString());
-        setSuccessMessage("Current location fetched.");
+      const location = await getCurrentPosition();
+      setTeacherLocation(location);
+      setManualLat(location.lat.toString());
+      setManualLng(location.lng.toString());
+      setSuccessMessage("Current location fetched.");
     } catch (err: any) {
-        setError(err.message);
+      setError(err.message);
     } finally {
-        setIsFetchingLocation(false);
+      setIsFetchingLocation(false);
     }
   };
 
   const handleSetManualLocation = () => {
-      clearMessages();
-      const lat = parseFloat(manualLat);
-      const lng = parseFloat(manualLng);
-      if (isNaN(lat) || isNaN(lng) || lat < -90 || lat > 90 || lng < -180 || lng > 180) {
-          setError("Invalid coordinates.");
-          return;
-      }
-      setTeacherLocation({ lat, lng });
-      setSuccessMessage("Manual location set.");
+    clearMessages();
+    const lat = parseFloat(manualLat);
+    const lng = parseFloat(manualLng);
+    if (isNaN(lat) || isNaN(lng) || lat < -90 || lat > 90 || lng < -180 || lng > 180) {
+      setError("Invalid coordinates.");
+      return;
+    }
+    setTeacherLocation({ lat, lng });
+    setSuccessMessage("Manual location set.");
   };
-  
+
   const saveCurrentSessionToHistory = useCallback(() => {
-      if (classSession.code && students.length > 0) {
-          const newRecord: HistoricalSessionRecord = {
-              id: classSession.expiry ? classSession.expiry - (CODE_DURATION * 1000) : Date.now(),
-              date: new Date().toISOString(),
-              subject: classSession.subject,
-              attendance: attendance,
-              notes: classSession.notes, // Include current session notes
-              classId: selectedClassFilter !== 'All' ? selectedClassFilter : undefined, // Add class ID to historical record
-          };
-          const updatedRecords = [newRecord, ...historicalRecords];
-          onUpdateHistoricalRecords(updatedRecords); // Use the prop setter
-      }
+    if (classSession.code && students.length > 0) {
+      const newRecord: HistoricalSessionRecord = {
+        id: classSession.expiry ? classSession.expiry - (CODE_DURATION * 1000) : Date.now(),
+        date: new Date().toISOString(),
+        subject: classSession.subject,
+        attendance: attendance,
+        notes: classSession.notes, // Include current session notes
+        classId: selectedClassFilter !== 'All' ? selectedClassFilter : undefined, // Add class ID to historical record
+      };
+      const updatedRecords = [newRecord, ...historicalRecords];
+      onUpdateHistoricalRecords(updatedRecords); // Use the prop setter
+    }
   }, [classSession, attendance, students, historicalRecords, onUpdateHistoricalRecords, classSession.notes, selectedClassFilter]);
 
   const handleGenerateCode = async () => {
     if (!selectedSubject) {
-        setError("Please select a subject first.");
-        return;
+      setError("Please select a subject first.");
+      return;
     }
     if (!teacherLocation) {
-        setError("Please set the classroom location first.");
-        return;
+      setError("Please set the classroom location first.");
+      return;
     }
     saveCurrentSessionToHistory();
     setIsGeneratingCode(true);
@@ -244,7 +268,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ teacher, students, 
     const code = Math.floor(100000 + Math.random() * 900000).toString();
     const expiry = Date.now() + CODE_DURATION * 1000;
     onUpdateSession({ code, expiry, teacherLocation, subject: selectedSubject, quiz: null, notes: null, quizPublished: false, attendanceRadius });
-    notify('New Class Code', `Code ${code} is active for ${Math.round((expiry - Date.now())/60000)} minutes`);
+    notify('New Class Code', `Code ${code} is active for ${Math.round((expiry - Date.now()) / 60000)} minutes`);
     setIsGeneratingCode(false);
   };
 
@@ -258,7 +282,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ teacher, students, 
     if (!file) return;
     if (file.size > 1024 * 1024) { setError("File is too large (> 1MB)."); return; }
     if (!['text/plain', 'text/markdown'].includes(file.type)) { setError("Unsupported file format (.txt or .md only)."); return; }
-    
+
     setIsUploading(true);
     setIsGeneratingQuiz(true);
     clearMessages();
@@ -270,11 +294,13 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ teacher, students, 
       try {
         const uploaded = await uploadClassNotes({ classId: teacher.id, subjectId: classSession.subject, content: notesText })
         setSuccessMessage(`Notes saved. URL: ${uploaded.url}`)
-      } catch (e) {}
-      const quiz = await generateQuizFromNotes({ 
-          notesText, 
-          subject: classSession.subject, 
-          enableThinkingMode: quizThinkingMode 
+      } catch (e) {
+        console.error('Failed to save notes to server:', e);
+      }
+      const quiz = await generateQuizFromNotes({
+        notesText,
+        subject: classSession.subject,
+        enableThinkingMode: quizThinkingMode
       });
       try {
         const bank = await fetchQuestionBank();
@@ -308,12 +334,12 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ teacher, students, 
       notify('Quiz Published', `Quiz for ${selectedSubject} is now available`);
       setSuccessMessage("Quiz is now live!");
     } catch (e) {
-      setError('Failed to publish quiz');
+      setError(e instanceof Error ? e.message : 'Failed to publish quiz');
     } finally {
       setIsPublishingQuiz(false);
     }
   };
-  
+
   const handleSort = (key: 'studentName' | 'status') => {
     const direction = (sortConfig.key === key && sortConfig.direction === 'ascending') ? 'descending' : 'ascending';
     setSortConfig({ key, direction });
@@ -325,26 +351,26 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ teacher, students, 
 
     // Only allow changing if the new subject is assigned to the teacher
     if (!teacher.assignedSubjects.includes(newSubjectId) && newSubjectId !== '') {
-        setError(`You are not assigned to teach ${newSubjectName}.`);
-        return;
+      setError(`You are not assigned to teach ${newSubjectName}.`);
+      return;
     }
 
     if (classSession.code && (classSession.notes || classSession.quiz)) {
-        if (window.confirm("Changing the subject will clear the current session's notes and quiz. Are you sure?")) {
-            setSelectedSubject(newSubjectName);
-            onUpdateSession({
-                subject: newSubjectName,
-                notes: null,
-                quiz: null,
-                quizPublished: false,
-            });
-            setSuccessMessage(`Subject changed to ${newSubjectName}. Notes and quiz reset.`);
-        }
-    } else {
+      if (window.confirm("Changing the subject will clear the current session's notes and quiz. Are you sure?")) {
         setSelectedSubject(newSubjectName);
-        if (classSession.code) {
-            onUpdateSession({ subject: newSubjectName });
-        }
+        onUpdateSession({
+          subject: newSubjectName,
+          notes: null,
+          quiz: null,
+          quizPublished: false,
+        });
+        setSuccessMessage(`Subject changed to ${newSubjectName}. Notes and quiz reset.`);
+      }
+    } else {
+      setSelectedSubject(newSubjectName);
+      if (classSession.code) {
+        onUpdateSession({ subject: newSubjectName });
+      }
     }
   };
 
@@ -374,11 +400,11 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ teacher, students, 
       records = records.filter(rec => studentsInClass.includes(rec.studentId));
     }
     records.sort((a, b) => {
-        const valA = a[sortConfig.key];
-        const valB = b[sortConfig.key];
-        if (valA < valB) return sortConfig.direction === 'ascending' ? -1 : 1;
-        if (valA > valB) return sortConfig.direction === 'ascending' ? 1 : -1;
-        return 0;
+      const valA = a[sortConfig.key];
+      const valB = b[sortConfig.key];
+      if (valA < valB) return sortConfig.direction === 'ascending' ? -1 : 1;
+      if (valA > valB) return sortConfig.direction === 'ascending' ? 1 : -1;
+      return 0;
     });
     return records;
   }, [attendance, filterStatus, sortConfig, selectedClassFilter, students]);
@@ -399,33 +425,43 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ teacher, students, 
           <button onClick={handleLogout} className="bg-red-600 text-white font-semibold py-2 px-4 rounded-lg hover:bg-red-700 transition-colors">Logout</button>
         </header>
 
+        {/* Session expiry warning toast */}
+        {expiryWarning && (
+          <div className="sticky top-0 z-40 mx-4 mt-2">
+            <div className="bg-amber-500 text-white px-4 py-3 rounded-xl shadow-lg flex items-center justify-between animate-slide-down">
+              <span className="font-semibold text-sm">{expiryWarning}</span>
+              <button onClick={() => setExpiryWarning(null)} className="ml-4 text-white/80 hover:text-white text-lg leading-none">&times;</button>
+            </div>
+          </div>
+        )}
+
         <main className="p-4 md:p-8 grid grid-cols-1 lg:grid-cols-3 gap-8">
           <div className="lg:col-span-1 space-y-6">
             <div className="bg-white p-6 rounded-lg shadow-md">
               <h2 className="text-xl font-semibold text-gray-700 mb-4">My Profile</h2>
               <div className="flex items-center space-x-4">
-                  <div className="w-16 h-16 rounded-full bg-gray-200 flex items-center justify-center text-gray-500 text-2xl font-bold">
-                      {teacher.name.charAt(0)}
-                  </div>
-                  <div>
-                      <p className="font-bold text-lg text-gray-800">{teacher.name}</p>
-                      <p className="text-sm text-gray-500">{teacher.email}</p>
-                  </div>
+                <div className="w-16 h-16 rounded-full bg-gray-200 flex items-center justify-center text-gray-500 text-2xl font-bold">
+                  {teacher.name.charAt(0)}
+                </div>
+                <div>
+                  <p className="font-bold text-lg text-gray-800">{teacher.name}</p>
+                  <p className="text-sm text-gray-500">{teacher.email}</p>
+                </div>
               </div>
               <div className="mt-4 border-t pt-4">
-                  <h3 className="text-md font-semibold text-gray-600 mb-2">Face ID</h3>
-                  {teacher.faceImage ? (
-                      <div className="flex items-center space-x-4">
-                          <img src={teacher.faceImage} alt="Teacher's face" className="w-12 h-12 rounded-full object-cover"/>
-                          <p className="text-sm text-green-700 font-medium">Registered</p>
-                          <button onClick={() => setShowFaceRegistration(true)} className={`ml-auto text-sm font-semibold ${colors.lightText} ${colors.lightHover} px-3 py-1 rounded-md`}>Update</button>
-                      </div>
-                  ) : (
-                      <div className="flex items-center justify-between">
-                          <p className="text-sm text-gray-500">Not registered.</p>
-                          <button onClick={() => setShowFaceRegistration(true)} className={`text-sm font-semibold ${colors.primary} text-white px-3 py-1 rounded-lg ${colors.hover}`}>Register Now</button>
-                      </div>
-                  )}
+                <h3 className="text-md font-semibold text-gray-600 mb-2">Face ID</h3>
+                {teacher.faceImage ? (
+                  <div className="flex items-center space-x-4">
+                    <img src={teacher.faceImage} alt="Teacher's face" className="w-12 h-12 rounded-full object-cover" />
+                    <p className="text-sm text-green-700 font-medium">Registered</p>
+                    <button onClick={() => setShowFaceRegistration(true)} className={`ml-auto text-sm font-semibold ${colors.lightText} ${colors.lightHover} px-3 py-1 rounded-md`}>Update</button>
+                  </div>
+                ) : (
+                  <div className="flex items-center justify-between">
+                    <p className="text-sm text-gray-500">Not registered.</p>
+                    <button onClick={() => setShowFaceRegistration(true)} className={`text-sm font-semibold ${colors.primary} text-white px-3 py-1 rounded-lg ${colors.hover}`}>Register Now</button>
+                  </div>
+                )}
               </div>
             </div>
 
@@ -433,56 +469,56 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ teacher, students, 
               <h2 className="text-xl font-semibold text-gray-700 mb-4">Session Control</h2>
               {error && <p className="text-red-600 bg-red-50 p-3 rounded-md mb-4">{error}</p>}
               {successMessage && <p className="text-green-600 bg-green-50 p-3 rounded-md mb-4">{successMessage}</p>}
-              
+
               <div className="mb-4">
-                  <label htmlFor="subject-select" className="block text-sm font-medium text-gray-700 mb-1">Subject</label>
-                  {availableSubjects.length > 0 ? (
-                      <select 
-                        id="subject-select" 
-                        value={selectedSubject} 
-                        onChange={e => handleSubjectChange(e.target.value)} 
-                        className={`w-full p-2 border border-gray-300 rounded-md shadow-sm ${colors.ring} ${colors.border}`}
-                      >
-                          <option value="">-- Select Subject --</option>
-                          {availableSubjects.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
-                      </select>
-                  ) : (
-                      <p className="text-sm text-gray-500 p-2 border border-gray-300 rounded-md bg-gray-100">No subjects assigned to you. Contact admin.</p>
-                  )}
-              </div>
-              
-              <div className="mb-4 border-t pt-4 mt-4">
-                  <h3 className="text-md font-semibold text-gray-600 mb-2">Classroom Location</h3>
-                  {teacherLocation ? (<div className="bg-green-50 text-green-800 p-2 rounded-md text-sm mb-2">Set: {teacherLocation.lat.toFixed(4)}, {teacherLocation.lng.toFixed(4)}</div>) : (<div className="bg-yellow-50 text-yellow-800 p-2 rounded-md text-sm mb-2">Location not set.</div>)}
-                  <div className="flex gap-2 mb-2">
-                      <input type="text" placeholder="Latitude" value={manualLat} onChange={(e) => setManualLat(e.target.value)} className="w-1/2 p-2 border border-gray-300 rounded-md text-sm"/>
-                      <input type="text" placeholder="Longitude" value={manualLng} onChange={(e) => setManualLng(e.target.value)} className="w-1/2 p-2 border border-gray-300 rounded-md text-sm"/>
-                  </div>
-                  <button onClick={handleSetManualLocation} className="w-full text-sm bg-gray-200 text-gray-700 font-semibold py-2 px-4 rounded-lg hover:bg-gray-300 mb-2">Set Manual</button>
-                  <button onClick={handleFetchCurrentLocation} disabled={isFetchingLocation} className={`w-full text-sm font-semibold py-2 px-4 rounded-lg transition-colors flex items-center justify-center ${colors.lightBg} ${colors.lightText} ${colors.lightHover}`}>
-                      {isFetchingLocation ? <Spinner size="w-4 h-4" color={colors.lightText}/> : 'Use GPS Location'}
-                  </button>
+                <label htmlFor="subject-select" className="block text-sm font-medium text-gray-700 mb-1">Subject</label>
+                {availableSubjects.length > 0 ? (
+                  <select
+                    id="subject-select"
+                    value={selectedSubject}
+                    onChange={e => handleSubjectChange(e.target.value)}
+                    className={`w-full p-2 border border-gray-300 rounded-md shadow-sm ${colors.ring} ${colors.border}`}
+                  >
+                    <option value="">-- Select Subject --</option>
+                    {availableSubjects.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
+                  </select>
+                ) : (
+                  <p className="text-sm text-gray-500 p-2 border border-gray-300 rounded-md bg-gray-100">No subjects assigned to you. Contact admin.</p>
+                )}
               </div>
 
               <div className="mb-4 border-t pt-4 mt-4">
-                  <label htmlFor="radius-slider" className="block text-sm font-medium text-gray-700 mb-2">
-                      Attendance Radius: <span className={`font-bold ${colors.text}`}>{attendanceRadius}m</span>
-                  </label>
-                  <input
-                      id="radius-slider"
-                      type="range"
-                      min="25"
-                      max="500"
-                      step="25"
-                      value={attendanceRadius}
-                      onChange={(e) => setAttendanceRadius(Number(e.target.value))}
-                      className={`w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer ${colors.accent}`}
-                  />
+                <h3 className="text-md font-semibold text-gray-600 mb-2">Classroom Location</h3>
+                {teacherLocation ? (<div className="bg-green-50 text-green-800 p-2 rounded-md text-sm mb-2">Set: {teacherLocation.lat.toFixed(4)}, {teacherLocation.lng.toFixed(4)}</div>) : (<div className="bg-yellow-50 text-yellow-800 p-2 rounded-md text-sm mb-2">Location not set.</div>)}
+                <div className="flex gap-2 mb-2">
+                  <input type="text" placeholder="Latitude" value={manualLat} onChange={(e) => setManualLat(e.target.value)} className="w-1/2 p-2 border border-gray-300 rounded-md text-sm" />
+                  <input type="text" placeholder="Longitude" value={manualLng} onChange={(e) => setManualLng(e.target.value)} className="w-1/2 p-2 border border-gray-300 rounded-md text-sm" />
+                </div>
+                <button onClick={handleSetManualLocation} className="w-full text-sm bg-gray-200 text-gray-700 font-semibold py-2 px-4 rounded-lg hover:bg-gray-300 mb-2">Set Manual</button>
+                <button onClick={handleFetchCurrentLocation} disabled={isFetchingLocation} className={`w-full text-sm font-semibold py-2 px-4 rounded-lg transition-colors flex items-center justify-center ${colors.lightBg} ${colors.lightText} ${colors.lightHover}`}>
+                  {isFetchingLocation ? <Spinner size="w-4 h-4" color={colors.lightText} /> : 'Use GPS Location'}
+                </button>
               </div>
 
-              <button 
-                onClick={handleGenerateCode} 
-                disabled={isGeneratingCode || !canGenerateSession} 
+              <div className="mb-4 border-t pt-4 mt-4">
+                <label htmlFor="radius-slider" className="block text-sm font-medium text-gray-700 mb-2">
+                  Attendance Radius: <span className={`font-bold ${colors.text}`}>{attendanceRadius}m</span>
+                </label>
+                <input
+                  id="radius-slider"
+                  type="range"
+                  min="25"
+                  max="500"
+                  step="25"
+                  value={attendanceRadius}
+                  onChange={(e) => setAttendanceRadius(Number(e.target.value))}
+                  className={`w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer ${colors.accent}`}
+                />
+              </div>
+
+              <button
+                onClick={handleGenerateCode}
+                disabled={isGeneratingCode || !canGenerateSession}
                 className={`w-full text-white font-bold py-3 px-6 rounded-lg transition-colors duration-300 flex items-center justify-center ${colors.primary} ${colors.hover} disabled:opacity-50`}
               >
                 {isGeneratingCode ? <Spinner /> : classSession.code ? 'End & Start New Session' : 'Generate Session Code'}
@@ -515,7 +551,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ teacher, students, 
                 </div>
               )}
             </div>
-            
+
             <div className="bg-white p-6 rounded-lg shadow-md">
               <h2 className="text-xl font-semibold text-gray-700 mb-4">{t('Attendance Summary')}</h2>
               {Object.keys(summaryBySubject).length > 0 ? (
@@ -524,119 +560,126 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ teacher, students, 
             </div>
 
             <div className="bg-white p-6 rounded-lg shadow-md">
-                <button onClick={() => setIsHistoryVisible(!isHistoryVisible)} className="w-full text-left p-1 -m-1 rounded-md hover:bg-gray-50 transition-colors">
-                    <h2 className="text-xl font-semibold text-gray-700 flex justify-between items-center">
-                        Historical Attendance
-                        <svg xmlns="http://www.w3.org/2000/svg" className={`h-6 w-6 transform transition-transform text-gray-400 ${isHistoryVisible ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                        </svg>
-                    </h2>
-                </button>
-                {isHistoryVisible && (
-                    <div className="mt-4 border-t pt-4 space-y-3 max-h-80 overflow-y-auto pr-2">
-                        {historicalRecords.length > 0 ? (
-                            historicalRecords.map(record => (
-                                <div key={record.id} className="p-3 bg-gray-50 rounded-lg border border-gray-200">
-                                    <div className="flex justify-between items-center">
-                                        <p className="font-semibold text-gray-800">{record.subject}</p>
-                                        <p className="text-sm font-bold text-gray-600">
-                                            {record.attendance.filter(a => a.status === 'Present').length} / {record.attendance.length}
-                                            <span className="font-normal text-gray-500 ml-1">Present</span>
-                                        </p>
-                                    </div>
-                                    <p className="text-xs text-gray-500 mt-1">{new Date(record.date).toLocaleString()}</p>
-                                </div>
-                            ))
-                        ) : (
-                            <p className="text-gray-500 text-sm text-center py-4">No historical records yet.</p>
-                        )}
-                    </div>
-                )}
+              <button onClick={() => setIsHistoryVisible(!isHistoryVisible)} className="w-full text-left p-1 -m-1 rounded-md hover:bg-gray-50 transition-colors">
+                <h2 className="text-xl font-semibold text-gray-700 flex justify-between items-center">
+                  Historical Attendance
+                  <svg xmlns="http://www.w3.org/2000/svg" className={`h-6 w-6 transform transition-transform text-gray-400 ${isHistoryVisible ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
+                </h2>
+              </button>
+              {isHistoryVisible && (
+                <div className="mt-4 border-t pt-4 space-y-3 max-h-80 overflow-y-auto pr-2">
+                  {historicalRecords.length > 0 ? (
+                    historicalRecords.map(record => (
+                      <div key={record.id} className="p-3 bg-gray-50 rounded-lg border border-gray-200">
+                        <div className="flex justify-between items-center">
+                          <p className="font-semibold text-gray-800">{record.subject}</p>
+                          <p className="text-sm font-bold text-gray-600">
+                            {record.attendance.filter(a => a.status === 'Present').length} / {record.attendance.length}
+                            <span className="font-normal text-gray-500 ml-1">Present</span>
+                          </p>
+                        </div>
+                        <p className="text-xs text-gray-500 mt-1">{new Date(record.date).toLocaleString()}</p>
+                      </div>
+                    ))
+                  ) : (
+                    <p className="text-gray-500 text-sm text-center py-4">No historical records yet.</p>
+                  )}
+                </div>
+              )}
             </div>
+
+            <AnnouncementBoard
+              announcements={announcements}
+              onPost={onPostAnnouncement}
+              canPost={true}
+              theme={theme}
+            />
 
             {classSession.code && (
               <div className="bg-white p-6 rounded-lg shadow-md">
-                  <div className="flex justify-between items-center mb-4">
-                      <h2 className="text-xl font-semibold text-gray-700">{t('Class Notes & Quiz')}</h2>
-                      <div className="flex items-center space-x-2 group relative">
-                          <label htmlFor="thinking-mode" className="text-sm font-medium text-gray-600 cursor-pointer">{t('Thinking Mode')}</label>
-                          <button
-                              onClick={() => setQuizThinkingMode(!quizThinkingMode)}
-                              id="thinking-mode"
-                              role="switch"
-                              aria-checked={quizThinkingMode}
-                              className={`relative inline-flex items-center h-6 rounded-full w-11 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 ${colors.ring}`}
-                          >
-                              <span className={`absolute transition-colors duration-200 ease-in-out w-full h-full rounded-full ${quizThinkingMode ? colors.primary : 'bg-gray-300'}`}></span>
-                              <span className={`inline-block w-4 h-4 transform bg-white rounded-full transition-transform duration-200 ease-in-out ${quizThinkingMode ? 'translate-x-6' : 'translate-x-1'}`} />
-                          </button>
-                          <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 bg-gray-800 text-white text-xs rounded py-1 px-2 text-center opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
-                              {t('Enable for higher quality quizzes from complex notes. (Slower)')}
-                              <svg className="absolute text-gray-800 h-2 w-full left-0 top-full" x="0px" y="0px" viewBox="0 0 255 255"><polygon className="fill-current" points="0,0 127.5,127.5 255,0"/></svg>
-                          </div>
-                      </div>
+                <div className="flex justify-between items-center mb-4">
+                  <h2 className="text-xl font-semibold text-gray-700">{t('Class Notes & Quiz')}</h2>
+                  <div className="flex items-center space-x-2 group relative">
+                    <label htmlFor="thinking-mode" className="text-sm font-medium text-gray-600 cursor-pointer">{t('Thinking Mode')}</label>
+                    <button
+                      onClick={() => setQuizThinkingMode(!quizThinkingMode)}
+                      id="thinking-mode"
+                      role="switch"
+                      aria-checked={quizThinkingMode}
+                      className={`relative inline-flex items-center h-6 rounded-full w-11 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 ${colors.ring}`}
+                    >
+                      <span className={`absolute transition-colors duration-200 ease-in-out w-full h-full rounded-full ${quizThinkingMode ? colors.primary : 'bg-gray-300'}`}></span>
+                      <span className={`inline-block w-4 h-4 transform bg-white rounded-full transition-transform duration-200 ease-in-out ${quizThinkingMode ? 'translate-x-6' : 'translate-x-1'}`} />
+                    </button>
+                    <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 bg-gray-800 text-white text-xs rounded py-1 px-2 text-center opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+                      {t('Enable for higher quality quizzes from complex notes. (Slower)')}
+                      <svg className="absolute text-gray-800 h-2 w-full left-0 top-full" x="0px" y="0px" viewBox="0 0 255 255"><polygon className="fill-current" points="0,0 127.5,127.5 255,0" /></svg>
+                    </div>
                   </div>
-                  <div className="mb-4">
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Class Notes</label>
-                      <textarea
-                          value={notesText}
-                          onChange={(e) => setNotesText(e.target.value)}
-                          placeholder="Type class notes here..."
-                          rows={4}
-                          className="w-full p-2 border border-gray-300 rounded-md shadow-sm"
-                      />
-                      <div className="flex gap-2 mt-2">
-                          <button onClick={async () => {
-                              onUpdateSession({ notes: notesText });
-                              try {
-                                  await uploadClassNotes({ classId: teacher.id, subjectId: classSession.subject, content: notesText });
-                                  setSuccessMessage(`Notes saved.`);
-                              } catch (e) {
-                                  setError('Failed to upload notes');
-                              }
-                          }} className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">
-                              Save Notes
-                          </button>
-                          <button onClick={async () => {
-                              if (!notesText.trim()) {
-                                  setError("Please enter notes first.");
-                                  return;
-                              }
-                              setIsGeneratingQuiz(true);
-                              clearMessages();
-                              try {
-                                  const quiz = await generateQuizFromNotes({
-                                      notesText,
-                                      subject: classSession.subject,
-                                      enableThinkingMode: quizThinkingMode
-                                  });
-                                  try {
-                                      const bank = await fetchQuestionBank();
-                                      const extras = (Array.isArray(bank) ? bank : [])
-                                          .filter(q => (q.subject || '') === classSession.subject)
-                                          .slice(0, Math.max(0, 5 - quiz.length))
-                                          .map(q => ({ id: q.id, question: q.question, options: q.options, correctAnswer: q.correctAnswer }));
-                                      const combined = quiz.concat(extras);
-                                      onUpdateSession({ quiz: combined });
-                                  } catch {
-                                      onUpdateSession({ quiz });
-                                  }
-                                  setSuccessMessage("Quiz is ready for your review.");
-                              } catch (err: any) {
-                                  setError(err instanceof Error ? err.message : String(err));
-                              } finally {
-                                  setIsGeneratingQuiz(false);
-                              }
-                          }} disabled={isGeneratingQuiz} className="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 disabled:opacity-50">
-                              Generate Quiz
-                          </button>
-                      </div>
+                </div>
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Class Notes</label>
+                  <textarea
+                    value={notesText}
+                    onChange={(e) => setNotesText(e.target.value)}
+                    placeholder="Type class notes here..."
+                    rows={4}
+                    className="w-full p-2 border border-gray-300 rounded-md shadow-sm"
+                  />
+                  <div className="flex gap-2 mt-2">
+                    <button onClick={async () => {
+                      onUpdateSession({ notes: notesText });
+                      try {
+                        await uploadClassNotes({ classId: teacher.id, subjectId: classSession.subject, content: notesText });
+                        setSuccessMessage(`Notes saved.`);
+                      } catch (e) {
+                        setError(e instanceof Error ? e.message : 'Failed to upload notes');
+                      }
+                    }} className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">
+                      Save Notes
+                    </button>
+                    <button onClick={async () => {
+                      if (!notesText.trim()) {
+                        setError("Please enter notes first.");
+                        return;
+                      }
+                      setIsGeneratingQuiz(true);
+                      clearMessages();
+                      try {
+                        const quiz = await generateQuizFromNotes({
+                          notesText,
+                          subject: classSession.subject,
+                          enableThinkingMode: quizThinkingMode
+                        });
+                        try {
+                          const bank = await fetchQuestionBank();
+                          const extras = (Array.isArray(bank) ? bank : [])
+                            .filter(q => (q.subject || '') === classSession.subject)
+                            .slice(0, Math.max(0, 5 - quiz.length))
+                            .map(q => ({ id: q.id, question: q.question, options: q.options, correctAnswer: q.correctAnswer }));
+                          const combined = quiz.concat(extras);
+                          onUpdateSession({ quiz: combined });
+                        } catch {
+                          onUpdateSession({ quiz });
+                        }
+                        setSuccessMessage("Quiz is ready for your review.");
+                      } catch (err: any) {
+                        setError(err instanceof Error ? err.message : String(err));
+                      } finally {
+                        setIsGeneratingQuiz(false);
+                      }
+                    }} disabled={isGeneratingQuiz} className="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 disabled:opacity-50">
+                      Generate Quiz
+                    </button>
                   </div>
-                  <div className="mb-4">
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Or Upload Notes File</label>
-                      <input type="file" accept=".txt,.md" onChange={handleNotesUpload} disabled={isUploading || isGeneratingQuiz} className={`block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:${colors.lightBg} file:${colors.lightText} ${colors.lightHover}`}/>
-                  </div>
-                  {(isUploading || isGeneratingQuiz) && (<div className="mt-4 flex items-center text-gray-600"><Spinner size="w-5 h-5" color={colors.text} /><span className="ml-2">{isUploading ? "Reading..." : `Generating quiz${quizThinkingMode ? ' with Thinking Mode...' : '...'}`}</span></div>)}
+                </div>
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Or Upload Notes File</label>
+                  <input type="file" accept=".txt,.md" onChange={handleNotesUpload} disabled={isUploading || isGeneratingQuiz} className={`block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:${colors.lightBg} file:${colors.lightText} ${colors.lightHover}`} />
+                </div>
+                {(isUploading || isGeneratingQuiz) && (<div className="mt-4 flex items-center text-gray-600"><Spinner size="w-5 h-5" color={colors.text} /><span className="ml-2">{isUploading ? "Reading..." : `Generating quiz${quizThinkingMode ? ' with Thinking Mode...' : '...'}`}</span></div>)}
               </div>
             )}
 
@@ -685,7 +728,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ teacher, students, 
                     </div>
                   </div>
                 ))}</div>
-                <button onClick={handlePublishQuiz} disabled={isPublishingQuiz} className="w-full mt-4 bg-green-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-green-700 flex items-center justify-center disabled:bg-green-300">{isPublishingQuiz ? <Spinner size="w-5 h-5"/> : t('Publish Quiz')}</button>
+                <button onClick={handlePublishQuiz} disabled={isPublishingQuiz} className="w-full mt-4 bg-green-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-green-700 flex items-center justify-center disabled:bg-green-300">{isPublishingQuiz ? <Spinner size="w-5 h-5" /> : t('Publish Quiz')}</button>
               </div>
             )}
           </div>
@@ -696,7 +739,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ teacher, students, 
               <div className="grid grid-cols-2 gap-4 mb-4 text-center"><div className="bg-gray-100 p-4 rounded-lg"><p className="text-sm font-medium text-gray-800">Total Students</p><p className="text-3xl font-bold text-gray-600">{students.length}</p></div><div className="bg-green-100 p-4 rounded-lg"><p className="text-sm font-medium text-green-800">Present</p><p className="text-3xl font-bold text-green-600">{attendance.filter(rec => rec.status === 'Present').length}</p></div></div>
               <div className="flex items-center space-x-2 mb-4">
                 <span className="text-sm font-medium text-gray-600">{t('Status')}:</span>
-                {([ 'All', 'Present', 'Absent'] as const).map(status => (<button key={status} onClick={() => setFilterStatus(status)} className={`px-3 py-1 text-xs font-semibold rounded-full transition-colors ${filterStatus === status ? `${colors.primary} text-white shadow` : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}`}>{status}</button>))}
+                {(['All', 'Present', 'Absent'] as const).map(status => (<button key={status} onClick={() => setFilterStatus(status)} className={`px-3 py-1 text-xs font-semibold rounded-full transition-colors ${filterStatus === status ? `${colors.primary} text-white shadow` : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}`}>{status}</button>))}
               </div>
               <div className="flex items-center space-x-2 mb-4">
                 <span className="text-sm font-medium text-gray-600">{t('Class')}:</span>
@@ -715,18 +758,18 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ teacher, students, 
             </div>
             <div className="bg-white p-6 rounded-lg shadow-md">
               <h2 className="text-xl font-semibold text-gray-700 mb-4">{t('Weekly Attendance Trend')}</h2>
-              <AttendanceChart data={weeklyAttendance} theme={theme}/>
+              <AttendanceChart data={weeklyAttendance} theme={theme} />
               <div className="mt-3 flex justify-end gap-2">
                 <button onClick={() => exportCSV(
-                  [['date','present']].concat(weeklyAttendance.map(w => [w.date, String(w.present)])),
-                  `attendance_weekly_${new Date().toISOString().slice(0,10)}.csv`
+                  [['date', 'present']].concat(weeklyAttendance.map(w => [w.date, String(w.present)])),
+                  `attendance_weekly_${new Date().toISOString().slice(0, 10)}.csv`
                 )} className={`text-sm px-3 py-1 rounded ${colors.lightText} ${colors.lightHover}`}>
                   {t('Export CSV')}
                 </button>
                 <button onClick={() => {
-                  const rows: string[][] = [['student','status','time']]
+                  const rows: string[][] = [['student', 'status', 'time']]
                   sortedAndFilteredAttendance.filter(a => selectedAttendanceIds.includes(a.studentId)).forEach(a => rows.push([a.studentName, a.status, a.timestamp ? a.timestamp.toLocaleTimeString() : 'N/A']))
-                  exportCSV(rows, `attendance_selected_${new Date().toISOString().slice(0,10)}.csv`)
+                  exportCSV(rows, `attendance_selected_${new Date().toISOString().slice(0, 10)}.csv`)
                 }} className={`text-sm px-3 py-1 rounded ${colors.lightText} ${colors.lightHover}`}>
                   {t('Export Selected')}
                 </button>
@@ -734,27 +777,27 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ teacher, students, 
             </div>
             <div className="bg-white p-6 rounded-lg shadow-md">
               <h2 className="text-xl font-semibold text-gray-700 mb-4">{t('Student Performance')} ({selectedSubject})</h2>
-                <div className="space-y-8 max-h-[60vh] overflow-y-auto pr-2">{students.filter(student => selectedClassFilter === 'All' || student.classId === selectedClassFilter).map(student => (<div key={student.id}><div className="flex items-center gap-2 mb-2"><input type="checkbox" checked={selectedPerformanceIds.includes(student.id)} onChange={e => setSelectedPerformanceIds(prev => e.target.checked ? [...prev, student.id] : prev.filter(id => id !== student.id))} /><h3 className="text-lg font-semibold text-gray-600">{student.name}</h3></div><PerformanceChart data={student.performance.filter(p => p.subject === selectedSubject)} title="" theme={theme}/></div>))}</div>
+              <div className="space-y-8 max-h-[60vh] overflow-y-auto pr-2">{students.filter(student => selectedClassFilter === 'All' || student.classId === selectedClassFilter).map(student => (<div key={student.id}><div className="flex items-center gap-2 mb-2"><input type="checkbox" checked={selectedPerformanceIds.includes(student.id)} onChange={e => setSelectedPerformanceIds(prev => e.target.checked ? [...prev, student.id] : prev.filter(id => id !== student.id))} /><h3 className="text-lg font-semibold text-gray-600">{student.name}</h3></div><PerformanceChart data={student.performance.filter(p => p.subject === selectedSubject)} title="" theme={theme} /></div>))}</div>
               <div className="mt-3 flex justify-end gap-2">
                 <button onClick={() => {
-                  const rows: string[][] = [['student','subject','date','score']];
+                  const rows: string[][] = [['student', 'subject', 'date', 'score']];
                   students.forEach(st => {
                     st.performance.filter(p => !selectedSubject || p.subject === selectedSubject).forEach(p => {
                       rows.push([st.name, p.subject, p.date, String(p.score)]);
                     })
                   });
-                  exportCSV(rows, `performance_${selectedSubject || 'all'}_${new Date().toISOString().slice(0,10)}.csv`);
+                  exportCSV(rows, `performance_${selectedSubject || 'all'}_${new Date().toISOString().slice(0, 10)}.csv`);
                 }} className={`text-sm px-3 py-1 rounded ${colors.lightText} ${colors.lightHover}`}>
                   {t('Export CSV')}
                 </button>
                 <button onClick={() => {
-                  const rows: string[][] = [['student','subject','date','score']];
+                  const rows: string[][] = [['student', 'subject', 'date', 'score']];
                   students.filter(s => selectedPerformanceIds.includes(s.id)).forEach(st => {
                     st.performance.filter(p => !selectedSubject || p.subject === selectedSubject).forEach(p => {
                       rows.push([st.name, p.subject, p.date, String(p.score)]);
                     })
                   });
-                  exportCSV(rows, `performance_selected_${selectedSubject || 'all'}_${new Date().toISOString().slice(0,10)}.csv`);
+                  exportCSV(rows, `performance_selected_${selectedSubject || 'all'}_${new Date().toISOString().slice(0, 10)}.csv`);
                 }} className={`text-sm px-3 py-1 rounded ${colors.lightText} ${colors.lightHover}`}>
                   {t('Export Selected')}
                 </button>
@@ -764,13 +807,13 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ teacher, students, 
         </main>
       </div>
       {showFaceRegistration && (
-          <WebcamCapture
-              onCapture={handleFaceRegister}
-              onClose={() => setShowFaceRegistration(false)}
-              theme={theme}
-              title={teacher.faceImage ? "Update Face ID" : "Register Face ID"}
-              buttonText="Capture & Save"
-          />
+        <WebcamCapture
+          onCapture={handleFaceRegister}
+          onClose={() => setShowFaceRegistration(false)}
+          theme={theme}
+          title={teacher.faceImage ? "Update Face ID" : "Register Face ID"}
+          buttonText="Capture & Save"
+        />
       )}
     </>
   );

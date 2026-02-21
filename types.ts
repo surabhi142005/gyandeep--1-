@@ -23,6 +23,7 @@ export interface User {
   email?: string;
   googleId?: string;
   password?: string;
+  emailVerified?: boolean;
   preferences?: UserPreferences;
   history?: UserHistory[];
 }
@@ -49,6 +50,9 @@ export interface Student extends User {
   xp?: number;
   badges?: string[];
   coins?: number;
+  level?: number;
+  totalQuizzes?: number;
+  longestStreak?: number;
 }
 
 export interface Teacher extends User {

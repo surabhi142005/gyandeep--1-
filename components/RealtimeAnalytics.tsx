@@ -17,21 +17,85 @@ const RealtimeAnalytics: React.FC<RealtimeAnalyticsProps> = ({ userId, userRole,
     const [liveMetrics, setLiveMetrics] = useState<LiveClassMetrics | null>(null);
     const [loading, setLoading] = useState(true);
 
+    const fetchPerformanceData = async () => {
+        // Fetch from backend or local storage
+        try {
+            const response = await fetch(`http://localhost:3001/api/analytics/performance?userId=${userId}`);
+            if (response.ok) {
+                const data = await response.json();
+                setPerformanceData(data);
+            }
+        } catch (error) {
+            console.error('Failed to fetch performance data:', error);
+            // Use mock data for demonstration
+            setPerformanceData([
+                {
+                    subject: 'Mathematics',
+                    data: [
+                        { date: '2026-02-01', score: 75 },
+                        { date: '2026-02-05', score: 82 },
+                        { date: '2026-02-10', score: 88 },
+                        { date: '2026-02-13', score: 92 }
+                    ],
+                    average: 84,
+                    trend: 'up'
+                },
+                {
+                    subject: 'Science',
+                    data: [
+                        { date: '2026-02-01', score: 80 },
+                        { date: '2026-02-05', score: 78 },
+                        { date: '2026-02-10', score: 85 },
+                        { date: '2026-02-13', score: 87 }
+                    ],
+                    average: 82,
+                    trend: 'up'
+                }
+            ]);
+        }
+    };
+
+    const fetchAttendanceData = async () => {
+        try {
+            const response = await fetch(`http://localhost:3001/api/analytics/attendance?userId=${userId}`);
+            if (response.ok) {
+                const data = await response.json();
+                setAttendanceData(data);
+            }
+        } catch (error) {
+            console.error('Failed to fetch attendance data:', error);
+            // Mock data
+            setAttendanceData({
+                period: 'month',
+                present: 18,
+                absent: 2,
+                percentage: 90
+            });
+        }
+    };
+
+    const updateLiveMetrics = (sessionData: Partial<LiveClassMetrics>) => {
+        setLiveMetrics({
+            sessionCode: sessionData.code || '',
+            studentsPresent: sessionData.studentsPresent || 0,
+            totalStudents: sessionData.totalStudents || 0,
+            quizParticipation: sessionData.quizParticipation || 0,
+            chatActivity: sessionData.chatActivity || 0,
+            averageEngagement: sessionData.averageEngagement || 0
+        });
+    };
+
     useEffect(() => {
         // Subscribe to real-time updates
-        const unsubscribePerformance = websocketService.on('performance-changed', (data) => {
-            console.log('Performance update received:', data);
-            // Update performance data
+        const unsubscribePerformance = websocketService.on('performance-changed', () => {
             fetchPerformanceData();
         });
 
-        const unsubscribeAttendance = websocketService.on('attendance-changed', (data) => {
-            console.log('Attendance update received:', data);
+        const unsubscribeAttendance = websocketService.on('attendance-changed', () => {
             fetchAttendanceData();
         });
 
         const unsubscribeSession = websocketService.on('session-changed', (data) => {
-            console.log('Session update received:', data);
             updateLiveMetrics(data);
         });
 

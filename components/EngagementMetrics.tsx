@@ -11,6 +11,20 @@ const EngagementMetrics: React.FC<EngagementMetricsProps> = ({ userId, sessionCo
     const [metrics, setMetrics] = useState<EngagementMetric[]>([]);
     const [totalEngagement, setTotalEngagement] = useState(0);
 
+    const loadMetrics = async () => {
+        try {
+            const response = await fetch(`http://localhost:3001/api/analytics/engagement?userId=${userId}`);
+            if (!response.ok) {
+                console.warn(`Engagement metrics API returned status ${response.status}`);
+                return;
+            }
+            const data = await response.json();
+            setMetrics(data);
+        } catch (error) {
+            console.error('Failed to load engagement metrics:', error);
+        }
+    };
+
     useEffect(() => {
         // Subscribe to engagement updates
         const unsubscribe = websocketService.on('engagement-update', (data: EngagementMetric) => {
@@ -36,10 +50,12 @@ const EngagementMetrics: React.FC<EngagementMetricsProps> = ({ userId, sessionCo
     const loadMetrics = async () => {
         try {
             const response = await fetch(`http://localhost:3001/api/analytics/engagement?userId=${userId}`);
-            if (response.ok) {
-                const data = await response.json();
-                setMetrics(data);
+            if (!response.ok) {
+                console.warn(`Engagement metrics API returned status ${response.status}`);
+                return;
             }
+            const data = await response.json();
+            setMetrics(data);
         } catch (error) {
             console.error('Failed to load engagement metrics:', error);
         }

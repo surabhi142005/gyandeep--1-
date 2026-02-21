@@ -10,10 +10,10 @@ interface WebcamCaptureProps {
 }
 
 const THEME_COLORS: Record<string, Record<string, string>> = {
-    indigo: { primary: 'bg-indigo-600', hover: 'hover:bg-indigo-700' },
-    teal: { primary: 'bg-teal-600', hover: 'hover:bg-teal-700' },
-    crimson: { primary: 'bg-red-600', hover: 'hover:bg-red-700' },
-    purple: { primary: 'bg-purple-600', hover: 'hover:bg-purple-700' },
+  indigo: { primary: 'bg-indigo-600', hover: 'hover:bg-indigo-700' },
+  teal: { primary: 'bg-teal-600', hover: 'hover:bg-teal-700' },
+  crimson: { primary: 'bg-red-600', hover: 'hover:bg-red-700' },
+  purple: { primary: 'bg-purple-600', hover: 'hover:bg-purple-700' },
 };
 
 const WebcamCapture: React.FC<WebcamCaptureProps> = ({ onCapture, onClose, theme, title, buttonText, liveness = false }) => {
@@ -53,8 +53,8 @@ const WebcamCapture: React.FC<WebcamCaptureProps> = ({ onCapture, onClose, theme
     let sum = 0;
     for (let i = 0; i < a.data.length && i < b.data.length; i += 4) {
       const dr = Math.abs(a.data[i] - b.data[i]);
-      const dg = Math.abs(a.data[i+1] - b.data[i+1]);
-      const db = Math.abs(a.data[i+2] - b.data[i+2]);
+      const dg = Math.abs(a.data[i + 1] - b.data[i + 1]);
+      const db = Math.abs(a.data[i + 2] - b.data[i + 2]);
       sum += (dr + dg + db) / 3;
     }
     const pixels = Math.min(a.data.length, b.data.length) / 4;
@@ -108,7 +108,7 @@ const WebcamCapture: React.FC<WebcamCaptureProps> = ({ onCapture, onClose, theme
     setIsProcessing(true);
     setLivenessSteps(['Capturing frames...']);
     setCapturedFrames([first.dataUrl]);
-    
+
     const steps = ['Capturing frame 1...', 'Capturing frame 2...', 'Capturing frame 3...', 'Processing...'];
     const frames: string[] = [first.dataUrl];
 
@@ -125,12 +125,23 @@ const WebcamCapture: React.FC<WebcamCaptureProps> = ({ onCapture, onClose, theme
 
     setHint(null);
     setLivenessSteps([...steps.slice(0, 3), 'Processing...']);
-    
-    // Simple liveness check: verify frames are different
-    let hasDifference = false;
-    if (frames.length >= 2) {
-      // Simple check: if we got multiple frames, consider it alive
-      hasDifference = true;
+
+    // Improved liveness check: verify frames have meaningful pixel differences
+    let hasMotion = false;
+    if (frames.length >= 3) {
+      // Create off-screen canvases to get ImageData for comparison
+      const tempCanvas = document.createElement('canvas');
+      const tempCtx = tempCanvas.getContext('2d');
+      if (tempCtx) {
+        // Compare first and last frame for motion
+        const img1 = await loadImageData(frames[0], tempCanvas, tempCtx);
+        const img3 = await loadImageData(frames[2], tempCanvas, tempCtx);
+        const diff = frameDiff(img1, img3);
+        // diff > 0.01 means at least 1% average pixel change - enough for simple movement
+        if (diff > 0.01) {
+          hasMotion = true;
+        }
+      }
     }
 
     setIsProcessing(false);
@@ -139,13 +150,27 @@ const WebcamCapture: React.FC<WebcamCaptureProps> = ({ onCapture, onClose, theme
 
     // Use best quality frame (last one)
     const bestFrame = frames[frames.length - 1] || first.dataUrl;
-    
+
     // If liveness check passed, use the captured image
-    if (hasDifference) {
+    if (hasMotion) {
       onCapture(bestFrame);
     } else {
-      setError("Liveness check failed. Please ensure camera is working and capture again.");
+      setError("Liveness check failed: No motion detected.\nPlease move slightly or blink during capture.");
     }
+  };
+
+  /** Helper to load a dataURL into ImageData */
+  const loadImageData = (url: string, canvas: HTMLCanvasElement, ctx: CanvasRenderingContext2D): Promise<ImageData> => {
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.onload = () => {
+        canvas.width = img.width;
+        canvas.height = img.height;
+        ctx.drawImage(img, 0, 0);
+        resolve(ctx.getImageData(0, 0, img.width, img.height));
+      };
+      img.src = url;
+    });
   };
 
   return (
@@ -156,7 +181,7 @@ const WebcamCapture: React.FC<WebcamCaptureProps> = ({ onCapture, onClose, theme
         <div className="relative w-full aspect-square bg-gray-200 rounded-lg overflow-hidden mb-4 border-4 border-gray-300">
           <video ref={videoRef} autoPlay playsInline className="w-full h-full object-cover" />
           <canvas ref={canvasRef} className="hidden" />
-          
+
           {/* Guide overlay for face positioning */}
           <svg className="absolute inset-0 w-full h-full pointer-events-none" viewBox="0 0 300 300">
             <circle cx="150" cy="150" r="80" fill="none" stroke="rgba(255,255,255,0.3)" strokeWidth="2" />
@@ -183,9 +208,8 @@ const WebcamCapture: React.FC<WebcamCaptureProps> = ({ onCapture, onClose, theme
             <div className="text-center font-semibold mb-2">Liveness Detection Progress</div>
             <div className="flex gap-1">
               {[1, 2, 3].map(step => (
-                <div key={step} className={`flex-1 h-2 rounded-full ${
-                  step <= Math.min(livenessSteps.length, 3) ? 'bg-blue-600' : 'bg-gray-300'
-                }`} />
+                <div key={step} className={`flex-1 h-2 rounded-full ${step <= Math.min(livenessSteps.length, 3) ? 'bg-blue-600' : 'bg-gray-300'
+                  }`} />
               ))}
             </div>
           </div>
