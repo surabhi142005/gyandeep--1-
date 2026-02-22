@@ -1,22 +1,39 @@
 import { ethers } from 'ethers';
 import type { WalletInfo, NFTCertificate, BlockchainRecord } from '../types';
 
-// Contract ABIs (simplified - will be replaced with actual ABIs after compilation)
+// Contract ABIs (will be replaced with actual ABIs after compilation)
 const AttendanceRecordABI = { abi: [] };
 const AcademicCredentialsABI = { abi: [] };
 const GradingSystemABI = { abi: [] };
+
+// Alchemy RPC URLs
+const ALCHEMY_RPC_URLS: Record<number, string> = {
+    11155111: `https://eth-sepolia.g.alchemy.com/v2/${import.meta.env.VITE_ALCHEMY_API_KEY || ''}`,
+    80001: `https://polygon-mumbai.g.alchemy.com/v2/${import.meta.env.VITE_ALCHEMY_API_KEY || ''}`,
+    137: `https://polygon-mainnet.g.alchemy.com/v2/${import.meta.env.VITE_ALCHEMY_API_KEY || ''}`,
+};
 
 class BlockchainService {
     private provider: ethers.BrowserProvider | null = null;
     private signer: ethers.Signer | null = null;
     private walletInfo: WalletInfo | null = null;
 
-    // Contract addresses (will be loaded from deployment files)
     private contractAddresses = {
         attendanceRecord: '',
         academicCredentials: '',
         gradingSystem: ''
     };
+
+    /**
+     * Get a read-only provider using Alchemy RPC (no MetaMask needed).
+     */
+    getReadOnlyProvider(chainId: number): ethers.JsonRpcProvider | null {
+        const rpcUrl = ALCHEMY_RPC_URLS[chainId];
+        if (!rpcUrl || !import.meta.env.VITE_ALCHEMY_API_KEY) {
+            return null;
+        }
+        return new ethers.JsonRpcProvider(rpcUrl);
+    }
 
     /**
      * Connect to MetaMask wallet
@@ -27,7 +44,6 @@ class BlockchainService {
         }
 
         try {
-            // Request account access
             await window.ethereum.request({ method: 'eth_requestAccounts' });
 
             this.provider = new ethers.BrowserProvider(window.ethereum);
@@ -43,7 +59,6 @@ class BlockchainService {
                 balance: ethers.formatEther(balance)
             };
 
-            // Load contract addresses
             await this.loadContractAddresses(Number(network.chainId));
 
             return this.walletInfo;
@@ -59,9 +74,6 @@ class BlockchainService {
         }
     }
 
-    /**
-     * Load contract addresses from deployment files
-     */
     private async loadContractAddresses(chainId: number): Promise<void> {
         try {
             const networkName = this.getNetworkName(chainId);
@@ -90,9 +102,6 @@ class BlockchainService {
         }
     }
 
-    /**
-     * Get network name from chain ID
-     */
     private getNetworkName(chainId: number): string {
         const networks: Record<number, string> = {
             1337: 'localhost',
@@ -102,9 +111,6 @@ class BlockchainService {
         return networks[chainId] || 'unknown';
     }
 
-    /**
-     * Record attendance on blockchain
-     */
     async recordAttendance(
         studentId: string,
         classId: string,
@@ -123,7 +129,6 @@ class BlockchainService {
             const tx = await contract.recordAttendance(studentId, classId, timestamp, location);
             const receipt = await tx.wait();
 
-            // Extract record ID from event
             const event = receipt.logs.find((log: any) => {
                 try {
                     const parsed = contract.interface.parseLog(log);
@@ -149,9 +154,6 @@ class BlockchainService {
         }
     }
 
-    /**
-     * Issue NFT certificate
-     */
     async issueCertificate(
         recipientAddress: string,
         studentId: string,
@@ -169,17 +171,9 @@ class BlockchainService {
         );
 
         try {
-            const tx = await contract.issueCertificate(
-                recipientAddress,
-                studentId,
-                courseId,
-                courseName,
-                grade,
-                metadataURI
-            );
+            const tx = await contract.issueCertificate(recipientAddress, studentId, courseId, courseName, grade, metadataURI);
             const receipt = await tx.wait();
 
-            // Extract token ID from event
             const event = receipt.logs.find((log: any) => {
                 try {
                     const parsed = contract.interface.parseLog(log);
@@ -192,19 +186,13 @@ class BlockchainService {
             const parsedEvent = event ? contract.interface.parseLog(event) : null;
             const tokenId = parsedEvent ? Number(parsedEvent.args[0]) : 0;
 
-            return {
-                tokenId,
-                transactionHash: receipt.hash
-            };
+            return { tokenId, transactionHash: receipt.hash };
         } catch (error) {
             console.error('Failed to issue certificate:', error);
             throw new Error('Failed to issue certificate on blockchain');
         }
     }
 
-    /**
-     * Record grade on blockchain
-     */
     async recordGrade(
         studentId: string,
         quizId: string,
@@ -250,24 +238,20 @@ class BlockchainService {
         }
     }
 
-    /**
-     * Verify certificate
-     */
     async verifyCertificate(tokenId: number): Promise<NFTCertificate | null> {
-        if (!this.provider) throw new Error('Wallet not connected');
+        // Use read-only Alchemy provider if no wallet connected
+        const readProvider = this.provider || (this.walletInfo ? null : this.getReadOnlyProvider(11155111));
+        if (!readProvider) throw new Error('No provider available');
 
         const contract = new ethers.Contract(
             this.contractAddresses.academicCredentials,
             AcademicCredentialsABI.abi,
-            this.provider
+            readProvider
         );
 
         try {
             const result = await contract.verifyCertificate(tokenId);
-
-            if (!result.exists) {
-                return null;
-            }
+            if (!result.exists) return null;
 
             const owner = await contract.ownerOf(tokenId);
             const tokenURI = await contract.tokenURI(tokenId);
@@ -289,16 +273,14 @@ class BlockchainService {
         }
     }
 
-    /**
-     * Get student's certificates
-     */
     async getStudentCertificates(studentId: string): Promise<number[]> {
-        if (!this.provider) throw new Error('Wallet not connected');
+        const readProvider = this.provider || this.getReadOnlyProvider(11155111);
+        if (!readProvider) throw new Error('No provider available');
 
         const contract = new ethers.Contract(
             this.contractAddresses.academicCredentials,
             AcademicCredentialsABI.abi,
-            this.provider
+            readProvider
         );
 
         try {
@@ -310,16 +292,10 @@ class BlockchainService {
         }
     }
 
-    /**
-     * Get wallet info
-     */
     getWalletInfo(): WalletInfo | null {
         return this.walletInfo;
     }
 
-    /**
-     * Disconnect wallet
-     */
     disconnect(): void {
         this.provider = null;
         this.signer = null;
@@ -327,10 +303,8 @@ class BlockchainService {
     }
 }
 
-// Singleton instance
 export const blockchainService = new BlockchainService();
 
-// Extend Window interface for TypeScript
 declare global {
     interface Window {
         ethereum?: any;

@@ -3,7 +3,7 @@ import { useState, useMemo } from 'react';
 import type { User, UserRole } from '../types';
 import { UserRole as UserRoleEnum, ROLE_DISPLAY_NAMES } from '../types';
 import WebcamCapture from './WebcamCapture';
-import { verifyFace, passwordMatches, hashPassword } from '../services/authService';
+import { verifyFace, passwordMatches, hashPassword, login as supabaseLogin, loginWithGoogle } from '../services/authService';
 import Spinner from './Spinner';
 import { t } from '../services/i18n';
 
@@ -90,6 +90,18 @@ const Login: React.FC<LoginProps> = ({ onLogin, users, theme, onPasswordReset })
     }
     setIsLoggingIn(true);
     try {
+      // Try Supabase auth first
+      try {
+        const { user: authUser } = await supabaseLogin(email, password);
+        if (authUser) {
+          // Auth state change listener in App.tsx will handle the rest
+          return;
+        }
+      } catch {
+        // Supabase not configured or auth failed — fall back to legacy
+      }
+
+      // Legacy: try backend API
       const API_BASE = import.meta.env.VITE_API_URL || '';
       if (API_BASE) {
         const res = await fetch(`${API_BASE}/api/auth/login`, {
@@ -102,7 +114,7 @@ const Login: React.FC<LoginProps> = ({ onLogin, users, theme, onPasswordReset })
           throw new Error(body.error || 'Login failed');
         }
         const { token, user } = await res.json();
-        try { window.localStorage.setItem('gyandeep_token', token) } catch (e:any) { console.warn('Failed to store auth token', e && e.message ? e.message : e) }
+        try { window.localStorage.setItem('gyandeep_token', token); } catch {}
         onLogin(user);
         return;
       }
@@ -194,8 +206,8 @@ const Login: React.FC<LoginProps> = ({ onLogin, users, theme, onPasswordReset })
           <div className="bg-white/90 backdrop-blur rounded-2xl shadow-2xl p-6 sm:p-8">
 
             {error && (
-              <div className="mb-4 p-3 bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg flex items-center gap-2">
-                <svg className="w-4 h-4 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+              <div role="alert" aria-live="assertive" className="mb-4 p-3 bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg flex items-center gap-2">
+                <svg className="w-4 h-4 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
                   <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
                 </svg>
                 {error}
@@ -203,20 +215,24 @@ const Login: React.FC<LoginProps> = ({ onLogin, users, theme, onPasswordReset })
             )}
 
             {/* Login Method Toggle */}
-            <div className="flex bg-gray-100 rounded-lg p-1 mb-5">
+            <div className="flex bg-gray-100 rounded-lg p-1 mb-5" role="tablist" aria-label="Login method">
               <button
+                role="tab"
+                aria-selected={loginMethod === 'emailPassword'}
                 onClick={() => { setLoginMethod('emailPassword'); setError(null); }}
                 className={`flex-1 py-2 px-4 text-sm font-semibold rounded-md transition-all ${loginMethod === 'emailPassword' ? `${colors.primary} text-white shadow` : 'text-gray-600'
                   }`}
               >
-                📧 Email & Password
+                <span aria-hidden="true">📧 </span>Email & Password
               </button>
               <button
+                role="tab"
+                aria-selected={loginMethod === 'faceId'}
                 onClick={() => { setLoginMethod('faceId'); setError(null); }}
                 className={`flex-1 py-2 px-4 text-sm font-semibold rounded-md transition-all ${loginMethod === 'faceId' ? `${colors.primary} text-white shadow` : 'text-gray-600'
                   }`}
               >
-                📷 Face ID
+                <span aria-hidden="true">📷 </span>Face ID
               </button>
             </div>
 

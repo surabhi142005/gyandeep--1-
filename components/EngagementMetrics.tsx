@@ -13,7 +13,8 @@ const EngagementMetrics: React.FC<EngagementMetricsProps> = ({ userId, sessionCo
 
     const loadMetrics = async () => {
         try {
-            const response = await fetch(`http://localhost:3001/api/analytics/engagement?userId=${userId}`);
+            const apiBase = import.meta.env.VITE_API_URL || '';
+            const response = await fetch(`${apiBase}/api/analytics/engagement?userId=${userId}`);
             if (!response.ok) {
                 console.warn(`Engagement metrics API returned status ${response.status}`);
                 return;
@@ -46,20 +47,6 @@ const EngagementMetrics: React.FC<EngagementMetricsProps> = ({ userId, sessionCo
         const total = metrics.reduce((sum, m) => sum + m.count, 0);
         setTotalEngagement(total);
     }, [metrics]);
-
-    const loadMetrics = async () => {
-        try {
-            const response = await fetch(`http://localhost:3001/api/analytics/engagement?userId=${userId}`);
-            if (!response.ok) {
-                console.warn(`Engagement metrics API returned status ${response.status}`);
-                return;
-            }
-            const data = await response.json();
-            setMetrics(data);
-        } catch (error) {
-            console.error('Failed to load engagement metrics:', error);
-        }
-    };
 
     const getMetricsByType = (type: string) => {
         return metrics.filter(m => m.type === type).reduce((sum, m) => sum + m.count, 0);

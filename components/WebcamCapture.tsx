@@ -174,16 +174,16 @@ const WebcamCapture: React.FC<WebcamCaptureProps> = ({ onCapture, onClose, theme
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4">
+    <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4" role="dialog" aria-modal="true" aria-label={title}>
       <div className="bg-white rounded-xl shadow-2xl p-6 w-full max-w-md text-center">
         <h2 className="text-2xl font-bold text-gray-800 mb-4">{title}</h2>
         <p className="text-gray-600 mb-4">Position your face within the frame.</p>
         <div className="relative w-full aspect-square bg-gray-200 rounded-lg overflow-hidden mb-4 border-4 border-gray-300">
-          <video ref={videoRef} autoPlay playsInline className="w-full h-full object-cover" />
-          <canvas ref={canvasRef} className="hidden" />
+          <video ref={videoRef} autoPlay playsInline className="w-full h-full object-cover" aria-label="Camera preview — position your face in the center" />
+          <canvas ref={canvasRef} className="hidden" aria-hidden="true" />
 
           {/* Guide overlay for face positioning */}
-          <svg className="absolute inset-0 w-full h-full pointer-events-none" viewBox="0 0 300 300">
+          <svg className="absolute inset-0 w-full h-full pointer-events-none" viewBox="0 0 300 300" aria-hidden="true">
             <circle cx="150" cy="150" r="80" fill="none" stroke="rgba(255,255,255,0.3)" strokeWidth="2" />
             <circle cx="150" cy="150" r="70" fill="none" stroke="rgba(255,255,255,0.5)" strokeWidth="1" />
           </svg>
@@ -205,8 +205,8 @@ const WebcamCapture: React.FC<WebcamCaptureProps> = ({ onCapture, onClose, theme
         {/* Liveness progress */}
         {livenessSteps.length > 0 && (
           <div className="mb-4 text-sm text-gray-700">
-            <div className="text-center font-semibold mb-2">Liveness Detection Progress</div>
-            <div className="flex gap-1">
+            <div className="text-center font-semibold mb-2" id="liveness-label">Liveness Detection Progress</div>
+            <div className="flex gap-1" role="progressbar" aria-labelledby="liveness-label" aria-valuenow={Math.min(livenessSteps.length, 3)} aria-valuemin={0} aria-valuemax={3}>
               {[1, 2, 3].map(step => (
                 <div key={step} className={`flex-1 h-2 rounded-full ${step <= Math.min(livenessSteps.length, 3) ? 'bg-blue-600' : 'bg-gray-300'
                   }`} />

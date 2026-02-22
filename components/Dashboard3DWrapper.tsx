@@ -38,9 +38,9 @@ const Dashboard3DWrapper: React.FC<Dashboard3DWrapperProps> = ({
                 <button
                     onClick={onClose}
                     className="fixed top-4 right-4 z-50 w-12 h-12 bg-red-600/90 hover:bg-red-700 text-white rounded-full shadow-2xl flex items-center justify-center transition-all"
-                    title="Exit 3D View"
+                    aria-label="Close 3D view"
                 >
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                     </svg>
                 </button>

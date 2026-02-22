@@ -453,12 +453,18 @@ app.get('/api/notes/list', (req, res) => {
 const port = process.env.PORT ? Number(process.env.PORT) : 3001
 
 // Initialize database (optional - SQLite) and schema
-initDB().then(() => setupSchema()).catch((err) => {
-  console.warn('DB initialization failed, continuing with file-storage fallback:', err && err.message ? err.message : err)
+console.log('Starting backend initialization...')
+initDB().then(() => {
+  console.log('DB initialized, setting up schema...')
+  return setupSchema()
+}).then(() => {
+  console.log('Schema setup complete.')
+}).catch((err) => {
+  console.warn('DB initialization failed:', err && err.message ? err.message : err)
 }).finally(() => {
+  console.log(`Starting express server on port ${port}...`)
   app.listen(port, () => {
-    process.stdout.write(`Backend running on http://localhost:${port}\n`)
-    process.stdout.flush()
+    console.log(`Backend running on http://localhost:${port}`)
   })
 })
 
@@ -704,7 +710,7 @@ app.post('/api/auth/password/complete', (req, res) => {
     const users = JSON.parse(fs.readFileSync(usersFile, 'utf8') || '[]')
     const idx = users.findIndex(u => (u.email || '').toLowerCase() === String(email).toLowerCase())
     if (idx === -1) return res.status(404).json({ error: 'User not found' })
-    users[idx].password = String(newPassword)
+    users[idx].password = bcrypt.hashSync(String(newPassword), 10)
     fs.writeFileSync(usersFile, JSON.stringify(users, null, 2))
     resetStore.delete(String(email).toLowerCase())
     return res.json({ ok: true })
@@ -1133,7 +1139,7 @@ app.post('/api/notifications', (req, res) => {
       const users = fs.existsSync(usersFile) ? JSON.parse(fs.readFileSync(usersFile, 'utf8') || '[]') : []
       const user = users.find(u => u.id === userId)
       if (user?.email) {
-        sendEmailVerification(user.email, title).catch(() => {})
+        sendEmailVerification(user.email, title).catch(() => { })
       }
     }
     return res.json({ ok: true, notification: notif })

@@ -3,8 +3,8 @@ import type { Student, Teacher, AttendanceRecord, ClassSession, PerformanceData,
 import { UserRole as UserRoleEnum } from './types';
 import Login from './components/Login';
 import ToastNotification from './components/ToastNotification';
+import type { ToastType } from './components/ToastNotification';
 import { getCurrentPosition } from './services/locationService';
-import Chatbot from './components/Chatbot';
 import { fetchUsers, fetchClasses } from './services/dataService';
 import { websocketService } from './services/websocketService';
 import { setLocale, t } from './services/i18n';
@@ -14,13 +14,20 @@ import UserProfile from './components/UserProfile';
 import Iridescence from './components/Iridescence';
 import AccessibilityPanel from './components/AccessibilityPanel';
 import { voiceService } from './services/voiceService';
-import LandingPage from './components/LandingPage';
 import type { Announcement } from './components/AnnouncementBoard';
+import { SkeletonDashboard } from './components/SkeletonLoader';
+import { useThemeEngine } from './hooks/useThemeEngine';
+import { supabase } from './services/supabaseClient';
+import { getCurrentUser } from './services/authService';
 
 // Lazy load dashboard components
 const TeacherDashboard = lazy(() => import('./components/TeacherDashboard'));
 const StudentDashboard = lazy(() => import('./components/StudentDashboard'));
 const AdminDashboard = lazy(() => import('./components/AdminDashboard').then(m => ({ default: m.default })));
+// Lazy load heavy components
+const Dashboard3DWrapper = lazy(() => import('./components/Dashboard3DWrapper'));
+const Chatbot = lazy(() => import('./components/Chatbot'));
+const LandingPage = lazy(() => import('./components/LandingPage'));
 
 // A custom hook to manage state in localStorage
 function useLocalStorage<T>(key: string, initialValue: T): [T, React.Dispatch<React.SetStateAction<T>>] {
@@ -62,7 +69,7 @@ const App: React.FC = () => {
     const [allClasses, setAllClasses] = useLocalStorage<ClassConfig[]>('gyandeep-classes', []);
     const [isSetupComplete, setIsSetupComplete] = useState(() => allUsers.length > 0);
     const [currentUser, setCurrentUser] = useState<AnyUser | null>(null);
-    const [notification, setNotification] = useState<{ message: string; type: 'info' | 'success' } | null>(null);
+    const [notification, setNotification] = useState<{ message: string; type: ToastType } | null>(null);
     const [userLocation, setUserLocation] = useState<Coordinates | null>(null);
     const [showProfile, setShowProfile] = useState(false);
     const [reducedMotion, setReducedMotion] = useLocalStorage('gyandeep-reduced-motion', false);
@@ -88,37 +95,39 @@ const App: React.FC = () => {
         attendanceRadius: 100,
     });
 
-    // --- Theme Effects ---
-    useEffect(() => {
-        document.documentElement.setAttribute('data-theme', theme);
-    }, [theme]);
+    const [currentLocale, setCurrentLocale] = useState('en');
 
-    useEffect(() => {
-        document.documentElement.setAttribute('data-high-contrast', highContrast ? '1' : '0');
-    }, [highContrast]);
+    // --- Theme & A11y Engine ---
+    useThemeEngine({
+        theme,
+        highContrast,
+        fontScale,
+        reducedMotion,
+        darkMode,
+        voiceEnabled,
+        locale: currentLocale
+    });
 
+    // --- Supabase Auth State Listener ---
     useEffect(() => {
-        document.documentElement.style.setProperty('--font-scale', String(fontScale));
-        document.body.style.fontSize = `${fontScale}rem`;
-    }, [fontScale]);
+        const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+            if (event === 'SIGNED_IN' && session?.user) {
+                try {
+                    const user = await getCurrentUser();
+                    if (user) {
+                        handleLogin(user as AnyUser);
+                    }
+                } catch (e) {
+                    console.error('Failed to load user after auth change:', e);
+                }
+            } else if (event === 'SIGNED_OUT') {
+                handleLogout();
+            }
+        });
+        return () => subscription.unsubscribe();
+    }, []);
 
-    useEffect(() => {
-        document.documentElement.setAttribute('data-reduced-motion', reducedMotion ? '1' : '0');
-        if (reducedMotion) {
-            document.documentElement.style.setProperty('--animation-duration', '0s');
-        } else {
-            document.documentElement.style.removeProperty('--animation-duration');
-        }
-    }, [reducedMotion]);
-
-    useEffect(() => {
-        voiceService.setTTSEnabled(voiceEnabled);
-    }, [voiceEnabled]);
-
-    useEffect(() => {
-        document.documentElement.setAttribute('data-dark-mode', darkMode ? '1' : '0');
-    }, [darkMode]);
-
+    // --- Data Initialization ---
     useEffect(() => {
         fetchUsers().then((users) => {
             if (Array.isArray(users) && users.length > 0) {
@@ -138,7 +147,7 @@ const App: React.FC = () => {
     }, []);
 
     // --- Handlers ---
-    const showNotification = (message: string, type: 'info' | 'success' = 'info') => {
+    const showNotification = (message: string, type: ToastType = 'info') => {
         setNotification({ message, type });
     };
 
@@ -155,13 +164,12 @@ const App: React.FC = () => {
     const handleLogin = (user: AnyUser) => {
         setCurrentUser(user);
 
-            // Connect to realtime server with JWT if available
-            try {
-                const token = window.localStorage.getItem('gyandeep_token') || undefined;
-                websocketService.connect(user.id, user.role, token || undefined);
-            } catch (e: any) {
-                console.warn('Could not read token from storage', e && e.message ? e.message : e);
-            }
+        // Connect to Supabase Realtime
+        try {
+            websocketService.connect(user.id, user.role);
+        } catch (e: any) {
+            console.warn('Real-time connection partial failure:', e?.message || e);
+        }
 
         if (user.role === UserRoleEnum.TEACHER) {
             const currentStudents = allUsers.filter(u => u.role === UserRoleEnum.STUDENT);
@@ -193,7 +201,7 @@ const App: React.FC = () => {
     const handleLogout = () => {
         setCurrentUser(null);
         setUserLocation(null);
-        try { websocketService.disconnect() } catch (e:any) { console.warn('Failed to disconnect websocket', e && e.message ? e.message : e) }
+        try { websocketService.disconnect() } catch (e: any) { console.warn('Failed to disconnect websocket', e && e.message ? e.message : e) }
     };
 
     const handleUpdateSession = (sessionUpdate: Partial<ClassSession>) => {
@@ -285,12 +293,7 @@ const App: React.FC = () => {
         }
 
         return (
-            <Suspense fallback={
-                <div className="flex flex-col items-center justify-center min-h-screen">
-                    <Spinner size="w-12 h-12" color="text-gray-600" />
-                    <p className="mt-4 text-xl text-gray-700">Loading Dashboard...</p>
-                </div>
-            }>
+            <Suspense fallback={<SkeletonDashboard />}>
                 {currentUser.role === UserRoleEnum.TEACHER && (
                     <TeacherDashboard
                         teacher={currentUser as Teacher}
@@ -349,7 +352,7 @@ const App: React.FC = () => {
     return (
         <>
             <Iridescence color={currentUser ? [0.6, 0.4, 0.8] : [0.5, 0.6, 0.8]} mouseReact amplitude={currentUser ? 0.15 : 0.1} speed={currentUser ? 1.2 : 1} />
-            <div className="relative z-10">
+            <div id="main-content" className="relative z-10" role="main">
                 {notification && (
                     <ToastNotification
                         message={notification.message}
@@ -368,7 +371,16 @@ const App: React.FC = () => {
                                 <option value="purple">Purple</option>
                             </select>
                             <label className="text-xs text-gray-700">{t('Locale')}</label>
-                            <select aria-label="Locale" onChange={e => setLocale(e.target.value as any)} className="text-xs border border-gray-300 rounded px-1 py-0.5">
+                            <select
+                                aria-label="Locale"
+                                value={currentLocale}
+                                onChange={e => {
+                                    const loc = e.target.value as any;
+                                    setLocale(loc);
+                                    setCurrentLocale(loc);
+                                }}
+                                className="text-xs border border-gray-300 rounded px-1 py-0.5"
+                            >
                                 <option value="en">English</option>
                                 <option value="hi">Hindi</option>
                                 <option value="mr">Marathi</option>
@@ -425,11 +437,17 @@ const App: React.FC = () => {
                     />
                 )}
                 {showLandingPage ? (
-                    <LandingPage onGetStarted={() => setShowLanding(false)} theme={theme} />
+                    <Suspense fallback={<SkeletonDashboard />}>
+                        <LandingPage onGetStarted={() => setShowLanding(false)} theme={theme} />
+                    </Suspense>
                 ) : (
                     renderContent()
                 )}
-                {currentUser && <Chatbot theme={theme} userLocation={userLocation} />}
+                {currentUser && (
+                    <Suspense fallback={null}>
+                        <Chatbot theme={theme} userLocation={userLocation} />
+                    </Suspense>
+                )}
             </div>
         </>
     );

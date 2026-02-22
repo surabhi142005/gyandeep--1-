@@ -1,116 +1,93 @@
-import { io, Socket } from 'socket.io-client';
-import type { WebSocketMessage } from '../types';
+import { supabase } from './supabaseClient';
+import type { RealtimeChannel } from '@supabase/supabase-js';
+
+const BROADCAST_EVENTS = [
+  'attendance-changed',
+  'performance-changed',
+  'quiz-submission',
+  'session-changed',
+  'session-ended',
+  'engagement-update',
+  'blockchain-update',
+  'digital-twin-changed',
+  'new-chat-message'
+] as const;
 
 class WebSocketService {
-    private socket: Socket | null = null;
+    private channel: RealtimeChannel | null = null;
+    private notificationChannel: RealtimeChannel | null = null;
     private connected: boolean = false;
     private listeners: Map<string, Set<(data: any) => void>> = new Map();
+    private userId: string | null = null;
 
     /**
-     * Connect to WebSocket server
+     * Connect to Supabase Realtime.
      */
-    connect(userId: string, userRole: string, token?: string): void {
-        if (this.socket?.connected) {
-            console.log('Already connected to WebSocket');
-            return;
+    connect(userId: string, userRole: string, _token?: string, _url?: string): void {
+        if (this.connected) return;
+        this.userId = userId;
+
+        // Create broadcast channel for custom classroom events
+        this.channel = supabase.channel('classroom', {
+            config: {
+                broadcast: { self: true },
+                presence: { key: userId }
+            }
+        });
+
+        // Subscribe to all broadcast events
+        for (const event of BROADCAST_EVENTS) {
+            this.channel.on('broadcast', { event }, ({ payload }) => {
+                this.notifyListeners(event, payload);
+            });
         }
 
-        this.socket = io('http://localhost:3002', {
-            transports: ['websocket'],
-            auth: {
-                token: token || undefined
-            },
-            reconnection: true,
-            reconnectionDelay: 1000,
-            reconnectionAttempts: 5
+        // Track presence
+        this.channel.on('presence', { event: 'sync' }, () => {
+            const state = this.channel?.presenceState() || {};
+            this.notifyListeners('presence-sync', state);
         });
 
-        this.socket.on('connect', () => {
-            console.log('Connected to WebSocket server');
-            this.connected = true;
+        this.channel.subscribe(async (status) => {
+            if (status === 'SUBSCRIBED') {
+                this.connected = true;
+                console.log('Connected to Supabase Realtime');
 
-            // Identify user
-            this.socket?.emit('identify', { id: userId, role: userRole });
+                // Track user presence
+                await this.channel?.track({ userId, role: userRole, online_at: new Date().toISOString() });
+            }
         });
 
-        this.socket.on('disconnect', () => {
-            console.log('Disconnected from WebSocket server');
-            this.connected = false;
-        });
-
-        this.socket.on('connect_error', (error) => {
-            console.error('WebSocket connection error:', error);
-            this.notifyListeners('connection-error', { message: 'Failed to connect to real-time server.' });
-        });
-
-        this.socket.on('reconnect_failed', () => {
-            console.error('WebSocket reconnection failed after all attempts');
-            this.connected = false;
-            this.notifyListeners('connection-error', { message: 'Lost connection to real-time server. Please refresh the page.' });
-        });
-
-        this.socket.on('reconnect_attempt', (attempt: number) => {
-            console.log(`WebSocket reconnection attempt ${attempt}`);
-        });
-
-        // Set up event listeners
-        this.setupEventListeners();
+        // Subscribe to notification changes via postgres_changes
+        this.notificationChannel = supabase
+            .channel('notifications-changes')
+            .on(
+                'postgres_changes',
+                {
+                    event: 'INSERT',
+                    schema: 'public',
+                    table: 'notifications',
+                    filter: `user_id=eq.${userId}`
+                },
+                (payload) => {
+                    this.notifyListeners('notification', payload.new);
+                }
+            )
+            .on(
+                'postgres_changes',
+                {
+                    event: 'INSERT',
+                    schema: 'public',
+                    table: 'notifications',
+                    filter: 'user_id=eq.all'
+                },
+                (payload) => {
+                    this.notifyListeners('notification', payload.new);
+                }
+            )
+            .subscribe();
     }
 
-    /**
-     * Set up event listeners for all message types
-     */
-    private setupEventListeners(): void {
-        if (!this.socket) return;
-
-        // Attendance events
-        this.socket.on('attendance-changed', (data) => {
-            this.notifyListeners('attendance-changed', data);
-        });
-
-        // Performance events
-        this.socket.on('performance-changed', (data) => {
-            this.notifyListeners('performance-changed', data);
-        });
-
-        // Quiz events
-        this.socket.on('quiz-submission', (data) => {
-            this.notifyListeners('quiz-submission', data);
-        });
-
-        // Session events
-        this.socket.on('session-changed', (data) => {
-            this.notifyListeners('session-changed', data);
-        });
-
-        this.socket.on('session-ended', (data) => {
-            this.notifyListeners('session-ended', data);
-        });
-
-        // Blockchain events
-        this.socket.on('blockchain-update', (data) => {
-            this.notifyListeners('blockchain-update', data);
-        });
-
-        // Digital twin events
-        this.socket.on('digital-twin-changed', (data) => {
-            this.notifyListeners('digital-twin-changed', data);
-        });
-
-        // Engagement events
-        this.socket.on('engagement-update', (data) => {
-            this.notifyListeners('engagement-update', data);
-        });
-
-        // Chat events
-        this.socket.on('new-chat-message', (data) => {
-            this.notifyListeners('new-chat-message', data);
-        });
-    }
-
-    /**
-     * Notify all listeners for a specific event
-     */
     private notifyListeners(event: string, data: any): void {
         const eventListeners = this.listeners.get(event);
         if (eventListeners) {
@@ -118,103 +95,73 @@ class WebSocketService {
         }
     }
 
-    /**
-     * Subscribe to an event
-     */
     on(event: string, callback: (data: any) => void): () => void {
         if (!this.listeners.has(event)) {
             this.listeners.set(event, new Set());
         }
         this.listeners.get(event)!.add(callback);
-
-        // Return unsubscribe function
         return () => {
-            const eventListeners = this.listeners.get(event);
-            if (eventListeners) {
-                eventListeners.delete(callback);
-            }
+            this.listeners.get(event)?.delete(callback);
         };
     }
 
-    /**
-     * Emit an event to the server
-     */
     emit(event: string, data: any): void {
-        if (!this.socket?.connected) {
-            console.warn('Cannot emit event: WebSocket not connected');
+        if (!this.channel) {
+            console.warn('Cannot emit event: Realtime not connected');
             return;
         }
-        this.socket.emit(event, data);
+        this.channel.send({
+            type: 'broadcast',
+            event,
+            payload: data
+        });
     }
 
-    /**
-     * Send attendance update
-     */
     sendAttendanceUpdate(data: any): void {
-        this.emit('attendance-update', data);
+        this.emit('attendance-changed', data);
     }
 
-    /**
-     * Send performance update
-     */
     sendPerformanceUpdate(data: any): void {
-        this.emit('performance-update', data);
+        this.emit('performance-changed', data);
     }
 
-    /**
-     * Send quiz submission
-     */
     sendQuizSubmission(data: any): void {
-        this.emit('quiz-submitted', data);
+        this.emit('quiz-submission', data);
     }
 
-    /**
-     * Send session update
-     */
     sendSessionUpdate(data: any): void {
-        this.emit('session-update', data);
+        this.emit('session-changed', data);
     }
 
-    /**
-     * Send blockchain transaction update
-     */
     sendBlockchainUpdate(data: any): void {
-        this.emit('blockchain-transaction', data);
+        this.emit('blockchain-update', data);
     }
 
-    /**
-     * Send digital twin state update
-     */
     sendDigitalTwinUpdate(data: any): void {
-        this.emit('digital-twin-update', data);
+        this.emit('digital-twin-changed', data);
     }
 
-    /**
-     * Send engagement metric
-     */
     sendEngagementMetric(data: any): void {
-        this.emit('engagement-metric', data);
+        this.emit('engagement-update', data);
     }
 
-    /**
-     * Check if connected
-     */
     isConnected(): boolean {
         return this.connected;
     }
 
-    /**
-     * Disconnect from server
-     */
     disconnect(): void {
-        if (this.socket) {
-            this.socket.disconnect();
-            this.socket = null;
-            this.connected = false;
-            this.listeners.clear();
+        if (this.channel) {
+            supabase.removeChannel(this.channel);
+            this.channel = null;
         }
+        if (this.notificationChannel) {
+            supabase.removeChannel(this.notificationChannel);
+            this.notificationChannel = null;
+        }
+        this.connected = false;
+        this.listeners.clear();
+        console.log('Disconnected from Supabase Realtime');
     }
 }
 
-// Singleton instance
 export const websocketService = new WebSocketService();

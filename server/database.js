@@ -73,6 +73,7 @@ export const setupSchema = async () => {
             performance TEXT,
             classId TEXT
         )`)
+        console.log('✓ Users table ready')
 
         // OTP Table
         await run(`CREATE TABLE IF NOT EXISTS otp (
@@ -80,6 +81,7 @@ export const setupSchema = async () => {
             code TEXT,
             expires INTEGER
         )`)
+        console.log('✓ OTP table ready')
 
         // Audit Log Table
         await run(`CREATE TABLE IF NOT EXISTS audit_logs (
@@ -89,12 +91,14 @@ export const setupSchema = async () => {
             userId TEXT,
             details TEXT
         )`)
+        console.log('✓ Audit logs table ready')
 
         // Classes Table
         await run(`CREATE TABLE IF NOT EXISTS classes (
             id TEXT PRIMARY KEY,
             name TEXT
         )`)
+        console.log('✓ Classes table ready')
 
         // Question Bank Table
         await run(`CREATE TABLE IF NOT EXISTS question_bank (
@@ -106,12 +110,14 @@ export const setupSchema = async () => {
             difficulty TEXT,
             subject TEXT
         )`)
+        console.log('✓ Question bank table ready')
 
         // Tags Presets Table
         await run(`CREATE TABLE IF NOT EXISTS tags_presets (
             subject TEXT PRIMARY KEY,
             tags TEXT
         )`)
+        console.log('✓ Tags presets table ready')
 
         console.log('Database schema synced.')
     } catch (err) {

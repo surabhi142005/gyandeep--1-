@@ -11,6 +11,8 @@ import WebcamCapture from './WebcamCapture';
 import { uploadClassNotes } from '../services/dataService';
 import { TeacherDashboardProps } from './TeacherDashboardProps';
 import AnnouncementBoard from './AnnouncementBoard';
+import { useTeacherSession } from '../hooks/useTeacherSession';
+import { exportToCSV } from '../services/exportService';
 
 const CODE_DURATION = 10 * 60; // 10 minutes in seconds
 
@@ -30,16 +32,12 @@ function usePrevious<T>(value: T): T | undefined {
 const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ teacher, students, attendance, classSession, onUpdateSession, onLogout, theme, onUpdateFaceImage, historicalRecords, onUpdateHistoricalRecords, allSubjects, allClasses, announcements = [], onPostAnnouncement }) => {
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
-  const [timeLeft, setTimeLeft] = useState(0);
-  // Initialize selectedSubject based on teacher's assigned subjects or a default
   const [selectedSubject, setSelectedSubject] = useState<string>(
     classSession.subject || (teacher.assignedSubjects.length > 0 ? allSubjects.find(s => s.id === teacher.assignedSubjects[0])?.name || '' : '')
   );
-  const [teacherLocation, setTeacherLocation] = useState<Coordinates | null>(null);
   const [manualLat, setManualLat] = useState('');
   const [manualLng, setManualLng] = useState('');
   const [attendanceRadius, setAttendanceRadius] = useState(100);
-  const [isFetchingLocation, setIsFetchingLocation] = useState(false);
   const [isGeneratingCode, setIsGeneratingCode] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [isGeneratingQuiz, setIsGeneratingQuiz] = useState(false);
@@ -55,14 +53,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ teacher, students, 
   const [showFaceRegistration, setShowFaceRegistration] = useState(false);
   const [isHistoryVisible, setIsHistoryVisible] = useState(false);
   const [showCopySuccess, setShowCopySuccess] = useState(false);
-  const exportCSV = (rows: string[][], filename: string) => {
-    const csv = rows.map(r => r.map(v => '"' + String(v).replace(/"/g, '""') + '"').join(',')).join('\n');
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url; a.download = filename; a.click();
-    URL.revokeObjectURL(url);
-  };
+
   const [tagPresets, setTagPresets] = useState<Record<string, string[]>>({});
   const [notesText, setNotesText] = useState(classSession.notes || '');
   const [expiryWarning, setExpiryWarning] = useState<string | null>(null);
@@ -162,67 +153,42 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ teacher, students, 
   // const subjects = ['Math', 'Science', 'History', 'English']; // Replaced by allSubjects
   const clearMessages = () => { setError(null); setSuccessMessage(null); };
 
-  const calculateTimeLeft = useCallback(() => {
-    if (classSession.expiry) {
-      const left = Math.round((classSession.expiry - Date.now()) / 1000);
-      setTimeLeft(left > 0 ? left : 0);
-    } else {
-      setTimeLeft(0);
+  // --- Session Management Hook ---
+  const {
+    timeLeft,
+    isFetchingLocation,
+    teacherLocation,
+    setTeacherLocation,
+    fetchCurrentLocation,
+    generateCode
+  } = useTeacherSession({
+    classSession,
+    onUpdateSession,
+    duration: CODE_DURATION
+  });
+
+  // Warn teacher before session expires
+  useEffect(() => {
+    if (timeLeft === 120) {
+      setExpiryWarning('⚠️ Session code expires in 2 minutes!');
+      notify('Session Expiring', 'Your session code expires in 2 minutes.');
+    } else if (timeLeft === 60) {
+      setExpiryWarning('🚨 Session code expires in 1 minute!');
+      notify('Session Expiring Soon', 'Your session code expires in 1 minute.');
+    } else if (timeLeft <= 0) {
+      setExpiryWarning(null);
     }
-  }, [classSession.expiry]);
-
-  // Compute real weekly attendance from historicalRecords
-  useEffect(() => {
-    const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-    const today = new Date();
-    const result = Array(7).fill(0).map((_, i) => {
-      const date = new Date();
-      date.setDate(today.getDate() - (6 - i));
-      const dayLabel = days[date.getDay()];
-      const dateStr = date.toISOString().split('T')[0];
-      // Count present students in sessions that happened on this date
-      const presentCount = historicalRecords
-        .filter(r => r.date.startsWith(dateStr))
-        .reduce((sum, r) => sum + r.attendance.filter(a => a.status === 'Present').length, 0);
-      return { date: dayLabel, present: presentCount };
-    });
-    setWeeklyAttendance(result);
-  }, [historicalRecords]);
-
-  // Timer and session expiry warning
-  useEffect(() => {
-    calculateTimeLeft();
-    const timer = setInterval(() => {
-      calculateTimeLeft();
-      if (classSession.expiry) {
-        const left = Math.round((classSession.expiry - Date.now()) / 1000);
-        if (left === 120) {
-          setExpiryWarning('⚠️ Session code expires in 2 minutes!');
-          notify('Session Expiring', 'Your session code expires in 2 minutes.');
-        } else if (left === 60) {
-          setExpiryWarning('🚨 Session code expires in 1 minute!');
-          notify('Session Expiring Soon', 'Your session code expires in 1 minute.');
-        } else if (left <= 0) {
-          setExpiryWarning(null);
-        }
-      }
-    }, 1000);
-    return () => clearInterval(timer);
-  }, [calculateTimeLeft, classSession.expiry]);
+  }, [timeLeft]);
 
   const handleFetchCurrentLocation = async () => {
-    setIsFetchingLocation(true);
     clearMessages();
     try {
-      const location = await getCurrentPosition();
-      setTeacherLocation(location);
+      const location = await fetchCurrentLocation();
       setManualLat(location.lat.toString());
       setManualLng(location.lng.toString());
-      setSuccessMessage("Current location fetched.");
+      setSuccessMessage("Current location fetched successfully.");
     } catch (err: any) {
       setError(err.message);
-    } finally {
-      setIsFetchingLocation(false);
     }
   };
 
@@ -760,7 +726,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ teacher, students, 
               <h2 className="text-xl font-semibold text-gray-700 mb-4">{t('Weekly Attendance Trend')}</h2>
               <AttendanceChart data={weeklyAttendance} theme={theme} />
               <div className="mt-3 flex justify-end gap-2">
-                <button onClick={() => exportCSV(
+                <button onClick={() => exportToCSV(
                   [['date', 'present']].concat(weeklyAttendance.map(w => [w.date, String(w.present)])),
                   `attendance_weekly_${new Date().toISOString().slice(0, 10)}.csv`
                 )} className={`text-sm px-3 py-1 rounded ${colors.lightText} ${colors.lightHover}`}>
@@ -769,7 +735,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ teacher, students, 
                 <button onClick={() => {
                   const rows: string[][] = [['student', 'status', 'time']]
                   sortedAndFilteredAttendance.filter(a => selectedAttendanceIds.includes(a.studentId)).forEach(a => rows.push([a.studentName, a.status, a.timestamp ? a.timestamp.toLocaleTimeString() : 'N/A']))
-                  exportCSV(rows, `attendance_selected_${new Date().toISOString().slice(0, 10)}.csv`)
+                  exportToCSV(rows, `attendance_selected_${new Date().toISOString().slice(0, 10)}.csv`)
                 }} className={`text-sm px-3 py-1 rounded ${colors.lightText} ${colors.lightHover}`}>
                   {t('Export Selected')}
                 </button>
@@ -786,7 +752,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ teacher, students, 
                       rows.push([st.name, p.subject, p.date, String(p.score)]);
                     })
                   });
-                  exportCSV(rows, `performance_${selectedSubject || 'all'}_${new Date().toISOString().slice(0, 10)}.csv`);
+                  exportToCSV(rows, `performance_${selectedSubject || 'all'}_${new Date().toISOString().slice(0, 10)}.csv`);
                 }} className={`text-sm px-3 py-1 rounded ${colors.lightText} ${colors.lightHover}`}>
                   {t('Export CSV')}
                 </button>
@@ -797,7 +763,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ teacher, students, 
                       rows.push([st.name, p.subject, p.date, String(p.score)]);
                     })
                   });
-                  exportCSV(rows, `performance_selected_${selectedSubject || 'all'}_${new Date().toISOString().slice(0, 10)}.csv`);
+                  exportToCSV(rows, `performance_selected_${selectedSubject || 'all'}_${new Date().toISOString().slice(0, 10)}.csv`);
                 }} className={`text-sm px-3 py-1 rounded ${colors.lightText} ${colors.lightHover}`}>
                   {t('Export Selected')}
                 </button>

@@ -295,8 +295,7 @@ const LightPillar: React.FC<LightPillarProps> = ({
             }
             if (rendererRef.current) {
                 rendererRef.current.dispose();
-                // @ts-expect-error - optional method on renderer implementations
-                rendererRef.current.forceContextLoss && rendererRef.current.forceContextLoss();
+                (rendererRef.current as any).forceContextLoss && (rendererRef.current as any).forceContextLoss();
                 if (container.contains(rendererRef.current.domElement)) {
                     container.removeChild(rendererRef.current.domElement);
                 }

@@ -20,7 +20,8 @@ const RealtimeAnalytics: React.FC<RealtimeAnalyticsProps> = ({ userId, userRole,
     const fetchPerformanceData = async () => {
         // Fetch from backend or local storage
         try {
-            const response = await fetch(`http://localhost:3001/api/analytics/performance?userId=${userId}`);
+            const apiBase = import.meta.env.VITE_API_URL || '';
+            const response = await fetch(`${apiBase}/api/analytics/performance?userId=${userId}`);
             if (response.ok) {
                 const data = await response.json();
                 setPerformanceData(data);
@@ -57,7 +58,8 @@ const RealtimeAnalytics: React.FC<RealtimeAnalyticsProps> = ({ userId, userRole,
 
     const fetchAttendanceData = async () => {
         try {
-            const response = await fetch(`http://localhost:3001/api/analytics/attendance?userId=${userId}`);
+            const apiBase = import.meta.env.VITE_API_URL || '';
+            const response = await fetch(`${apiBase}/api/analytics/attendance?userId=${userId}`);
             if (response.ok) {
                 const data = await response.json();
                 setAttendanceData(data);
@@ -76,7 +78,7 @@ const RealtimeAnalytics: React.FC<RealtimeAnalyticsProps> = ({ userId, userRole,
 
     const updateLiveMetrics = (sessionData: Partial<LiveClassMetrics>) => {
         setLiveMetrics({
-            sessionCode: sessionData.code || '',
+            sessionCode: sessionData.sessionCode || (sessionData as any).code || '',
             studentsPresent: sessionData.studentsPresent || 0,
             totalStudents: sessionData.totalStudents || 0,
             quizParticipation: sessionData.quizParticipation || 0,
@@ -111,73 +113,6 @@ const RealtimeAnalytics: React.FC<RealtimeAnalyticsProps> = ({ userId, userRole,
         };
     }, [userId]);
 
-    const fetchPerformanceData = async () => {
-        // Fetch from backend or local storage
-        try {
-            const response = await fetch(`http://localhost:3001/api/analytics/performance?userId=${userId}`);
-            if (response.ok) {
-                const data = await response.json();
-                setPerformanceData(data);
-            }
-        } catch (error) {
-            console.error('Failed to fetch performance data:', error);
-            // Use mock data for demonstration
-            setPerformanceData([
-                {
-                    subject: 'Mathematics',
-                    data: [
-                        { date: '2026-02-01', score: 75 },
-                        { date: '2026-02-05', score: 82 },
-                        { date: '2026-02-10', score: 88 },
-                        { date: '2026-02-13', score: 92 }
-                    ],
-                    average: 84,
-                    trend: 'up'
-                },
-                {
-                    subject: 'Science',
-                    data: [
-                        { date: '2026-02-01', score: 80 },
-                        { date: '2026-02-05', score: 78 },
-                        { date: '2026-02-10', score: 85 },
-                        { date: '2026-02-13', score: 87 }
-                    ],
-                    average: 82,
-                    trend: 'up'
-                }
-            ]);
-        }
-    };
-
-    const fetchAttendanceData = async () => {
-        try {
-            const response = await fetch(`http://localhost:3001/api/analytics/attendance?userId=${userId}`);
-            if (response.ok) {
-                const data = await response.json();
-                setAttendanceData(data);
-            }
-        } catch (error) {
-            console.error('Failed to fetch attendance data:', error);
-            // Mock data
-            setAttendanceData({
-                period: 'month',
-                present: 18,
-                absent: 2,
-                percentage: 90
-            });
-        }
-    };
-
-    const updateLiveMetrics = (sessionData: any) => {
-        setLiveMetrics({
-            sessionCode: sessionData.code || '',
-            studentsPresent: sessionData.studentsPresent || 0,
-            totalStudents: sessionData.totalStudents || 0,
-            quizParticipation: sessionData.quizParticipation || 0,
-            chatActivity: sessionData.chatActivity || 0,
-            averageEngagement: sessionData.averageEngagement || 0
-        });
-    };
 
     if (loading) {
         return (
