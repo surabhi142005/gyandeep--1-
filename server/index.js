@@ -13,14 +13,51 @@ import bcrypt from 'bcryptjs'
 import { Strategy as GoogleStrategy } from 'passport-google-oauth20'
 import { sendPasswordResetEmail, sendEmailVerification } from './emailService.js'
 import { initDB, setupSchema, all as dbAll, run as dbRun } from './database.js'
-
+import { addJob, getJob, registerProcessor, isRedisMode } from './jobQueue.js'
+import { indexContent, semanticSearch, buildContext, indexStats } from './embeddings.js'
 
 dotenv.config({ path: '.env.local' })
 dotenv.config()
 
 const app = express()
-app.use(cors({ origin: ['http://localhost:5173', 'http://localhost:5174', 'http://localhost:5175'], credentials: true })) // Update CORS for cookie
+app.use(cors({ origin: ['http://localhost:5173', 'http://localhost:5174', 'http://localhost:5175'], credentials: true }))
 app.use(express.json({ limit: '10mb' }))
+
+// ─── Rate Limiting (in-memory, sliding window) ────────────────────────────────
+const rateLimitStore = new Map()
+function rateLimit({ windowMs = 60000, max = 30, keyFn } = {}) {
+  return (req, res, next) => {
+    const key = keyFn ? keyFn(req) : (req.ip || req.headers['x-forwarded-for'] || 'unknown')
+    const now = Date.now()
+    let record = rateLimitStore.get(key)
+    if (!record) {
+      record = { hits: [], blocked: 0 }
+      rateLimitStore.set(key, record)
+    }
+    // Purge expired hits
+    record.hits = record.hits.filter(t => t > now - windowMs)
+    if (record.hits.length >= max) {
+      const retryAfter = Math.ceil((record.hits[0] + windowMs - now) / 1000)
+      res.set('Retry-After', String(retryAfter))
+      return res.status(429).json({ error: 'Too many requests. Please try again later.', retryAfter })
+    }
+    record.hits.push(now)
+    next()
+  }
+}
+// Periodic cleanup
+setInterval(() => {
+  const now = Date.now()
+  for (const [key, record] of rateLimitStore) {
+    record.hits = record.hits.filter(t => t > now - 120000)
+    if (record.hits.length === 0) rateLimitStore.delete(key)
+  }
+}, 60000)
+
+// Apply general rate limit
+app.use('/api/', rateLimit({ windowMs: 60000, max: 60 }))
+// Stricter limits for AI endpoints
+const aiRateLimit = rateLimit({ windowMs: 60000, max: 10, keyFn: (req) => `ai-${req.ip || 'unknown'}` })
 
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID
 const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET
@@ -112,10 +149,16 @@ app.get('/api/auth/logout', (req, res, next) => {
 
 const apiKey = process.env.GEMINI_API_KEY || process.env.API_KEY
 if (!apiKey) {
-  throw new Error('Missing GEMINI_API_KEY or API_KEY in environment')
+  console.warn('⚠️  Missing GEMINI_API_KEY or API_KEY in environment. AI features will return mock responses.')
 }
 
-const ai = new GoogleGenAI({ apiKey })
+const ai = apiKey ? new GoogleGenAI({ apiKey }) : null
+
+// Guard for AI calls when no API key
+function requireAI(req, res, next) {
+  if (!ai) return res.status(503).json({ error: 'AI features unavailable. Set GEMINI_API_KEY in environment.' })
+  next()
+}
 
 const postJSON = (targetUrl, body) => {
   const urlObj = new URL(targetUrl)
@@ -152,7 +195,7 @@ const postJSON = (targetUrl, body) => {
   })
 }
 
-app.post('/api/quiz', async (req, res) => {
+app.post('/api/quiz', aiRateLimit, requireAI, async (req, res) => {
   try {
     const { notesText, subject, enableThinkingMode } = req.body || {}
     if (!notesText || !subject) {
@@ -207,18 +250,30 @@ app.post('/api/quiz', async (req, res) => {
   }
 })
 
-app.post('/api/chat', async (req, res) => {
+app.post('/api/chat', aiRateLimit, requireAI, async (req, res) => {
   try {
-    const { prompt, location, model } = req.body || {}
+    const { prompt, location, model, classId, subjectId } = req.body || {}
     if (!prompt) {
       return res.status(400).json({ error: 'prompt is required' })
     }
+
+    // RAG-Lite: inject relevant lesson context into the prompt
+    let ragContext = ''
+    try {
+      ragContext = await buildContext(prompt, { classId, subjectId, topK: 3 })
+    } catch { /* RAG optional — ignore errors */ }
+
     const modelName = model === 'fast' ? 'gemini-flash-lite-latest' : 'gemini-2.5-flash'
     const config = { tools: [{ googleMaps: {} }] }
     if (location && typeof location.lat === 'number' && typeof location.lng === 'number') {
       config.toolConfig = { retrievalConfig: { latLng: { latitude: location.lat, longitude: location.lng } } }
     }
-    const response = await ai.models.generateContent({ model: modelName, contents: prompt, config })
+
+    const fullPrompt = ragContext
+      ? `You are Gyandeep AI, an educational assistant. Use the lesson material below as context when relevant.\n${ragContext}\nUser question: ${prompt}`
+      : prompt
+
+    const response = await ai.models.generateContent({ model: modelName, contents: fullPrompt, config })
     const text = response.text
     const groundingChunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks || []
     const sources = groundingChunks
@@ -238,7 +293,7 @@ app.post('/api/chat', async (req, res) => {
         return foundSources
       })
       .filter((source, index, self) => index === self.findIndex((s) => s.uri === source.uri))
-    return res.json({ text, sources })
+    return res.json({ text, sources, ragUsed: !!ragContext })
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown error'
     if (message.includes('SAFETY')) {
@@ -1034,7 +1089,7 @@ app.delete('/api/timetable/:id', (req, res) => {
 })
 
 // --- Analytics ---
-app.post('/api/analytics/insights', async (req, res) => {
+app.post('/api/analytics/insights', aiRateLimit, requireAI, async (req, res) => {
   try {
     const { studentData, type } = req.body || {}
     if (!studentData) return res.status(400).json({ error: 'studentData required' })
@@ -1049,6 +1104,50 @@ app.post('/api/analytics/insights', async (req, res) => {
     return res.json(JSON.parse(response.text))
   } catch (error) {
     return res.status(500).json({ error: error.message || 'AI analytics error' })
+  }
+})
+
+// --- AI Summarize (Server-side proxy) ---
+app.post('/api/summarize', aiRateLimit, requireAI, async (req, res) => {
+  try {
+    const { text, type } = req.body || {}
+    if (!text) return res.status(400).json({ error: 'text is required' })
+    const instruction = type === 'keypoints'
+      ? 'Extract the key points from the following lesson text. Return JSON: { "keyPoints": string[], "summary": string }'
+      : 'Provide a concise TL;DR summary and key highlights of the following lesson content. Return JSON: { "tldr": string, "highlights": string[], "concepts": string[] }'
+    const response = await ai.models.generateContent({
+      model: 'gemini-2.5-flash',
+      contents: `${instruction}\n\nText:\n${text.slice(0, 10000)}`,
+      config: { responseMimeType: 'application/json' }
+    })
+    return res.json(JSON.parse(response.text))
+  } catch (error) {
+    return res.status(500).json({ error: error.message || 'AI summarization error' })
+  }
+})
+
+// --- Auto-Grading with Rubric ---
+app.post('/api/auto-grade', aiRateLimit, requireAI, async (req, res) => {
+  try {
+    const { answer, rubric, question, maxScore } = req.body || {}
+    if (!answer || !question) return res.status(400).json({ error: 'answer and question are required' })
+    const rubricText = rubric || 'Grade based on accuracy, completeness, and clarity.'
+    const prompt = `You are an auto-grader for an educational platform. Grade the following student answer.
+
+Question: ${question}
+Student Answer: ${answer}
+Rubric: ${rubricText}
+Max Score: ${maxScore || 10}
+
+Return JSON: { "score": number, "maxScore": number, "feedback": string, "strengths": string[], "improvements": string[] }`
+    const response = await ai.models.generateContent({
+      model: 'gemini-2.5-flash',
+      contents: prompt,
+      config: { responseMimeType: 'application/json' }
+    })
+    return res.json(JSON.parse(response.text))
+  } catch (error) {
+    return res.status(500).json({ error: error.message || 'Auto-grading error' })
   }
 })
 
@@ -1182,6 +1281,303 @@ app.delete('/api/webhooks/:id', (req, res) => {
   } catch (error) {
     return res.status(500).json({ error: error.message || 'Unknown error' })
   }
+})
+
+// --- Attendance Review (Admin 2.0) ---
+const attendanceReviewFile = path.join(dataDir, 'attendance_review.json')
+
+app.get('/api/admin/attendance-review', (req, res) => {
+  try {
+    if (!fs.existsSync(attendanceReviewFile)) return res.json([])
+    return res.json(JSON.parse(fs.readFileSync(attendanceReviewFile, 'utf8') || '[]'))
+  } catch (error) {
+    return res.status(500).json({ error: error.message || 'Unknown error' })
+  }
+})
+
+app.post('/api/admin/attendance-review/flag', (req, res) => {
+  try {
+    const { attendanceId, studentId, studentName, reason, imageDataUrl, adminId } = req.body || {}
+    if (!studentId || !reason) return res.status(400).json({ error: 'studentId and reason required' })
+    ensureDirs()
+    const existing = fs.existsSync(attendanceReviewFile) ? JSON.parse(fs.readFileSync(attendanceReviewFile, 'utf8') || '[]') : []
+    const entry = {
+      id: `ar-${Date.now()}`,
+      attendanceId: attendanceId || `att-${Date.now()}`,
+      studentId,
+      studentName: studentName || 'Unknown',
+      reason,
+      imageDataUrl: imageDataUrl || null,
+      status: 'pending', // pending | approved | rejected
+      adminId: adminId || null,
+      flaggedAt: new Date().toISOString(),
+      resolvedAt: null,
+      notes: ''
+    }
+    existing.push(entry)
+    fs.writeFileSync(attendanceReviewFile, JSON.stringify(existing, null, 2))
+    // Log to audit
+    const auditEntry = { ts: Date.now(), type: 'attendance_flagged', adminId, studentId, reason }
+    const auditExisting = fs.existsSync(auditLogFile) ? JSON.parse(fs.readFileSync(auditLogFile, 'utf8') || '[]') : []
+    auditExisting.push(auditEntry)
+    fs.writeFileSync(auditLogFile, JSON.stringify(auditExisting, null, 2))
+    return res.json({ ok: true, entry })
+  } catch (error) {
+    return res.status(500).json({ error: error.message || 'Unknown error' })
+  }
+})
+
+app.post('/api/admin/attendance-review/resolve', (req, res) => {
+  try {
+    const { id, status, adminId, notes } = req.body || {}
+    if (!id || !status || !['approved', 'rejected'].includes(status)) {
+      return res.status(400).json({ error: 'id and status (approved|rejected) required' })
+    }
+    ensureDirs()
+    const existing = fs.existsSync(attendanceReviewFile) ? JSON.parse(fs.readFileSync(attendanceReviewFile, 'utf8') || '[]') : []
+    const idx = existing.findIndex(e => e.id === id)
+    if (idx === -1) return res.status(404).json({ error: 'Review entry not found' })
+    existing[idx].status = status
+    existing[idx].adminId = adminId || existing[idx].adminId
+    existing[idx].notes = notes || ''
+    existing[idx].resolvedAt = new Date().toISOString()
+    fs.writeFileSync(attendanceReviewFile, JSON.stringify(existing, null, 2))
+    // Log to audit
+    const auditEntry = { ts: Date.now(), type: 'attendance_resolved', adminId, reviewId: id, status, notes: notes || '' }
+    const auditExisting = fs.existsSync(auditLogFile) ? JSON.parse(fs.readFileSync(auditLogFile, 'utf8') || '[]') : []
+    auditExisting.push(auditEntry)
+    fs.writeFileSync(auditLogFile, JSON.stringify(auditExisting, null, 2))
+    return res.json({ ok: true, entry: existing[idx] })
+  } catch (error) {
+    return res.status(500).json({ error: error.message || 'Unknown error' })
+  }
+})
+
+// --- Audit Logs ---
+app.get('/api/admin/audit-logs', (req, res) => {
+  try {
+    if (!fs.existsSync(auditLogFile)) return res.json([])
+    const logs = JSON.parse(fs.readFileSync(auditLogFile, 'utf8') || '[]')
+    const limit = parseInt(String(req.query.limit || '100'))
+    const type = req.query.type ? String(req.query.type) : null
+    const filtered = type ? logs.filter(l => l.type === type) : logs
+    return res.json(filtered.slice(-limit).reverse())
+  } catch (error) {
+    return res.status(500).json({ error: error.message || 'Unknown error' })
+  }
+})
+
+// ─── /api/summarize ──────────────────────────────────────────────────────────
+app.post('/api/summarize', aiRateLimit, requireAI, async (req, res) => {
+  try {
+    const { text, subject, mode } = req.body || {}
+    if (!text) return res.status(400).json({ error: 'text is required' })
+
+    const prompt = mode === 'bullets'
+      ? `Summarize the following ${subject || 'lesson'} notes into a concise TL;DR (1-2 sentences), then provide 5 key bullet points, and list up to 8 key concepts/terms. Respond ONLY with valid JSON in this format:
+{"tldr":"...","highlights":["..."],"concepts":["..."]}
+
+Notes:
+${text.slice(0, 8000)}`
+      : `Extract the key points from these ${subject || 'lesson'} notes. Return valid JSON only:
+{"keyPoints":["..."],"summary":"..."}
+
+Notes:
+${text.slice(0, 8000)}`
+
+    const response = await ai.models.generateContent({
+      model: 'gemini-2.5-flash',
+      contents: prompt,
+      config: { responseMimeType: 'application/json' }
+    })
+
+    let parsed
+    try {
+      parsed = JSON.parse(response.text)
+    } catch {
+      // AI returned non-JSON, wrap it
+      parsed = { summary: response.text, keyPoints: [] }
+    }
+    return res.json(parsed)
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown error'
+    return res.status(500).json({ error: `Summarization error: ${message}` })
+  }
+})
+
+// ─── /api/auto-grade ─────────────────────────────────────────────────────────
+app.post('/api/auto-grade', aiRateLimit, requireAI, async (req, res) => {
+  try {
+    const { question, studentAnswer, rubric, subject, maxScore = 10 } = req.body || {}
+    if (!question || !studentAnswer) {
+      return res.status(400).json({ error: 'question and studentAnswer are required' })
+    }
+
+    const rubricText = rubric
+      ? `Grading Rubric:\n${typeof rubric === 'string' ? rubric : JSON.stringify(rubric, null, 2)}`
+      : `Award marks based on accuracy, completeness, and clarity. Maximum score: ${maxScore}.`
+
+    const prompt = `You are an expert teacher grading a student's answer for the subject "${subject || 'General'}".
+
+Question: ${question}
+
+Student's Answer: ${studentAnswer}
+
+${rubricText}
+
+Provide a detailed, encouraging assessment. Return ONLY valid JSON:
+{
+  "score": <number 0-${maxScore}>,
+  "maxScore": ${maxScore},
+  "percentage": <0-100>,
+  "grade": "<A+|A|B|C|D|F>",
+  "feedback": "<2-3 sentence overall feedback>",
+  "strengths": ["<point>", "..."],
+  "improvements": ["<point>", "..."],
+  "modelAnswer": "<brief model answer>"
+}`
+
+    const response = await ai.models.generateContent({
+      model: 'gemini-2.5-flash',
+      contents: prompt,
+      config: { responseMimeType: 'application/json' }
+    })
+
+    let result
+    try {
+      result = JSON.parse(response.text)
+    } catch {
+      return res.status(502).json({ error: 'AI returned an invalid grading response. Please try again.' })
+    }
+
+    // Clamp score to valid range
+    result.score = Math.max(0, Math.min(maxScore, Number(result.score) || 0))
+    result.percentage = Math.round((result.score / maxScore) * 100)
+
+    return res.json(result)
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown error'
+    return res.status(500).json({ error: `Auto-grading error: ${message}` })
+  }
+})
+
+// ─── /api/jobs — Job queue status polling ─────────────────────────────────────
+app.post('/api/jobs', async (req, res) => {
+  try {
+    const { queueName, data, opts } = req.body || {}
+    if (!queueName || !data) {
+      return res.status(400).json({ error: 'queueName and data are required' })
+    }
+    const job = await addJob(queueName, data, opts || {})
+    return res.json({ ok: true, job, mode: isRedisMode() ? 'bullmq' : 'in-process' })
+  } catch (error) {
+    return res.status(500).json({ error: error instanceof Error ? error.message : 'Unknown error' })
+  }
+})
+
+app.get('/api/jobs/:queueName/:id', async (req, res) => {
+  try {
+    const { queueName, id } = req.params
+    const job = await getJob(queueName, id)
+    if (!job) return res.status(404).json({ error: 'Job not found' })
+    return res.json(job)
+  } catch (error) {
+    return res.status(500).json({ error: error instanceof Error ? error.message : 'Unknown error' })
+  }
+})
+
+// ─── /api/embeddings — RAG-Lite index & search ────────────────────────────────
+app.post('/api/embeddings/index', requireAuth, async (req, res) => {
+  try {
+    const { classId, subjectId, title, text, id } = req.body || {}
+    if (!text || !title) return res.status(400).json({ error: 'title and text are required' })
+    const result = await indexContent({
+      id: id || `doc-${Date.now()}`,
+      classId: classId || 'default',
+      subjectId: subjectId || 'default',
+      title,
+      text,
+    })
+    return res.json({ ok: true, ...result })
+  } catch (error) {
+    return res.status(500).json({ error: error instanceof Error ? error.message : 'Unknown error' })
+  }
+})
+
+app.get('/api/embeddings/search', async (req, res) => {
+  try {
+    const query = String(req.query.q || '')
+    if (!query) return res.status(400).json({ error: 'q query param required' })
+    const results = await semanticSearch(query, {
+      classId: req.query.classId ? String(req.query.classId) : undefined,
+      subjectId: req.query.subjectId ? String(req.query.subjectId) : undefined,
+      topK: parseInt(String(req.query.topK || '5')),
+    })
+    return res.json({ results })
+  } catch (error) {
+    return res.status(500).json({ error: error instanceof Error ? error.message : 'Unknown error' })
+  }
+})
+
+app.get('/api/embeddings/stats', (req, res) => {
+  try {
+    return res.json(indexStats())
+  } catch (error) {
+    return res.status(500).json({ error: error instanceof Error ? error.message : 'Unknown error' })
+  }
+})
+
+// ─── Register job processors ──────────────────────────────────────────────────
+// quiz-generation job: called when quiz needs background generation
+registerProcessor('quiz-generation', async (data) => {
+  const { notesText, subject } = data
+  if (!ai) throw new Error('AI unavailable')
+  const response = await ai.models.generateContent({
+    model: 'gemini-2.5-flash',
+    contents: `Generate 5 MCQ quiz questions for subject "${subject}" from these notes:\n${notesText}`,
+    config: {
+      responseMimeType: 'application/json',
+      responseSchema: {
+        type: 'object',
+        properties: {
+          quiz: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                question: { type: 'string' },
+                options: { type: 'array', items: { type: 'string' } },
+                correctAnswer: { type: 'string' }
+              },
+              required: ['question', 'options', 'correctAnswer']
+            }
+          }
+        },
+        required: ['quiz']
+      }
+    }
+  })
+  const parsed = JSON.parse(response.text)
+  return parsed.quiz.map((q, i) => ({ ...q, id: `q-${Date.now()}-${i}` }))
+})
+
+// auto-grade job: for bulk grading tasks
+registerProcessor('auto-grade', async (data) => {
+  const { question, studentAnswer, rubric, subject, maxScore = 10 } = data
+  if (!ai) throw new Error('AI unavailable')
+  const rubricText = rubric ? `Rubric: ${JSON.stringify(rubric)}` : `Max score: ${maxScore}`
+  const prompt = `Grade this answer for "${subject || 'General'}". Q: ${question}\nA: ${studentAnswer}\n${rubricText}\nReturn JSON: {"score":N,"maxScore":${maxScore},"feedback":"...","strengths":[],"improvements":[]}`
+  const response = await ai.models.generateContent({
+    model: 'gemini-2.5-flash',
+    contents: prompt,
+    config: { responseMimeType: 'application/json' }
+  })
+  return JSON.parse(response.text)
+})
+
+// embedding-index job: background document indexing
+registerProcessor('embedding-index', async (data) => {
+  return indexContent(data)
 })
 
 // Global error handler - catches unhandled errors in routes

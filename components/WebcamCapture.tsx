@@ -173,58 +173,129 @@ const WebcamCapture: React.FC<WebcamCaptureProps> = ({ onCapture, onClose, theme
     });
   };
 
+  // Liveness hint messages shown to user for anti-spoofing
+  const livenessHints = [
+    { icon: '👁️', text: 'Please blink naturally', color: 'bg-blue-600' },
+    { icon: '🔄', text: 'Slowly turn your head slightly left', color: 'bg-purple-600' },
+    { icon: '😊', text: 'Smile for a moment', color: 'bg-green-600' },
+  ];
+
+  const currentHintIndex = Math.min(livenessSteps.length, livenessHints.length - 1);
+  const currentHint = liveness ? livenessHints[currentHintIndex] : null;
+
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4" role="dialog" aria-modal="true" aria-label={title}>
-      <div className="bg-white rounded-xl shadow-2xl p-6 w-full max-w-md text-center">
-        <h2 className="text-2xl font-bold text-gray-800 mb-4">{title}</h2>
-        <p className="text-gray-600 mb-4">Position your face within the frame.</p>
-        <div className="relative w-full aspect-square bg-gray-200 rounded-lg overflow-hidden mb-4 border-4 border-gray-300">
+    <div className="fixed inset-0 bg-black/75 backdrop-blur-sm flex items-center justify-center z-50 p-4" role="dialog" aria-modal="true" aria-label={title}>
+      <div className="bg-white/95 backdrop-blur-xl rounded-3xl shadow-2xl p-6 w-full max-w-md text-center border border-white/20">
+        <h2 className="text-xl font-bold text-gray-800 mb-1">{title}</h2>
+
+        {liveness && (
+          <div className="flex items-center justify-center gap-2 mb-3 px-3 py-1.5 rounded-full bg-indigo-50 border border-indigo-100 w-fit mx-auto">
+            <span className="w-2 h-2 rounded-full bg-indigo-500 animate-pulse" />
+            <p className="text-xs text-indigo-600 font-semibold">Anti-spoofing liveness check enabled</p>
+          </div>
+        )}
+
+        <p className="text-gray-500 text-sm mb-4">Position your face within the oval guide.</p>
+
+        <div className="relative w-full aspect-square bg-gray-100 rounded-2xl overflow-hidden mb-4 border-2 border-gray-200">
           <video ref={videoRef} autoPlay playsInline className="w-full h-full object-cover" aria-label="Camera preview — position your face in the center" />
           <canvas ref={canvasRef} className="hidden" aria-hidden="true" />
 
-          {/* Guide overlay for face positioning */}
+          {/* Face oval guide */}
           <svg className="absolute inset-0 w-full h-full pointer-events-none" viewBox="0 0 300 300" aria-hidden="true">
-            <circle cx="150" cy="150" r="80" fill="none" stroke="rgba(255,255,255,0.3)" strokeWidth="2" />
-            <circle cx="150" cy="150" r="70" fill="none" stroke="rgba(255,255,255,0.5)" strokeWidth="1" />
+            {/* Dim the area outside the oval */}
+            <defs>
+              <mask id="ovalMask">
+                <rect width="300" height="300" fill="white" />
+                <ellipse cx="150" cy="145" rx="90" ry="110" fill="black" />
+              </mask>
+            </defs>
+            <rect width="300" height="300" fill="rgba(0,0,0,0.3)" mask="url(#ovalMask)" />
+            {/* Oval border */}
+            <ellipse cx="150" cy="145" rx="90" ry="110" fill="none"
+              stroke={isProcessing ? '#6366f1' : 'rgba(255,255,255,0.8)'}
+              strokeWidth="2.5"
+              strokeDasharray={isProcessing ? "8,4" : "none"}
+            />
+            {/* Corner dots */}
+            <circle cx="150" cy="35" r="3" fill="rgba(255,255,255,0.6)" />
+            <circle cx="150" cy="255" r="3" fill="rgba(255,255,255,0.6)" />
+            <circle cx="60" cy="145" r="3" fill="rgba(255,255,255,0.6)" />
+            <circle cx="240" cy="145" r="3" fill="rgba(255,255,255,0.6)" />
           </svg>
 
-          {error && <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-70" aria-live="assertive"><div className="bg-red-600 text-white p-4 rounded-lg text-center text-sm max-w-xs whitespace-pre-line">{error}</div></div>}
-          {hint && !error && <div className="absolute inset-x-0 bottom-0 p-3 bg-black bg-opacity-60 text-white text-sm text-center" aria-live="polite">{hint}</div>}
-          {isProcessing && livenessSteps.length > 0 && (
-            <div className="absolute inset-0 flex flex-col items-center justify-center bg-black bg-opacity-40">
-              <div className="bg-blue-600 text-white px-4 py-2 rounded-full text-center mb-2 text-sm">
-                Step {Math.min(livenessSteps.length, 3)} of 3
-              </div>
-              <div className="text-white text-center text-sm">
-                {livenessSteps[livenessSteps.length - 1]}
+          {/* Liveness hint banner */}
+          {isProcessing && currentHint && !error && (
+            <div className={`absolute inset-x-0 bottom-0 p-3 ${currentHint.color} text-white text-sm text-center flex items-center justify-center gap-2`} aria-live="polite">
+              <span className="text-lg">{currentHint.icon}</span>
+              <span className="font-medium">{currentHint.text}</span>
+            </div>
+          )}
+
+          {/* Static hint before capture */}
+          {!isProcessing && hint && !error && (
+            <div className="absolute inset-x-0 bottom-0 p-3 bg-black/60 text-white text-sm text-center" aria-live="polite">
+              {hint}
+            </div>
+          )}
+
+          {error && (
+            <div className="absolute inset-0 flex items-center justify-center bg-black/70" aria-live="assertive">
+              <div className="bg-red-600/90 backdrop-blur text-white p-4 rounded-xl text-center text-sm max-w-xs mx-4 whitespace-pre-line">
+                {error}
               </div>
             </div>
           )}
         </div>
 
-        {/* Liveness progress */}
-        {livenessSteps.length > 0 && (
-          <div className="mb-4 text-sm text-gray-700">
-            <div className="text-center font-semibold mb-2" id="liveness-label">Liveness Detection Progress</div>
-            <div className="flex gap-1" role="progressbar" aria-labelledby="liveness-label" aria-valuenow={Math.min(livenessSteps.length, 3)} aria-valuemin={0} aria-valuemax={3}>
-              {[1, 2, 3].map(step => (
-                <div key={step} className={`flex-1 h-2 rounded-full ${step <= Math.min(livenessSteps.length, 3) ? 'bg-blue-600' : 'bg-gray-300'
+        {/* Liveness progress steps */}
+        {liveness && (
+          <div className="mb-4">
+            <div className="flex items-center gap-2 mb-2">
+              {livenessHints.map((hint, i) => (
+                <div key={i} className="flex-1 flex flex-col items-center gap-1">
+                  <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm transition-all duration-300 ${
+                    i < livenessSteps.length
+                      ? 'bg-indigo-600 text-white scale-110'
+                      : i === livenessSteps.length && isProcessing
+                      ? 'bg-indigo-200 text-indigo-700 animate-pulse'
+                      : 'bg-gray-100 text-gray-400'
+                  }`}>
+                    {i < livenessSteps.length ? '✓' : hint.icon}
+                  </div>
+                  <div className={`flex-1 h-1.5 w-full rounded-full ${
+                    i < livenessSteps.length ? 'bg-indigo-500' : 'bg-gray-200'
                   }`} />
+                </div>
               ))}
             </div>
+            <p className="text-xs text-gray-400 text-center" id="liveness-label" role="status">
+              {isProcessing
+                ? livenessHints[currentHintIndex]?.text || 'Verifying liveness...'
+                : 'Complete liveness steps to verify you are real'}
+            </p>
           </div>
         )}
-        <div className="flex flex-col sm:flex-row gap-3">
+
+        <div className="flex gap-3">
           <button
             onClick={handleCaptureClick}
-            className={`flex-1 text-white font-bold py-3 px-6 rounded-lg transition-colors duration-300 disabled:opacity-50 ${colors.primary} ${colors.hover}`}
-            disabled={!!error}
+            className={`flex-1 text-white font-bold py-3 px-6 rounded-xl transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed ${colors.primary} ${colors.hover} shadow-lg`}
+            disabled={!!error || isProcessing}
           >
-            {buttonText}
+            {isProcessing ? (
+              <span className="flex items-center justify-center gap-2">
+                <svg className="animate-spin w-4 h-4" viewBox="0 0 24 24" fill="none">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+                </svg>
+                Verifying...
+              </span>
+            ) : buttonText}
           </button>
           <button
             onClick={onClose}
-            className="flex-1 bg-gray-200 text-gray-700 font-bold py-3 px-6 rounded-lg hover:bg-gray-300 transition-colors duration-300"
+            className="flex-1 bg-gray-100 text-gray-700 font-bold py-3 px-6 rounded-xl hover:bg-gray-200 transition-colors duration-300"
           >
             Cancel
           </button>

@@ -19,6 +19,7 @@ import { SkeletonDashboard } from './components/SkeletonLoader';
 import { useThemeEngine } from './hooks/useThemeEngine';
 import { supabase } from './services/supabaseClient';
 import { getCurrentUser } from './services/authService';
+import Header from './components/Header';
 
 // Lazy load dashboard components
 const TeacherDashboard = lazy(() => import('./components/TeacherDashboard'));
@@ -362,55 +363,20 @@ const App: React.FC = () => {
                 )}
                 {currentUser && (
                     <>
-                        <div className="fixed bottom-2 left-2 z-50 flex flex-col gap-2 bg-white/80 backdrop-blur rounded-md shadow p-2">
-                            <label className="text-xs text-gray-700">{t('Theme')}</label>
-                            <select aria-label="Theme" value={theme} onChange={e => setTheme(e.target.value)} className="text-xs border border-gray-300 rounded px-1 py-0.5">
-                                <option value="indigo">Indigo</option>
-                                <option value="teal">Teal</option>
-                                <option value="crimson">Crimson</option>
-                                <option value="purple">Purple</option>
-                            </select>
-                            <label className="text-xs text-gray-700">{t('Locale')}</label>
-                            <select
-                                aria-label="Locale"
-                                value={currentLocale}
-                                onChange={e => {
-                                    const loc = e.target.value as any;
-                                    setLocale(loc);
-                                    setCurrentLocale(loc);
-                                }}
-                                className="text-xs border border-gray-300 rounded px-1 py-0.5"
-                            >
-                                <option value="en">English</option>
-                                <option value="hi">Hindi</option>
-                                <option value="mr">Marathi</option>
-                            </select>
-                        </div>
-                        <div className="fixed top-2 right-2 z-50 flex items-center gap-2 bg-white/80 backdrop-blur rounded-md shadow p-2">
-                            {/* Dark mode toggle in header */}
-                            <button
-                                onClick={() => setDarkMode(!darkMode)}
-                                className="p-1.5 rounded-full hover:bg-gray-200 transition-colors"
-                                title={darkMode ? 'Switch to light mode' : 'Switch to dark mode'}
-                            >
-                                {darkMode ? (
-                                    <svg className="w-5 h-5 text-yellow-500" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 2a1 1 0 011 1v1a1 1 0 11-2 0V3a1 1 0 011-1zm4 8a4 4 0 11-8 0 4 4 0 018 0zm-.464 4.95l.707.707a1 1 0 001.414-1.414l-.707-.707a1 1 0 00-1.414 1.414zm2.12-10.607a1 1 0 010 1.414l-.706.707a1 1 0 11-1.414-1.414l.707-.707a1 1 0 011.414 0zM17 11a1 1 0 100-2h-1a1 1 0 100 2h1zm-7 4a1 1 0 011 1v1a1 1 0 11-2 0v-1a1 1 0 011-1zM5.05 6.464A1 1 0 106.465 5.05l-.708-.707a1 1 0 00-1.414 1.414l.707.707zm1.414 8.486l-.707.707a1 1 0 01-1.414-1.414l.707-.707a1 1 0 011.414 1.414zM4 11a1 1 0 100-2H3a1 1 0 000 2h1z" clipRule="evenodd" /></svg>
-                                ) : (
-                                    <svg className="w-5 h-5 text-gray-700" fill="currentColor" viewBox="0 0 20 20"><path d="M17.293 13.293A8 8 0 016.707 2.707a8.001 8.001 0 1010.586 10.586z" /></svg>
-                                )}
-                            </button>
-                            <button
-                                onClick={() => setShowProfile(true)}
-                                className="p-1 rounded-full hover:bg-gray-200 transition-colors"
-                                title={t('Profile')}
-                            >
-                                {currentUser.faceImage ? (
-                                    <img src={currentUser.faceImage} alt="Profile" className="w-6 h-6 rounded-full object-cover" />
-                                ) : (
-                                    <svg className="w-5 h-5 text-gray-700" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
-                                )}
-                            </button>
-                        </div>
+                        <Header
+                            user={currentUser}
+                            darkMode={darkMode}
+                            onToggleDarkMode={() => setDarkMode(!darkMode)}
+                            onShowProfile={() => setShowProfile(true)}
+                            onLogout={handleLogout}
+                            theme={theme}
+                            onThemeChange={setTheme}
+                            locale={currentLocale}
+                            onLocaleChange={(loc) => {
+                                setCurrentLocale(loc);
+                                setLocale(loc as 'en' | 'hi' | 'mr');
+                            }}
+                        />
                         <AccessibilityPanel
                             highContrast={!!highContrast}
                             setHighContrast={setHighContrast}

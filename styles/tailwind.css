@@ -1,3 +1,52 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* ─── Skeleton Shimmer ───────────────────────────────────────────────── */
+@layer components {
+  .gd-skeleton {
+    background: linear-gradient(
+      90deg,
+      rgba(229, 231, 235, 0.6) 25%,
+      rgba(243, 244, 246, 0.8) 50%,
+      rgba(229, 231, 235, 0.6) 75%
+    );
+    background-size: 200% 100%;
+    animation: shimmer 1.5s ease-in-out infinite;
+  }
+
+  @keyframes shimmer {
+    0% { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+  }
+
+  /* Respect reduced motion */
+  @media (prefers-reduced-motion: reduce) {
+    .gd-skeleton {
+      animation: none;
+      background: rgba(229, 231, 235, 0.8);
+    }
+  }
+
+  [data-reduced-motion="1"] .gd-skeleton {
+    animation: none;
+    background: rgba(229, 231, 235, 0.8);
+  }
+}
+
+/* ─── Glass morphism utility ─────────────────────────────────────────── */
+@layer utilities {
+  .glass {
+    background: rgba(255, 255, 255, 0.6);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+  }
+
+  .glass-dark {
+    background: rgba(17, 24, 39, 0.6);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+  }
+}

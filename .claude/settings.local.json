@@ -13,7 +13,13 @@
       "Bash(dir \"C:\\\\Users\\\\SUNIL KORE\\\\Downloads\\\\gyandeep \\(1\\)\\\\services\")",
       "Bash(dir \"C:\\\\Users\\\\SUNIL KORE\\\\Downloads\\\\gyandeep \\(1\\)\\\\server\")",
       "Bash(wc:*)",
-      "Bash(dir:*)"
+      "Bash(dir:*)",
+      "Bash(npm run build:*)",
+      "Bash(timeout 12 npm run dev:*)",
+      "Bash(pkill:*)",
+      "Bash(curl:*)",
+      "Bash(__NEW_LINE_a9673aaa67f906c6__ echo \"\")",
+      "Bash(__NEW_LINE_a16562818268f157__ echo \"\")"
     ]
   }
 }
