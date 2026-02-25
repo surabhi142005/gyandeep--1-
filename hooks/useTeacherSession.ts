@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect } from 'react';
-import { Coordinates, ClassSession } from '../types';
+import type { Coordinates, ClassSession } from '../types';
 import { getCurrentPosition } from '../services/locationService';
 
 interface UseTeacherSessionProps {

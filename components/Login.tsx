@@ -101,25 +101,29 @@ const Login: React.FC<LoginProps> = ({ onLogin, users, theme, onPasswordReset })
         // Supabase not configured or auth failed — fall back to legacy
       }
 
-      // Legacy: try backend API
-      const API_BASE = import.meta.env.VITE_API_URL || '';
-      if (API_BASE) {
-        const res = await fetch(`${API_BASE}/api/auth/login`, {
+      // Backend JWT login (always try — vite proxy forwards /api/* to server)
+      const apiBase = import.meta.env.VITE_API_URL || '';
+      try {
+        const res = await fetch(`${apiBase}/api/auth/login`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ email, password })
         });
-        if (!res.ok) {
-          const body = await res.json().catch(() => ({}));
-          throw new Error(body.error || 'Login failed');
+        if (res.ok) {
+          const { token, user } = await res.json();
+          try { window.localStorage.setItem('gyandeep_token', token); } catch {}
+          onLogin(user);
+          return;
         }
-        const { token, user } = await res.json();
-        try { window.localStorage.setItem('gyandeep_token', token); } catch {}
-        onLogin(user);
-        return;
+        const body = await res.json().catch(() => ({}));
+        // If 401, throw proper error; otherwise fall through to offline mode
+        if (res.status === 401) throw new Error(body.error || 'Invalid credentials');
+      } catch (fetchErr: any) {
+        if (fetchErr.message && fetchErr.message !== 'Failed to fetch') throw fetchErr;
+        // Server unreachable — fall through to offline mode
       }
 
-      // Offline / local mode fallback
+      // Offline / local-user fallback (when server is not running)
       const user = users.find(u => u.email?.toLowerCase() === email.toLowerCase());
       if (user && await passwordMatches(password, user.password)) {
         onLogin(user);
@@ -161,8 +165,8 @@ const Login: React.FC<LoginProps> = ({ onLogin, users, theme, onPasswordReset })
     setIsAuthenticating(true);
     setError(null);
     try {
-      const result = await verifyFace(imageDataUrl, selectedUserId);
       const userToLogin = users.find(u => u.id === selectedUserId);
+      const result = await verifyFace(imageDataUrl, userToLogin?.faceImage);
       if (result.authenticated && userToLogin) {
         onLogin(userToLogin);
       } else {

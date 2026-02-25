@@ -19,7 +19,10 @@
       "Bash(pkill:*)",
       "Bash(curl:*)",
       "Bash(__NEW_LINE_a9673aaa67f906c6__ echo \"\")",
-      "Bash(__NEW_LINE_a16562818268f157__ echo \"\")"
+      "Bash(__NEW_LINE_a16562818268f157__ echo \"\")",
+      "Bash(__NEW_LINE_d9cd863152b15e70__ echo \"\")",
+      "Bash(head:*)",
+      "Bash(cd:*)"
     ]
   }
 }

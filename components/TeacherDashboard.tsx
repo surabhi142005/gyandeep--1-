@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import type { User, PerformanceData, Coordinates, QuizQuestion, HistoricalSessionRecord } from '../types';
-import { generateQuizFromNotes } from '../services/geminiService';
+import { useQuizWorker } from '../hooks/useQuizWorker';
 import { fetchQuestionBank, upsertQuizToBank, syncCalendar, uploadToDrive, fetchTagPresets } from '../services/dataService';
 import { t } from '../services/i18n';
 import { getCurrentPosition } from '../services/locationService';
@@ -40,6 +40,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ teacher, students, 
   const [attendanceRadius, setAttendanceRadius] = useState(100);
   const [isGeneratingCode, setIsGeneratingCode] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
+  const { generateQuiz: generateQuizWorker, isGenerating: workerGenerating, progress: workerProgress, error: workerError } = useQuizWorker();
   const [isGeneratingQuiz, setIsGeneratingQuiz] = useState(false);
   const [isPublishingQuiz, setIsPublishingQuiz] = useState(false);
   const [quizThinkingMode, setQuizThinkingMode] = useState(false);
@@ -263,10 +264,9 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ teacher, students, 
       } catch (e) {
         console.error('Failed to save notes to server:', e);
       }
-      const quiz = await generateQuizFromNotes({
+      const { quiz } = await generateQuizWorker({
         notesText,
         subject: classSession.subject,
-        enableThinkingMode: quizThinkingMode
       });
       try {
         const bank = await fetchQuestionBank();
@@ -614,10 +614,9 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ teacher, students, 
                       setIsGeneratingQuiz(true);
                       clearMessages();
                       try {
-                        const quiz = await generateQuizFromNotes({
+                        const { quiz } = await generateQuizWorker({
                           notesText,
                           subject: classSession.subject,
-                          enableThinkingMode: quizThinkingMode
                         });
                         try {
                           const bank = await fetchQuestionBank();
@@ -645,7 +644,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ teacher, students, 
                   <label className="block text-sm font-medium text-gray-700 mb-2">Or Upload Notes File</label>
                   <input type="file" accept=".txt,.md" onChange={handleNotesUpload} disabled={isUploading || isGeneratingQuiz} className={`block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:${colors.lightBg} file:${colors.lightText} ${colors.lightHover}`} />
                 </div>
-                {(isUploading || isGeneratingQuiz) && (<div className="mt-4 flex items-center text-gray-600"><Spinner size="w-5 h-5" color={colors.text} /><span className="ml-2">{isUploading ? "Reading..." : `Generating quiz${quizThinkingMode ? ' with Thinking Mode...' : '...'}`}</span></div>)}
+                {(isUploading || isGeneratingQuiz) && (<div className="mt-4 flex items-center text-gray-600"><Spinner size="w-5 h-5" color={colors.text} /><span className="ml-2">{isUploading ? "Reading..." : workerProgress || 'Generating quiz...'}</span></div>)}
               </div>
             )}
 

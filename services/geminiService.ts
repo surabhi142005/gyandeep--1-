@@ -15,19 +15,15 @@ const getApiBase = () => import.meta.env.VITE_API_URL || '';
 
 const getAuthHeaders = async (): Promise<Record<string, string>> => {
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-  // Supabase auth token will be injected here once Phase 4 lands;
-  // for now use the JWT token if present
+  // Try Supabase session first, then fall back to localStorage JWT
+  let token: string | null = null;
   try {
     const { supabase } = await import('./supabaseClient');
     const { data } = await supabase.auth.getSession();
-    if (data.session?.access_token) {
-      headers['Authorization'] = `Bearer ${data.session.access_token}`;
-    }
-  } catch {
-    // supabaseClient not yet available — fall back to legacy token
-    const token = localStorage.getItem('gyandeep_token');
-    if (token) headers['Authorization'] = `Bearer ${token}`;
-  }
+    token = data.session?.access_token ?? null;
+  } catch { /* supabase not configured */ }
+  if (!token) token = localStorage.getItem('gyandeep_token');
+  if (token) headers['Authorization'] = `Bearer ${token}`;
   return headers;
 };
 
