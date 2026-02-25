@@ -83,8 +83,10 @@ async function saveInsight(teacherId, insight) {
     // Fallback: SQLite
     try {
       await run(
-        `INSERT OR REPLACE INTO teacher_insights (teacher_id, insight_text, generated_at)
-         VALUES (?, ?, datetime('now'))`,
+        `INSERT INTO teacher_insights (teacher_id, insight_text, generated_at)
+         VALUES (?, ?, datetime('now'))
+         ON CONFLICT(teacher_id, DATE(generated_at))
+         DO UPDATE SET insight_text = excluded.insight_text, generated_at = datetime('now')`,
         [teacherId, insight],
       );
     } catch (e) {

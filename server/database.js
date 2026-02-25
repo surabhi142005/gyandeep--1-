@@ -121,11 +121,12 @@ export const setupSchema = async () => {
 
         // Teacher Insights Table (populated by weekly cron)
         await run(`CREATE TABLE IF NOT EXISTS teacher_insights (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
             teacher_id TEXT NOT NULL,
             insight_text TEXT NOT NULL,
-            generated_at TEXT NOT NULL,
-            PRIMARY KEY (teacher_id, DATE(generated_at))
+            generated_at TEXT NOT NULL
         )`)
+        await run(`CREATE UNIQUE INDEX IF NOT EXISTS idx_ti_teacher_date ON teacher_insights(teacher_id, DATE(generated_at))`)
         console.log('✓ Teacher insights table ready')
 
         // Attendance Table

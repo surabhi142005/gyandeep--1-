@@ -36,7 +36,7 @@ if (bullmqAvailable) {
     const { default: Redis } = await import('ioredis')
     const host = process.env.REDIS_HOST || '127.0.0.1'
     const port = parseInt(process.env.REDIS_PORT || '6379')
-    const client = new Redis({ host, port, maxRetriesPerRequest: null, lazyConnect: true })
+    const client = new Redis({ host, port, maxRetriesPerRequest: null, lazyConnect: true, retryStrategy: () => null })
     await client.connect()
     redisConnection = client
     console.log(`✅ Redis connected at ${host}:${port}`)

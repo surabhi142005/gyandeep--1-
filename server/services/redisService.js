@@ -20,7 +20,7 @@ try {
   const { default: Redis } = await import('ioredis')
   const host = process.env.REDIS_HOST || '127.0.0.1'
   const port = parseInt(process.env.REDIS_PORT || '6379')
-  const client = new Redis({ host, port, maxRetriesPerRequest: 1, lazyConnect: true, enableOfflineQueue: false })
+  const client = new Redis({ host, port, maxRetriesPerRequest: 1, lazyConnect: true, enableOfflineQueue: false, retryStrategy: () => null })
   await client.connect()
   await client.ping()
   redis = client
