@@ -15,8 +15,8 @@ import path from 'path'
 import { requireAuth } from '../middleware/requireAuth.js'
 import { ensureRole } from '../middleware/rbac.js'
 import { asyncRoute } from '../middleware/validate.js'
-import { setSessionCode, getSessionCode, deleteSessionCode, bufferAttendance } from '../services/redisService.js'
-import { run as dbRun, all as dbAll } from '../database.js'
+import { setSessionCode, getSessionCode, deleteSessionCode, bufferAttendance, isStudentInBuffer } from '../services/redisService.js'
+import { run as dbRun, all as dbAll, get as dbGet } from '../database.js'
 
 const router = Router()
 const dataDir = path.join(process.cwd(), 'server', 'data')
@@ -83,6 +83,16 @@ router.post('/mark', requireAuth, asyncRoute(async (req, res) => {
     return res.status(410).json({ error: 'Session code has expired' })
   }
 
+  // Verify the student is enrolled in the class that owns this session.
+  // Prevents a student who obtained a code from marking attendance for a
+  // class they are not enrolled in.
+  try {
+    const student = await dbGet(`SELECT classId FROM users WHERE id = ?`, [req.user.id])
+    if (student && student.classId && session.classId && student.classId !== session.classId) {
+      return res.status(403).json({ error: 'You are not enrolled in this class' })
+    }
+  } catch { /* DB unavailable — allow mark to proceed */ }
+
   // Server-side geofencing (never trust client alone)
   if (session.teacherLat !== null && typeof studentLat === 'number' && typeof studentLng === 'number') {
     const R = 6371000
@@ -96,8 +106,10 @@ router.post('/mark', requireAuth, asyncRoute(async (req, res) => {
     }
   }
 
-  // Buffer the write — responds in ~1 ms; flushed to DB every 5 s
-  await bufferAttendance({
+  // Buffer the write — responds in ~1 ms; flushed to DB every 5 s.
+  // bufferAttendance returns false if this student already marked for this
+  // session in the current flush window (idempotency dedup).
+  const buffered = await bufferAttendance({
     sessionId: session.sessionId,
     studentId: req.user.id,
     studentName: req.user.name || req.user.email,
@@ -108,6 +120,11 @@ router.post('/mark', requireAuth, asyncRoute(async (req, res) => {
     geoLng: studentLng || null,
     verifiedAt: new Date().toISOString(),
   })
+
+  if (!buffered) {
+    // Already marked — idempotent success (not an error)
+    return res.json({ ok: true, alreadyMarked: true, session: { classId: session.classId, subjectId: session.subjectId } })
+  }
 
   return res.json({ ok: true, session: { classId: session.classId, subjectId: session.subjectId } })
 }))

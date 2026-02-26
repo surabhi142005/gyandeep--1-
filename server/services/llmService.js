@@ -14,6 +14,7 @@
 
 import dotenv from 'dotenv'
 import { isCircuitOpen, recordFailure, recordSuccess } from './redisService.js'
+import { recordAICall } from './metrics.js'
 
 dotenv.config({ path: '../.env.local' })
 dotenv.config()
@@ -34,20 +35,22 @@ class GeminiAdapter {
     this.Type = Type
   }
 
-  async _generate(model, contents, config = {}) {
+  async _generate(model, contents, config = {}, operation = 'generate') {
     await this._init()
     const CIRCUIT = 'gemini'
-    if (isCircuitOpen(CIRCUIT)) {
+    if (await isCircuitOpen(CIRCUIT)) {
       throw new Error('AI service temporarily unavailable (circuit open). Please try again shortly.')
     }
-    try {
-      const response = await this.ai.models.generateContent({ model, contents, config })
-      recordSuccess(CIRCUIT)
-      return response
-    } catch (err) {
-      recordFailure(CIRCUIT)
-      throw err
-    }
+    return recordAICall(operation, async () => {
+      try {
+        const response = await this.ai.models.generateContent({ model, contents, config })
+        await recordSuccess(CIRCUIT)
+        return response
+      } catch (err) {
+        await recordFailure(CIRCUIT)
+        throw err
+      }
+    })
   }
 
   async generateQuiz(notesText, subject, opts = {}) {
@@ -81,6 +84,7 @@ class GeminiAdapter {
       modelName,
       `Based on the following class notes for "${subject}", generate exactly 5 MCQ questions with 4 options each.\n\nNotes:\n---\n${notesText}\n---`,
       config,
+      'generateQuiz',
     )
     const parsed = JSON.parse(response.text)
     if (!parsed.quiz?.length) throw new Error('AI returned empty quiz')
@@ -97,7 +101,7 @@ class GeminiAdapter {
     const fullPrompt = context
       ? `You are Gyandeep AI, an educational assistant. Use the lesson material below as context when relevant.\n${context}\nUser question: ${prompt}`
       : prompt
-    const response = await this._generate(modelName, fullPrompt, config)
+    const response = await this._generate(modelName, fullPrompt, config, 'chat')
     const groundingChunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks || []
     const sources = groundingChunks
       .filter(c => c.maps)
@@ -114,7 +118,7 @@ class GeminiAdapter {
     const prompt = mode === 'bullets'
       ? `Summarize the following ${subject || 'lesson'} notes into a concise TL;DR (1-2 sentences), then 5 key bullet points, and up to 8 key concepts. Return ONLY valid JSON: {"tldr":"...","highlights":["..."],"concepts":["..."]}\n\nNotes:\n${text.slice(0, 8000)}`
       : `Extract key points from these ${subject || 'lesson'} notes. Return valid JSON only: {"keyPoints":["..."],"summary":"..."}\n\nNotes:\n${text.slice(0, 8000)}`
-    const response = await this._generate('gemini-2.5-flash', prompt, { responseMimeType: 'application/json' })
+    const response = await this._generate('gemini-2.5-flash', prompt, { responseMimeType: 'application/json' }, 'summarize')
     try { return JSON.parse(response.text) } catch { return { summary: response.text, keyPoints: [] } }
   }
 
@@ -123,7 +127,7 @@ class GeminiAdapter {
       ? `Grading Rubric:\n${typeof rubric === 'string' ? rubric : JSON.stringify(rubric, null, 2)}`
       : `Award marks based on accuracy, completeness, and clarity. Maximum: ${maxScore}.`
     const prompt = `You are an expert teacher grading a student answer for "${subject || 'General'}".\n\nQuestion: ${question}\nAnswer: ${studentAnswer}\n${rubricText}\n\nReturn ONLY valid JSON:\n{"score":N,"maxScore":${maxScore},"percentage":N,"grade":"A|B|C|D|F","feedback":"...","strengths":["..."],"improvements":["..."],"modelAnswer":"..."}`
-    const response = await this._generate('gemini-2.5-flash', prompt, { responseMimeType: 'application/json' })
+    const response = await this._generate('gemini-2.5-flash', prompt, { responseMimeType: 'application/json' }, 'autoGrade')
     const result = JSON.parse(response.text)
     result.score = Math.max(0, Math.min(maxScore, Number(result.score) || 0))
     result.percentage = Math.round((result.score / maxScore) * 100)
@@ -134,7 +138,7 @@ class GeminiAdapter {
     const prompt = type === 'at-risk'
       ? `Analyze student performance data and identify at-risk students. Return JSON:\n{"atRiskStudents":[{"studentId":"...","studentName":"...","riskLevel":"high|medium|low","reasons":["..."],"suggestions":["..."]}]}\n\nData:\n${JSON.stringify(studentData)}`
       : `Analyze this educational data and provide insights. Return JSON:\n{"summary":"...","trends":["..."],"recommendations":["..."],"highlights":["..."]}\n\nData:\n${JSON.stringify(studentData)}`
-    const response = await this._generate('gemini-2.5-flash', prompt, { responseMimeType: 'application/json' })
+    const response = await this._generate('gemini-2.5-flash', prompt, { responseMimeType: 'application/json' }, 'analyticsInsights')
     return JSON.parse(response.text)
   }
 }

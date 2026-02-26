@@ -94,6 +94,8 @@ const ATTEND_FLUSH_INTERVAL_MS = 5_000   // flush every 5 s
 const localAttendanceBuffer = []
 /** @type {((records: object[]) => Promise<void>) | null} */
 let attendanceFlusher = null
+let lastFlushAt = null
+let lastFlushError = null
 
 /**
  * Register the function that will bulk-insert buffered attendance records.
@@ -114,10 +116,17 @@ async function flushAttendance() {
   } else {
     if (localAttendanceBuffer.length === 0) return
     records = localAttendanceBuffer.splice(0, 100)
+    // Clear dedup keys for flushed records so seen set doesn't grow unboundedly
+    for (const r of records) {
+      localAttendanceSeen.delete(`attend:seen:${r.sessionId}:${r.studentId}`)
+    }
   }
   try {
     await attendanceFlusher(records)
+    lastFlushAt = Date.now()
+    lastFlushError = null
   } catch (err) {
+    lastFlushError = err.message
     console.error('Attendance flush error:', err.message)
     // Re-queue on failure so records are not lost
     if (redisOk) {
@@ -131,19 +140,23 @@ async function flushAttendance() {
 setInterval(flushAttendance, ATTEND_FLUSH_INTERVAL_MS)
 
 // ─── Circuit breaker ──────────────────────────────────────────────────────────
+//
+// When Redis is available the circuit breaker state is stored there so all
+// server instances share a single view of service health.
+//
+//   cb:{name}:open     — key exists while circuit is open (TTL = cooldown)
+//   cb:{name}:failures — integer failure count (TTL = 2× cooldown for auto-reset)
+//
+// When Redis is unavailable it falls back to the in-process Map (original
+// behaviour) so auth/AI keeps working without Redis.
+//
+const CB_DEFAULTS = { threshold: 3, cooldownMs: 30_000 }
+// In-process fallback state
 const circuitBreakers = new Map()
-/**
- * @param {string} name  e.g. 'gemini'
- * @param {{ threshold?: number, cooldownMs?: number }} opts
- */
-function getCircuitBreaker(name, opts = {}) {
+
+function getLocalCB(name) {
   if (!circuitBreakers.has(name)) {
-    circuitBreakers.set(name, {
-      failures: 0,
-      threshold: opts.threshold || 3,
-      cooldownMs: opts.cooldownMs || 30_000,
-      openedAt: null,
-    })
+    circuitBreakers.set(name, { failures: 0, threshold: CB_DEFAULTS.threshold, cooldownMs: CB_DEFAULTS.cooldownMs, openedAt: null })
   }
   return circuitBreakers.get(name)
 }
@@ -180,13 +193,40 @@ export async function deleteCode(purpose, key) {
   await del(`code:${purpose}:${String(key).toLowerCase()}`)
 }
 
-/** Buffer an attendance record for batch insert (non-blocking, ~1 ms). */
+// In-process dedup set for when Redis is unavailable (cleared on flush)
+const localAttendanceSeen = new Set()
+
+/**
+ * Buffer an attendance record for batch insert (non-blocking, ~1 ms).
+ * Uses an idempotency key (hash of sessionId+studentId) to prevent
+ * duplicate records from race conditions in the 5-second flush window.
+ * Returns true if buffered, false if already buffered (duplicate).
+ */
 export async function bufferAttendance(record) {
+  const dedupKey = `attend:seen:${record.sessionId}:${record.studentId}`
   if (redisOk) {
+    // SETNX with TTL: if key already exists, this is a duplicate
+    const added = await redis.set(dedupKey, '1', 'EX', 30, 'NX')
+    if (!added) return false   // duplicate — already buffered this cycle
     await redis.rpush(ATTEND_BUFFER_KEY, JSON.stringify(record))
   } else {
+    if (localAttendanceSeen.has(dedupKey)) return false
+    localAttendanceSeen.add(dedupKey)
     localAttendanceBuffer.push(record)
   }
+  return true
+}
+
+/**
+ * Check if a student's attendance is already buffered for a session.
+ * Used by the route to give a meaningful response on duplicate submissions.
+ */
+export async function isStudentInBuffer(sessionId, studentId) {
+  const dedupKey = `attend:seen:${sessionId}:${studentId}`
+  if (redisOk) {
+    return (await redis.exists(dedupKey)) === 1
+  }
+  return localAttendanceSeen.has(dedupKey)
 }
 
 /** Force an immediate flush (e.g. on server shutdown). */
@@ -194,34 +234,82 @@ export async function flushAttendanceNow() {
   await flushAttendance()
 }
 
+/** Return attendance buffer health metrics for the /health endpoint. */
+export async function attendanceBufferStats() {
+  let queueDepth = localAttendanceBuffer.length
+  if (redisOk) {
+    try { queueDepth = await redis.llen(ATTEND_BUFFER_KEY) } catch {}
+  }
+  const flushLagMs = lastFlushAt ? Date.now() - lastFlushAt : null
+  return { queueDepth, flushLagMs, lastFlushError }
+}
+
 /**
  * Circuit breaker: check if a service is currently tripped.
+ *
+ * Redis mode:  checks existence of key cb:{name}:open (set with TTL on trip).
+ *              All server instances see the same state.
+ * Fallback:    reads from in-process Map.
+ *
  * @returns {boolean} true = circuit OPEN (service unavailable), false = OK
  */
-export function isCircuitOpen(name) {
-  const cb = getCircuitBreaker(name)
-  if (cb.openedAt && Date.now() - cb.openedAt < cb.cooldownMs) return true
-  if (cb.openedAt) {
-    // Half-open: reset and allow one probe
-    cb.failures = 0
-    cb.openedAt = null
+export async function isCircuitOpen(name) {
+  if (redisOk) {
+    try {
+      return (await redis.exists(`cb:${name}:open`)) === 1
+    } catch { /* Redis hiccup — fall through to local */ }
   }
+  const cb = getLocalCB(name)
+  if (cb.openedAt && Date.now() - cb.openedAt < cb.cooldownMs) return true
+  if (cb.openedAt) { cb.failures = 0; cb.openedAt = null }
   return false
 }
 
-/** Record a failure for the circuit breaker. */
-export function recordFailure(name) {
-  const cb = getCircuitBreaker(name)
+/**
+ * Record a failure for the circuit breaker.
+ * In Redis mode, uses INCR + EXPIRE so the counter is shared across instances.
+ * The circuit trips when the failure count reaches the threshold within the
+ * cooldown window.
+ */
+export async function recordFailure(name, opts = {}) {
+  const threshold  = opts.threshold  || CB_DEFAULTS.threshold
+  const cooldownMs = opts.cooldownMs || CB_DEFAULTS.cooldownMs
+  const cooldownS  = Math.ceil(cooldownMs / 1000)
+  if (redisOk) {
+    try {
+      const failKey = `cb:${name}:failures`
+      const openKey = `cb:${name}:open`
+      const count = await redis.incr(failKey)
+      await redis.expire(failKey, cooldownS * 2)   // auto-reset after 2× cooldown
+      if (count >= threshold) {
+        // NX so the first instance to trip doesn't keep resetting TTL
+        const tripped = await redis.set(openKey, '1', 'EX', cooldownS, 'NX')
+        if (tripped) console.warn(`⚡ Circuit breaker OPEN (Redis): ${name} — ${count} failures`)
+      }
+      return
+    } catch { /* fall through */ }
+  }
+  // In-process fallback
+  const cb = getLocalCB(name)
   cb.failures++
-  if (cb.failures >= cb.threshold) {
+  if (cb.failures >= threshold) {
     cb.openedAt = Date.now()
-    console.warn(`⚡ Circuit breaker OPEN: ${name}`)
+    cb.cooldownMs = cooldownMs
+    console.warn(`⚡ Circuit breaker OPEN (local): ${name}`)
   }
 }
 
-/** Record a success (resets failure counter). */
-export function recordSuccess(name) {
-  const cb = getCircuitBreaker(name)
+/**
+ * Record a success — resets failure counter so the circuit closes.
+ */
+export async function recordSuccess(name) {
+  if (redisOk) {
+    try {
+      await redis.del(`cb:${name}:failures`, `cb:${name}:open`)
+      return
+    } catch { /* fall through */ }
+  }
+  const cb = getLocalCB(name)
   cb.failures = 0
   cb.openedAt = null
 }

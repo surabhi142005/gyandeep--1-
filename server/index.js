@@ -27,12 +27,14 @@ import { registerAttendanceFlusher, flushAttendanceNow } from './services/redisS
 import { registerWeeklyInsightsCron } from './cron/weeklyInsights.js'
 import { getLLMService } from './services/llmService.js'
 import { generalRateLimit, aiRateLimit } from './middleware/rateLimiter.js'
+import { metricsMiddleware, attendanceQueueDepth, attendanceFlushLagMs, register } from './services/metrics.js'
 import { requireAuth } from './middleware/requireAuth.js'
 import { ensureRole } from './middleware/rbac.js'
 import { asyncRoute } from './middleware/validate.js'
 import { toPublicUser } from './middleware/sanitizeResponse.js'
 import { readUsers, writeUsers, updateUser } from './controllers/userStore.js'
-import { run as dbRun, all as dbAll } from './database.js'
+import { run as dbRun, all as dbAll, get as dbGet } from './database.js'
+import { readJSON, mutateJSON } from './utils/fileStore.js'
 
 // ── Route modules ─────────────────────────────────────────────────────────────
 import authRoutes       from './routes/auth.js'
@@ -49,14 +51,26 @@ const app = express()
 // ── CORS (lockdown to known origins) ─────────────────────────────────────────
 const allowedOrigins = (process.env.ALLOWED_ORIGINS || 'http://localhost:5173,http://localhost:5174,http://localhost:5175').split(',')
 app.use(cors({ origin: allowedOrigins, credentials: true }))
-app.use(express.json({ limit: '10mb' }))
+// 1mb global limit — routes that accept large payloads (notes upload) apply their own higher limit
+app.use(express.json({ limit: '1mb' }))
+
+// ── Prometheus request instrumentation ───────────────────────────────────────
+app.use(metricsMiddleware)
 
 // ── General rate limit ────────────────────────────────────────────────────────
 app.use('/api/', generalRateLimit)
 
 // ── Session + Passport (Google OAuth) ────────────────────────────────────────
-const SESSION_SECRET = process.env.SESSION_SECRET || 'gyandeep-secret-key'
-const JWT_SECRET     = process.env.JWT_SECRET || SESSION_SECRET
+const SESSION_SECRET = process.env.SESSION_SECRET
+const JWT_SECRET     = process.env.JWT_SECRET
+if (!JWT_SECRET) {
+  console.error('FATAL: JWT_SECRET environment variable is not set. Refusing to start.')
+  process.exit(1)
+}
+if (!SESSION_SECRET) {
+  console.error('FATAL: SESSION_SECRET environment variable is not set. Refusing to start.')
+  process.exit(1)
+}
 app.use(session({ secret: SESSION_SECRET, resave: false, saveUninitialized: false }))
 app.use(passport.initialize())
 app.use(passport.session())
@@ -114,10 +128,16 @@ app.use('/api/attendance', attendanceRoutes)
 app.use('/api/admin',      adminRoutes)
 app.use('/api/notes',      notesRoutes)
 
-// ── Users (public list for admin/teacher use, sensitive fields stripped) ──────
+// ── Users (paginated; sensitive fields stripped) ──────────────────────────────
 app.get('/api/users', requireAuth, asyncRoute(async (req, res) => {
+  const page  = Math.max(1, parseInt(String(req.query.page  || '1')))
+  const limit = Math.min(100, Math.max(1, parseInt(String(req.query.limit || '50'))))
+  const role  = req.query.role ? String(req.query.role) : null
   const users = await readUsers()
-  return res.json(users.map(toPublicUser))
+  const filtered = role ? users.filter(u => u.role === role) : users
+  const total = filtered.length
+  const items = filtered.slice((page - 1) * limit, page * limit).map(toPublicUser)
+  return res.json({ items, total, page, limit, pages: Math.ceil(total / limit) })
 }))
 
 app.post('/api/users/bulk', requireAuth, ensureRole('admin'), asyncRoute(async (req, res) => {
@@ -236,19 +256,27 @@ app.delete('/api/question-bank/:id', requireAuth, ensureRole('teacher', 'admin')
   return res.json({ ok: true })
 }))
 
-// ── Grades ────────────────────────────────────────────────────────────────────
-const gradesFile = path.join(dataDir, 'grades.json')
+// ── Grades (SQLite — replaces grades.json for safe concurrent writes) ─────────
+// Each INSERT/DELETE is atomic; no read-modify-write race condition possible.
 
 app.get('/api/grades', requireAuth, asyncRoute(async (req, res) => {
-  if (!fs.existsSync(gradesFile)) return res.json([])
-  return res.json(JSON.parse(fs.readFileSync(gradesFile, 'utf8') || '[]'))
+  const studentId = req.query.studentId ? String(req.query.studentId) : null
+  const subject   = req.query.subject   ? String(req.query.subject)   : null
+  let sql = `SELECT * FROM grades`
+  const params = []
+  const where = []
+  if (studentId) { where.push(`studentId = ?`); params.push(studentId) }
+  if (subject)   { where.push(`subject = ?`);   params.push(subject) }
+  if (where.length) sql += ` WHERE ${where.join(' AND ')}`
+  sql += ` ORDER BY createdAt DESC`
+  const rows = await dbAll(sql, params).catch(() => [])
+  return res.json(rows)
 }))
 
 app.post('/api/grades', requireAuth, ensureRole('teacher', 'admin'), asyncRoute(async (req, res) => {
   const { studentId, subject, category, title, score, maxScore, weight, date, teacherId } = req.body || {}
   if (!studentId || !subject || !category || !title || score === undefined || !maxScore)
     return res.status(400).json({ error: 'studentId, subject, category, title, score, maxScore required' })
-  const existing = fs.existsSync(gradesFile) ? JSON.parse(fs.readFileSync(gradesFile, 'utf8') || '[]') : []
   const entry = {
     id: `gr-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
     studentId, subject, category, title,
@@ -256,28 +284,41 @@ app.post('/api/grades', requireAuth, ensureRole('teacher', 'admin'), asyncRoute(
     weight: Number(weight || 1), date: date || new Date().toISOString().split('T')[0],
     teacherId: teacherId || req.user.id, createdAt: Date.now()
   }
-  existing.push(entry)
-  fs.writeFileSync(gradesFile, JSON.stringify(existing, null, 2))
+  await dbRun(
+    `INSERT INTO grades (id,studentId,subject,category,title,score,maxScore,weight,date,teacherId,createdAt) VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
+    [entry.id, entry.studentId, entry.subject, entry.category, entry.title, entry.score, entry.maxScore, entry.weight, entry.date, entry.teacherId, entry.createdAt]
+  )
   return res.json({ ok: true, grade: entry })
 }))
 
 app.post('/api/grades/bulk', requireAuth, ensureRole('teacher', 'admin'), asyncRoute(async (req, res) => {
   const { grades } = req.body || {}
   if (!Array.isArray(grades)) return res.status(400).json({ error: 'grades array required' })
-  const existing = fs.existsSync(gradesFile) ? JSON.parse(fs.readFileSync(gradesFile, 'utf8') || '[]') : []
   const entries = grades.map(g => ({
     id: `gr-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
     studentId: g.studentId, subject: g.subject, category: g.category, title: g.title,
     score: Number(g.score), maxScore: Number(g.maxScore), weight: Number(g.weight || 1),
     date: g.date || new Date().toISOString().split('T')[0], teacherId: g.teacherId || req.user.id, createdAt: Date.now()
   }))
-  fs.writeFileSync(gradesFile, JSON.stringify(existing.concat(entries), null, 2))
+  // Wrap bulk insert in a transaction for atomicity and performance
+  await dbRun('BEGIN')
+  try {
+    for (const e of entries) {
+      await dbRun(
+        `INSERT INTO grades (id,studentId,subject,category,title,score,maxScore,weight,date,teacherId,createdAt) VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
+        [e.id, e.studentId, e.subject, e.category, e.title, e.score, e.maxScore, e.weight, e.date, e.teacherId, e.createdAt]
+      )
+    }
+    await dbRun('COMMIT')
+  } catch (err) {
+    await dbRun('ROLLBACK').catch(() => {})
+    throw err
+  }
   return res.json({ ok: true, count: entries.length })
 }))
 
 app.delete('/api/grades/:id', requireAuth, ensureRole('teacher', 'admin'), asyncRoute(async (req, res) => {
-  const existing = fs.existsSync(gradesFile) ? JSON.parse(fs.readFileSync(gradesFile, 'utf8') || '[]') : []
-  fs.writeFileSync(gradesFile, JSON.stringify(existing.filter(g => g.id !== req.params.id), null, 2))
+  await dbRun(`DELETE FROM grades WHERE id = ?`, [req.params.id])
   return res.json({ ok: true })
 }))
 
@@ -285,34 +326,30 @@ app.delete('/api/grades/:id', requireAuth, ensureRole('teacher', 'admin'), async
 const timetableFile = path.join(dataDir, 'timetable.json')
 
 app.get('/api/timetable', requireAuth, asyncRoute(async (req, res) => {
-  if (!fs.existsSync(timetableFile)) return res.json([])
-  return res.json(JSON.parse(fs.readFileSync(timetableFile, 'utf8') || '[]'))
+  return res.json(readJSON(timetableFile, []))
 }))
 
 app.post('/api/timetable', requireAuth, ensureRole('admin', 'teacher'), asyncRoute(async (req, res) => {
   const entries = req.body
   if (!Array.isArray(entries)) return res.status(400).json({ error: 'Expected array of timetable entries' })
-  fs.writeFileSync(timetableFile, JSON.stringify(entries, null, 2))
+  await mutateJSON(timetableFile, [], () => entries)
   return res.json({ ok: true, count: entries.length })
 }))
 
 app.post('/api/timetable/entry', requireAuth, ensureRole('admin', 'teacher'), asyncRoute(async (req, res) => {
   const { day, startTime, endTime, subject, teacherId, classId, room } = req.body || {}
   if (!day || !startTime || !endTime || !subject) return res.status(400).json({ error: 'day, startTime, endTime, subject required' })
-  const existing = fs.existsSync(timetableFile) ? JSON.parse(fs.readFileSync(timetableFile, 'utf8') || '[]') : []
   const entry = {
     id: `tt-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
     day, startTime, endTime, subject,
     teacherId: teacherId || req.user.id, classId: classId || null, room: room || null
   }
-  existing.push(entry)
-  fs.writeFileSync(timetableFile, JSON.stringify(existing, null, 2))
+  await mutateJSON(timetableFile, [], arr => { arr.push(entry); return arr })
   return res.json({ ok: true, entry })
 }))
 
 app.delete('/api/timetable/:id', requireAuth, ensureRole('admin', 'teacher'), asyncRoute(async (req, res) => {
-  const existing = fs.existsSync(timetableFile) ? JSON.parse(fs.readFileSync(timetableFile, 'utf8') || '[]') : []
-  fs.writeFileSync(timetableFile, JSON.stringify(existing.filter(e => e.id !== req.params.id), null, 2))
+  await mutateJSON(timetableFile, [], arr => arr.filter(e => e.id !== req.params.id))
   return res.json({ ok: true })
 }))
 
@@ -320,16 +357,13 @@ app.delete('/api/timetable/:id', requireAuth, ensureRole('admin', 'teacher'), as
 const tagsPresetsFile = path.join(dataDir, 'tagsPresets.json')
 
 app.get('/api/tags-presets', requireAuth, asyncRoute(async (req, res) => {
-  if (!fs.existsSync(tagsPresetsFile)) return res.json({})
-  return res.json(JSON.parse(fs.readFileSync(tagsPresetsFile, 'utf8') || '{}'))
+  return res.json(readJSON(tagsPresetsFile, {}))
 }))
 
 app.post('/api/tags-presets/update', requireAuth, ensureRole('teacher', 'admin'), asyncRoute(async (req, res) => {
   const { subject, tags } = req.body || {}
   if (!subject || !Array.isArray(tags)) return res.status(400).json({ error: 'subject and tags[] required' })
-  const existing = fs.existsSync(tagsPresetsFile) ? JSON.parse(fs.readFileSync(tagsPresetsFile, 'utf8') || '{}') : {}
-  existing[subject] = tags
-  fs.writeFileSync(tagsPresetsFile, JSON.stringify(existing, null, 2))
+  await mutateJSON(tagsPresetsFile, {}, obj => { obj[subject] = tags; return obj })
   return res.json({ ok: true })
 }))
 
@@ -337,8 +371,7 @@ app.post('/api/tags-presets/update', requireAuth, ensureRole('teacher', 'admin')
 const ticketsFile = path.join(dataDir, 'tickets.json')
 
 app.get('/api/tickets', requireAuth, asyncRoute(async (req, res) => {
-  if (!fs.existsSync(ticketsFile)) return res.json([])
-  const tickets = JSON.parse(fs.readFileSync(ticketsFile, 'utf8') || '[]')
+  const tickets = readJSON(ticketsFile, [])
   // Students see only their own tickets
   if (req.user.role === 'student') return res.json(tickets.filter(t => t.userId === req.user.id))
   return res.json(tickets)
@@ -347,37 +380,47 @@ app.get('/api/tickets', requireAuth, asyncRoute(async (req, res) => {
 app.post('/api/tickets', requireAuth, asyncRoute(async (req, res) => {
   const { subject, message, category } = req.body || {}
   if (!subject || !message) return res.status(400).json({ error: 'subject and message required' })
-  const existing = fs.existsSync(ticketsFile) ? JSON.parse(fs.readFileSync(ticketsFile, 'utf8') || '[]') : []
   const ticket = {
     id: `tk-${Date.now()}`, userId: req.user.id, userName: req.user.name || req.user.email,
     subject: String(subject).slice(0, 200), message: String(message).slice(0, 5000),
     category: category || 'general', status: 'open', createdAt: Date.now(), replies: []
   }
-  existing.push(ticket)
-  fs.writeFileSync(ticketsFile, JSON.stringify(existing, null, 2))
+  await mutateJSON(ticketsFile, [], arr => { arr.push(ticket); return arr })
   return res.json({ ok: true, ticket })
 }))
 
 app.post('/api/tickets/:id/reply', requireAuth, asyncRoute(async (req, res) => {
   const { message } = req.body || {}
   if (!message) return res.status(400).json({ error: 'message required' })
-  const existing = fs.existsSync(ticketsFile) ? JSON.parse(fs.readFileSync(ticketsFile, 'utf8') || '[]') : []
-  const idx = existing.findIndex(t => t.id === req.params.id)
-  if (idx === -1) return res.status(404).json({ error: 'Ticket not found' })
-  // Students can only reply to their own tickets
-  if (req.user.role === 'student' && existing[idx].userId !== req.user.id)
-    return res.status(403).json({ error: 'Forbidden' })
-  existing[idx].replies.push({ userId: req.user.id, userName: req.user.name || req.user.email, message: String(message).slice(0, 5000), createdAt: Date.now() })
-  fs.writeFileSync(ticketsFile, JSON.stringify(existing, null, 2))
+  const ticketId = req.params.id
+  const reply = { userId: req.user.id, userName: req.user.name || req.user.email, message: String(message).slice(0, 5000), createdAt: Date.now() }
+  let found = false
+  await mutateJSON(ticketsFile, [], arr => {
+    const idx = arr.findIndex(t => t.id === ticketId)
+    if (idx === -1) return arr   // not found — handled below
+    if (req.user.role === 'student' && arr[idx].userId !== req.user.id) return arr  // forbidden — handled below
+    arr[idx].replies.push(reply)
+    found = true
+    return arr
+  })
+  // We need to re-check the ticket state after mutation for error responses
+  const tickets = readJSON(ticketsFile, [])
+  const ticket = tickets.find(t => t.id === ticketId)
+  if (!ticket) return res.status(404).json({ error: 'Ticket not found' })
+  if (req.user.role === 'student' && ticket.userId !== req.user.id) return res.status(403).json({ error: 'Forbidden' })
+  if (!found) return res.status(404).json({ error: 'Ticket not found' })
   return res.json({ ok: true })
 }))
 
 app.post('/api/tickets/:id/close', requireAuth, ensureRole('admin', 'teacher'), asyncRoute(async (req, res) => {
-  const existing = fs.existsSync(ticketsFile) ? JSON.parse(fs.readFileSync(ticketsFile, 'utf8') || '[]') : []
-  const idx = existing.findIndex(t => t.id === req.params.id)
-  if (idx === -1) return res.status(404).json({ error: 'Ticket not found' })
-  existing[idx].status = 'closed'
-  fs.writeFileSync(ticketsFile, JSON.stringify(existing, null, 2))
+  const ticketId = req.params.id
+  let found = false
+  await mutateJSON(ticketsFile, [], arr => {
+    const idx = arr.findIndex(t => t.id === ticketId)
+    if (idx !== -1) { arr[idx].status = 'closed'; found = true }
+    return arr
+  })
+  if (!found) return res.status(404).json({ error: 'Ticket not found' })
   return res.json({ ok: true })
 }))
 
@@ -385,18 +428,15 @@ app.post('/api/tickets/:id/close', requireAuth, ensureRole('admin', 'teacher'), 
 const notificationsFile = path.join(dataDir, 'notifications.json')
 
 app.get('/api/notifications', requireAuth, asyncRoute(async (req, res) => {
-  if (!fs.existsSync(notificationsFile)) return res.json([])
-  const all = JSON.parse(fs.readFileSync(notificationsFile, 'utf8') || '[]')
+  const all = readJSON(notificationsFile, [])
   return res.json(all.filter(n => n.userId === req.user.id || n.userId === 'all'))
 }))
 
 app.post('/api/notifications', requireAuth, ensureRole('admin', 'teacher'), asyncRoute(async (req, res) => {
   const { userId, title, message, type } = req.body || {}
   if (!title || !message) return res.status(400).json({ error: 'title and message required' })
-  const existing = fs.existsSync(notificationsFile) ? JSON.parse(fs.readFileSync(notificationsFile, 'utf8') || '[]') : []
   const notif = { id: `n-${Date.now()}`, userId: userId || 'all', title: String(title).slice(0, 200), message: String(message).slice(0, 2000), type: type || 'info', read: false, createdAt: Date.now() }
-  existing.push(notif)
-  fs.writeFileSync(notificationsFile, JSON.stringify(existing, null, 2))
+  await mutateJSON(notificationsFile, [], arr => { arr.push(notif); return arr })
   return res.json({ ok: true, notification: notif })
 }))
 
@@ -404,23 +444,19 @@ app.post('/api/notifications', requireAuth, ensureRole('admin', 'teacher'), asyn
 const webhooksFile = path.join(dataDir, 'webhooks.json')
 
 app.get('/api/webhooks', requireAuth, ensureRole('admin'), asyncRoute(async (req, res) => {
-  if (!fs.existsSync(webhooksFile)) return res.json([])
-  return res.json(JSON.parse(fs.readFileSync(webhooksFile, 'utf8') || '[]'))
+  return res.json(readJSON(webhooksFile, []))
 }))
 
 app.post('/api/webhooks', requireAuth, ensureRole('admin'), asyncRoute(async (req, res) => {
   const { url, events, name } = req.body || {}
   if (!url || !events) return res.status(400).json({ error: 'url and events required' })
-  const existing = fs.existsSync(webhooksFile) ? JSON.parse(fs.readFileSync(webhooksFile, 'utf8') || '[]') : []
   const hook = { id: `wh-${Date.now()}`, url, events: Array.isArray(events) ? events : [events], name: name || url, active: true, createdAt: Date.now() }
-  existing.push(hook)
-  fs.writeFileSync(webhooksFile, JSON.stringify(existing, null, 2))
+  await mutateJSON(webhooksFile, [], arr => { arr.push(hook); return arr })
   return res.json({ ok: true, webhook: hook })
 }))
 
 app.delete('/api/webhooks/:id', requireAuth, ensureRole('admin'), asyncRoute(async (req, res) => {
-  const existing = fs.existsSync(webhooksFile) ? JSON.parse(fs.readFileSync(webhooksFile, 'utf8') || '[]') : []
-  fs.writeFileSync(webhooksFile, JSON.stringify(existing.filter(w => w.id !== req.params.id), null, 2))
+  await mutateJSON(webhooksFile, [], arr => arr.filter(w => w.id !== req.params.id))
   return res.json({ ok: true })
 }))
 
@@ -543,19 +579,89 @@ registerProcessor('embedding-index', async (data) => indexContent(data))
 // ── Register cron jobs ────────────────────────────────────────────────────────
 registerWeeklyInsightsCron()
 
+// Audit log archival — runs daily at 2:00 AM.
+// Archives rows older than 90 days to a NDJSON file and deletes them from SQLite
+// to prevent the table growing to hundreds of millions of rows.
+;(async () => {
+  try {
+    const { default: nodeCron } = await import('node-cron')
+    nodeCron.schedule('0 2 * * *', async () => {
+      const cutoff = Date.now() - 90 * 24 * 60 * 60 * 1000   // 90 days ago
+      try {
+        const rows = await dbAll(`SELECT * FROM audit_logs WHERE ts < ? ORDER BY ts ASC`, [cutoff])
+        if (rows && rows.length > 0) {
+          const archiveFile = path.join(dataDir, `audit_archive_${new Date().toISOString().slice(0, 10)}.ndjson`)
+          const lines = rows.map(r => JSON.stringify(r)).join('\n') + '\n'
+          fs.appendFileSync(archiveFile, lines, 'utf8')
+          await dbRun(`DELETE FROM audit_logs WHERE ts < ?`, [cutoff])
+          console.log(`✓ Audit log: archived ${rows.length} records older than 90 days → ${archiveFile}`)
+        }
+      } catch (err) {
+        console.error('Audit log archival error:', err.message)
+      }
+    })
+  } catch { /* node-cron not available */ }
+})()
+
 // ── Register attendance flush function ────────────────────────────────────────
 registerAttendanceFlusher(async (records) => {
-  for (const r of records) {
-    try {
+  if (records.length === 0) return
+  // Wrap all inserts in a single transaction: 750 individual INSERTs with
+  // separate write locks takes 2-3s; one transaction takes ~50ms.
+  try {
+    await dbRun('BEGIN')
+    for (const r of records) {
       await dbRun(
         `INSERT OR IGNORE INTO attendance (session_id, student_id, status, verified_at) VALUES (?,?,?,?)`,
         [r.sessionId, r.studentId, r.status || 'present', r.verifiedAt || new Date().toISOString()]
       )
-    } catch (err) {
-      console.error('Attendance flush insert error:', err.message)
     }
+    await dbRun('COMMIT')
+  } catch (err) {
+    console.error('Attendance flush transaction error:', err.message)
+    try { await dbRun('ROLLBACK') } catch {}
+    // Re-throw so redisService re-queues the records
+    throw err
   }
 })
+
+// ── Prometheus metrics scrape endpoint ───────────────────────────────────────
+// Restricted to internal/monitoring networks in production via a reverse proxy.
+// The endpoint itself does not require auth so Prometheus can scrape it without
+// needing to manage JWT tokens — ensure it is not publicly reachable in prod.
+app.get('/metrics', asyncRoute(async (req, res) => {
+  // Update attendance buffer gauges on each scrape so values are fresh
+  const { attendanceBufferStats } = await import('./services/redisService.js')
+  const bufStats = await attendanceBufferStats()
+  attendanceQueueDepth.set(bufStats.queueDepth)
+  if (bufStats.flushLagMs !== null) attendanceFlushLagMs.set(bufStats.flushLagMs)
+
+  res.set('Content-Type', register.contentType)
+  res.end(await register.metrics())
+}))
+
+// ── Health check ──────────────────────────────────────────────────────────────
+app.get('/health', asyncRoute(async (req, res) => {
+  const { redisOk, attendanceBufferStats } = await import('./services/redisService.js')
+  const bufStats = await attendanceBufferStats()
+  const status = {
+    db: 'unknown',
+    redis: redisOk ? 'ok' : 'unavailable (in-process fallback)',
+    jobMode: isRedisMode() ? 'bullmq' : 'in-process',
+    uptime: Math.floor(process.uptime()),
+    attendance: {
+      queueDepth: bufStats.queueDepth,
+      flushLagMs: bufStats.flushLagMs,
+      lastFlushError: bufStats.lastFlushError || null,
+    },
+  }
+  try { await dbAll('SELECT 1'); status.db = 'ok' } catch { status.db = 'error' }
+
+  // Warn if flush has not happened in the last 30 seconds (write bottleneck indicator)
+  const flushLagging = bufStats.flushLagMs !== null && bufStats.flushLagMs > 30_000
+  const healthy = status.db === 'ok' && !flushLagging
+  return res.status(healthy ? 200 : 503).json({ status: healthy ? 'ok' : 'degraded', checks: status })
+}))
 
 // ── Global error handler ──────────────────────────────────────────────────────
 app.use((err, req, res, _next) => {

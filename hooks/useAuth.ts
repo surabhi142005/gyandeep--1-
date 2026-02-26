@@ -11,7 +11,7 @@ import type { ToastType } from '../components/ToastNotification';
 import { websocketService } from '../services/websocketService';
 import { getCurrentPosition } from '../services/locationService';
 import { supabase, isSupabaseConfigured } from '../services/supabaseClient';
-import { getCurrentUser } from '../services/authService';
+import { getCurrentUser, requestPasswordReset } from '../services/authService';
 import type { Coordinates } from '../types';
 
 interface UseAuthOptions {
@@ -87,7 +87,16 @@ export function useAuth({ allUsers, setAllUsers, showNotification }: UseAuthOpti
     }
   };
 
-  const handlePasswordReset = (_email: string, _newPassword: string): boolean => true;
+  const handlePasswordReset = async (email: string): Promise<boolean> => {
+    try {
+      await requestPasswordReset(email);
+      showNotification('Password reset email sent. Check your inbox.', 'success');
+      return true;
+    } catch (e: any) {
+      showNotification(e?.message || 'Failed to send reset email.', 'error');
+      return false;
+    }
+  };
 
   return {
     currentUser,
