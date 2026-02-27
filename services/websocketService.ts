@@ -4,6 +4,9 @@ import type { RealtimeChannel } from '@supabase/supabase-js';
 const BROADCAST_EVENTS = [
   'attendance-changed',
   'performance-changed',
+  'grades-changed',
+  'timetable-changed',
+  'tickets-changed',
   'quiz-submission',
   'session-changed',
   'session-ended',
@@ -123,6 +126,19 @@ class WebSocketService {
 
     sendPerformanceUpdate(data: any): void {
         this.emit('performance-changed', data);
+    }
+
+
+    sendGradesUpdate(data: any): void {
+        this.emit('grades-changed', data);
+    }
+
+    sendTimetableUpdate(data: any): void {
+        this.emit('timetable-changed', data);
+    }
+
+    sendTicketsUpdate(data: any): void {
+        this.emit('tickets-changed', data);
     }
 
     sendQuizSubmission(data: any): void {

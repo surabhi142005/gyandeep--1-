@@ -203,7 +203,7 @@ const App: React.FC = () => {
     return (
         <>
             <Iridescence
-                color={currentUser ? [0.6, 0.4, 0.8] : [0.5, 0.6, 0.8]}
+                color={currentUser ? [0.62, 0.62, 0.62] : [0.56, 0.56, 0.56]}
                 mouseReact amplitude={currentUser ? 0.15 : 0.1} speed={currentUser ? 1.2 : 1}
             />
             <div id="main-content" className="relative z-10" role="main">

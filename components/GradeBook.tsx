@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { fetchGrades, addGrade, deleteGrade, addGradesBulk } from '../services/dataService';
+import { websocketService } from '../services/websocketService';
 
 interface GradeBookProps {
     students: Array<{ id: string; name: string; classId?: string }>;
@@ -51,6 +52,7 @@ const GradeBook: React.FC<GradeBookProps> = ({ students, currentUserId, currentU
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [successMessage, setSuccessMessage] = useState<string | null>(null);
+    const [lastSyncAt, setLastSyncAt] = useState<string>('Never');
 
     // Category weights
     const [weights, setWeights] = useState<CategoryWeight>({ ...DEFAULT_WEIGHTS });
@@ -85,6 +87,12 @@ const GradeBook: React.FC<GradeBookProps> = ({ students, currentUserId, currentU
     // Load grades on mount
     useEffect(() => {
         loadGrades();
+
+        const unsubscribe = websocketService.on('grades-changed', () => {
+            loadGrades();
+        });
+
+        return () => unsubscribe();
     }, []);
 
     // Auto-dismiss success messages
@@ -101,6 +109,7 @@ const GradeBook: React.FC<GradeBookProps> = ({ students, currentUserId, currentU
         try {
             const data = await fetchGrades();
             setGrades(Array.isArray(data) ? data : []);
+            setLastSyncAt(new Date().toLocaleTimeString());
         } catch (err) {
             setError(err instanceof Error ? err.message : 'Failed to load grades');
         } finally {
@@ -378,7 +387,10 @@ const GradeBook: React.FC<GradeBookProps> = ({ students, currentUserId, currentU
         <div className="space-y-6">
             {/* Header */}
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-                <h2 className="text-2xl font-bold text-gray-800">Grade Book</h2>
+                <div>
+                    <h2 className="text-2xl font-bold text-gray-800">Grade Book</h2>
+                    <p className="text-xs text-gray-400 mt-1">Last synced: {lastSyncAt} · Source: live server</p>
+                </div>
                 <div className="flex flex-wrap gap-2">
                     <button
                         onClick={handleExportCSV}

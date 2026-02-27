@@ -9,6 +9,7 @@
  */
 
 import cron from 'node-cron';
+import crypto from 'crypto';
 import { getLLMService } from '../services/llmService.js';
 import { query } from '../db/pg.js';
 import { run } from '../database.js';
@@ -95,29 +96,58 @@ async function saveInsight(teacherId, insight) {
   }
 }
 
+function deterministicDelayMs(teacherId, maxWindowMs) {
+  const hash = crypto.createHash('sha256').update(String(teacherId)).digest();
+  const bucket = hash.readUInt32BE(0);
+  return bucket % maxWindowMs;
+}
+
+async function generateInsightForTeacher(teacher, llm) {
+  const [attendance, quizStats] = await Promise.all([
+    getWeeklyAttendanceSummary(teacher.id),
+    getWeeklyQuizSummary(teacher.id),
+  ]);
+
+  const insight = await llm.analyticsInsights({ attendance, quizStats, teacherName: teacher.name });
+  await saveInsight(teacher.id, insight);
+}
+
 async function generateInsightsForAll() {
-  console.log('[weeklyInsights] Running Friday insight generation...');
   const llm = getLLMService();
-  const teachers = await getTeachers();
-
-  let generated = 0;
-  for (const teacher of teachers) {
-    try {
-      const [attendance, quizStats] = await Promise.all([
-        getWeeklyAttendanceSummary(teacher.id),
-        getWeeklyQuizSummary(teacher.id),
-      ]);
-
-      const insight = await llm.analyticsInsights({ attendance, quizStats, teacherName: teacher.name });
-      await saveInsight(teacher.id, insight);
-      generated++;
-      console.log(`[weeklyInsights] Insight generated for teacher: ${teacher.name}`);
-    } catch (err) {
-      console.error(`[weeklyInsights] Failed for teacher ${teacher.id}:`, err.message);
-    }
+  if (!llm) {
+    console.warn('[weeklyInsights] Skipped: LLM service unavailable');
+    return;
   }
 
-  console.log(`[weeklyInsights] Done. Generated ${generated}/${teachers.length} insights.`);
+  const windowHours = Number(process.env.WEEKLY_INSIGHTS_WINDOW_HOURS || 4);
+  const windowMs = Math.max(1, Math.floor(windowHours * 60 * 60 * 1000));
+  const teachers = await getTeachers();
+
+  console.log(`[weeklyInsights] Running Friday insight generation for ${teachers.length} teachers over ${windowHours}h window...`);
+
+  let generated = 0;
+  let failed = 0;
+
+  const tasks = teachers.map((teacher) => {
+    const delay = deterministicDelayMs(teacher.id, windowMs);
+    return new Promise((resolve) => {
+      setTimeout(async () => {
+        try {
+          await generateInsightForTeacher(teacher, llm);
+          generated++;
+          console.log(`[weeklyInsights] Insight generated for teacher=${teacher.id} delayMs=${delay}`);
+        } catch (err) {
+          failed++;
+          console.error(`[weeklyInsights] Failed for teacher=${teacher.id}:`, err.message);
+        } finally {
+          resolve();
+        }
+      }, delay);
+    });
+  });
+
+  await Promise.all(tasks);
+  console.log(`[weeklyInsights] Done. Generated ${generated}/${teachers.length}; failed=${failed}.`);
 }
 
 /**
@@ -125,11 +155,11 @@ async function generateInsightsForAll() {
  * Call this once from server/index.js: `import { registerWeeklyInsightsCron } from './cron/weeklyInsights.js'`
  */
 export function registerWeeklyInsightsCron() {
-  // Every Friday at 16:00
-  cron.schedule('0 16 * * 5', generateInsightsForAll, {
-    timezone: 'Asia/Kolkata',
-  });
-  console.log('[weeklyInsights] Cron registered: Fridays at 4:00 PM IST');
+  const expression = process.env.WEEKLY_INSIGHTS_CRON || '0 16 * * 5';
+  const timezone = process.env.WEEKLY_INSIGHTS_TIMEZONE || 'Asia/Kolkata';
+
+  cron.schedule(expression, generateInsightsForAll, { timezone });
+  console.log(`[weeklyInsights] Cron registered: expr=${expression} timezone=${timezone} windowHours=${process.env.WEEKLY_INSIGHTS_WINDOW_HOURS || 4}`);
 }
 
 /** Manual trigger for testing: `node -e "import('./cron/weeklyInsights.js').then(m => m.runNow())"` */

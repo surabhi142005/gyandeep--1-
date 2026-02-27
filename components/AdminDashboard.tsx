@@ -6,11 +6,10 @@ import type { Coordinates } from '../types';
 import Spinner from './Spinner';
 import WebcamCapture from './WebcamCapture';
 import AdminFaceViewer from './AdminFaceViewer';
-import { adminOverride } from '../services/dataService';
+import { adminOverride, bulkImportUsers, fetchQuestionBank, updateQuestionInBank, deleteQuestionFromBank, addQuestionsToBank, fetchTagPresets, updateTagPresets, checkEmailServiceHealth, sendEmailNotification } from '../services/dataService';
 import { registerFace, verifyFace, hashPassword } from '../services/authService';
-import { bulkImportUsers } from '../services/dataService';
-import { fetchQuestionBank, updateQuestionInBank, deleteQuestionFromBank, addQuestionsToBank, fetchTagPresets, updateTagPresets } from '../services/dataService';
 import { t } from '../services/i18n';
+
 
 interface AdminDashboardProps {
   admin: Admin;
@@ -153,6 +152,12 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ admin, users, onUpdateU
   // Face Capture State
   const [capturingForUser, setCapturingForUser] = useState<AnyUser | null>(null);
   const [showFaceRegistration, setShowFaceRegistration] = useState(false);
+
+  const [emailHealth, setEmailHealth] = useState<{ transport: string; message: string; smtpConfigured: boolean; resendConfigured: boolean } | null>(null);
+  const [emailHealthLoading, setEmailHealthLoading] = useState(false);
+  const [testEmailTo, setTestEmailTo] = useState(admin.email || '');
+  const [emailStatusMessage, setEmailStatusMessage] = useState<string | null>(null);
+
   const [showFaceViewer, setShowFaceViewer] = useState(false);
   const [verifyingForUser, setVerifyingForUser] = useState<AnyUser | null>(null);
   const [overrideForUser, setOverrideForUser] = useState<AnyUser | null>(null);
@@ -200,6 +205,38 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ admin, users, onUpdateU
     fetchQuestionBank().then(setBank).catch((err) => { console.error('Failed to load question bank:', err); });
     fetchTagPresets().then(setTagPresets).catch((err) => { console.error('Failed to load tag presets:', err); });
   }, []);
+
+  const loadEmailHealth = async () => {
+    try {
+      setEmailHealthLoading(true);
+      setEmailStatusMessage(null);
+      const status = await checkEmailServiceHealth();
+      setEmailHealth(status);
+    } catch (err: any) {
+      setEmailStatusMessage(err?.message || 'Failed to check email health');
+    } finally {
+      setEmailHealthLoading(false);
+    }
+  };
+
+  const sendTestEmail = async () => {
+    if (!testEmailTo || !testEmailTo.includes('@')) {
+      setEmailStatusMessage('Enter a valid test email address.');
+      return;
+    }
+    try {
+      setEmailStatusMessage(null);
+      await sendEmailNotification({
+        to: testEmailTo,
+        subject: 'Gyandeep Email Health Check',
+        html: `<p>Gyandeep email check successful at ${new Date().toISOString()}</p>`,
+      });
+      setEmailStatusMessage('Test email sent successfully.');
+    } catch (err: any) {
+      setEmailStatusMessage(err?.message || 'Failed to send test email.');
+    }
+  };
+
 
   // Filter users based on search and role filter
   const filteredUsers = useMemo(() => {
@@ -725,6 +762,35 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ admin, users, onUpdateU
             {/* Enhanced Sidebar */}
             <div className="lg:col-span-1 space-y-8">
               {/* Modern Admin Profile Card */}
+
+              <div className="bg-white rounded-2xl shadow-xl border border-gray-200 p-5">
+                <h4 className="text-sm font-bold text-gray-700 mb-3">Email Health</h4>
+                <p className="text-xs text-gray-500 mb-2">
+                  {emailHealthLoading ? 'Checking...' : (emailHealth?.message || 'Not checked yet')}
+                </p>
+                {emailHealth && (
+                  <div className="text-xs text-gray-600 space-y-1 mb-3">
+                    <p>Transport: <span className="font-semibold">{emailHealth.transport}</span></p>
+                    <p>SMTP: <span className="font-semibold">{emailHealth.smtpConfigured ? 'On' : 'Off'}</span></p>
+                    <p>Resend: <span className="font-semibold">{emailHealth.resendConfigured ? 'On' : 'Off'}</span></p>
+                  </div>
+                )}
+                <div className="space-y-2">
+                  <input
+                    type="email"
+                    value={testEmailTo}
+                    onChange={e => setTestEmailTo(e.target.value)}
+                    placeholder="test@domain.com"
+                    className="w-full px-3 py-2 text-xs border border-gray-300 rounded-lg"
+                  />
+                  <div className="flex gap-2">
+                    <button onClick={loadEmailHealth} className="px-3 py-1.5 text-xs bg-gray-100 rounded-lg hover:bg-gray-200">Refresh</button>
+                    <button onClick={sendTestEmail} className="px-3 py-1.5 text-xs bg-gray-800 text-white rounded-lg hover:bg-gray-900">Send Test</button>
+                  </div>
+                </div>
+                {emailStatusMessage && <p className="mt-2 text-xs text-gray-600">{emailStatusMessage}</p>}
+              </div>
+
               <div className={`${colors.card} rounded-2xl shadow-xl border ${colors.border} p-8 transform hover:scale-105 transition-all duration-300 hover:shadow-2xl`}>
                 <div className="flex flex-col items-center text-center mb-6">
                   <div className={`w-20 h-20 rounded-full ${colors.gradient} flex items-center justify-center text-white text-3xl font-bold shadow-2xl mb-4 transform hover:rotate-12 transition-transform duration-300`}>

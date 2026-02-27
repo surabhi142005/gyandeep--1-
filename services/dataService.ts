@@ -6,10 +6,48 @@
  */
 
 import { supabase } from './supabaseClient';
+import { websocketService } from './websocketService';
+import { getStoredToken } from './authService';
 
 const isSupabaseConfigured = () => {
   const url = import.meta.env.VITE_SUPABASE_URL;
   return !!url && url !== 'https://placeholder.supabase.co';
+};
+
+
+const API_BASE = import.meta.env.VITE_API_URL || '';
+
+const uid = () => {
+  try {
+    if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') return crypto.randomUUID();
+  } catch { }
+  return `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+};
+
+const idempotencyKey = (prefix: string) => `gd-${prefix}-${uid()}`;
+
+async function apiRequest(path: string, init: RequestInit = {}) {
+  const token = getStoredToken();
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    ...(init.headers as Record<string, string> || {}),
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+  };
+
+  const res = await fetch(`${API_BASE}${path}`, { ...init, headers });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const msg = body.error || body.message || `Request failed (${res.status})`;
+    throw new Error(msg);
+  }
+  return body;
+}
+
+const useServerApi = () => {
+  if (typeof window === 'undefined') return false;
+  const local = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+  const hasJwt = !!getStoredToken();
+  return !!(API_BASE || local || hasJwt);
 };
 
 // ─── Utility ────────────────────────────────────────────────────────────────
@@ -371,6 +409,10 @@ export const updateTagPresets = async (subject: string, tags: string[]) => {
 // ─── Grades ──────────────────────────────────────────────────────────────────
 
 export const fetchGrades = async () => {
+  if (useServerApi()) {
+    const rows = await apiRequest('/api/grades', { method: 'GET' });
+    return Array.isArray(rows) ? rows : [];
+  }
   if (!isSupabaseConfigured()) return lsGet('gyandeep-grades', []);
 
   const { data, error } = await supabase.from('grades').select('*');
@@ -393,9 +435,20 @@ export const fetchGrades = async () => {
 export const addGrade = async (grade: { studentId: string; subject: string; category: string; title: string; score: number; maxScore: number; weight?: number; date?: string; teacherId?: string }) => {
   const newGrade = { ...grade, id: `g_${Date.now()}`, date: grade.date || new Date().toISOString().split('T')[0] };
 
+  if (useServerApi()) {
+    const payload = await apiRequest('/api/grades', {
+      method: 'POST',
+      headers: { 'Idempotency-Key': idempotencyKey('grade-create') },
+      body: JSON.stringify(newGrade),
+    });
+    websocketService.sendGradesUpdate({ type: 'created', id: payload?.grade?.id || newGrade.id });
+    return payload?.grade || newGrade;
+  }
+
   if (!isSupabaseConfigured()) {
     const existing: any[] = lsGet('gyandeep-grades', []);
     lsSet('gyandeep-grades', [...existing, newGrade]);
+    websocketService.sendGradesUpdate({ type: 'created', id: newGrade.id });
     return newGrade;
   }
 
@@ -412,14 +465,26 @@ export const addGrade = async (grade: { studentId: string; subject: string; cate
     teacher_id: grade.teacherId
   });
   if (error) throw new Error(error.message);
+  websocketService.sendGradesUpdate({ type: 'created', id: newGrade.id });
   return newGrade;
 };
 
 export const addGradesBulk = async (grades: any[]) => {
+  if (useServerApi()) {
+    const payload = await apiRequest('/api/grades/bulk', {
+      method: 'POST',
+      headers: { 'Idempotency-Key': idempotencyKey('grade-bulk') },
+      body: JSON.stringify({ grades }),
+    });
+    websocketService.sendGradesUpdate({ type: 'bulk-created', count: payload?.count || grades.length });
+    return payload;
+  }
+
   if (!isSupabaseConfigured()) {
     const existing: any[] = lsGet('gyandeep-grades', []);
     const newGrades = grades.map(g => ({ ...g, id: g.id || `g_${Date.now()}_${Math.random()}` }));
     lsSet('gyandeep-grades', [...existing, ...newGrades]);
+    websocketService.sendGradesUpdate({ type: 'bulk-created', count: grades.length });
     return { ok: true, count: grades.length };
   }
 
@@ -438,24 +503,40 @@ export const addGradesBulk = async (grades: any[]) => {
 
   const { error } = await supabase.from('grades').insert(rows);
   if (error) throw new Error(error.message);
+  websocketService.sendGradesUpdate({ type: 'bulk-created', count: grades.length });
   return { ok: true, count: grades.length };
 };
 
 export const deleteGrade = async (id: string) => {
+  if (useServerApi()) {
+    const payload = await apiRequest(`/api/grades/${id}`, {
+      method: 'DELETE',
+      headers: { 'Idempotency-Key': idempotencyKey('grade-delete') },
+    });
+    websocketService.sendGradesUpdate({ type: 'deleted', id });
+    return payload;
+  }
+
   if (!isSupabaseConfigured()) {
     const existing: any[] = lsGet('gyandeep-grades', []);
     lsSet('gyandeep-grades', existing.filter(g => g.id !== id));
+    websocketService.sendGradesUpdate({ type: 'deleted', id });
     return { ok: true };
   }
 
   const { error } = await supabase.from('grades').delete().eq('id', id);
   if (error) throw new Error(error.message);
+  websocketService.sendGradesUpdate({ type: 'deleted', id });
   return { ok: true };
 };
 
 // ─── Timetable ───────────────────────────────────────────────────────────────
 
 export const fetchTimetable = async () => {
+  if (useServerApi()) {
+    const rows = await apiRequest('/api/timetable', { method: 'GET' });
+    return Array.isArray(rows) ? rows : [];
+  }
   if (!isSupabaseConfigured()) return lsGet('gyandeep-timetable', []);
 
   const { data, error } = await supabase.from('timetable').select('*');
@@ -501,9 +582,20 @@ export const saveTimetable = async (entries: any[]) => {
 export const addTimetableEntry = async (entry: any) => {
   const newEntry = { ...entry, id: `tt_${Date.now()}` };
 
+  if (useServerApi()) {
+    const payload = await apiRequest('/api/timetable/entry', {
+      method: 'POST',
+      headers: { 'Idempotency-Key': idempotencyKey('tt-create') },
+      body: JSON.stringify(entry),
+    });
+    websocketService.sendTimetableUpdate({ type: 'created', id: payload?.entry?.id || newEntry.id });
+    return payload?.entry || newEntry;
+  }
+
   if (!isSupabaseConfigured()) {
     const existing: any[] = lsGet('gyandeep-timetable', []);
     lsSet('gyandeep-timetable', [...existing, newEntry]);
+    websocketService.sendTimetableUpdate({ type: 'created', id: newEntry.id });
     return newEntry;
   }
 
@@ -518,24 +610,40 @@ export const addTimetableEntry = async (entry: any) => {
     room: entry.room
   });
   if (error) throw new Error(error.message);
+  websocketService.sendTimetableUpdate({ type: 'created', id: newEntry.id });
   return newEntry;
 };
 
 export const deleteTimetableEntry = async (id: string) => {
+  if (useServerApi()) {
+    const payload = await apiRequest(`/api/timetable/${id}`, {
+      method: 'DELETE',
+      headers: { 'Idempotency-Key': idempotencyKey('tt-delete') },
+    });
+    websocketService.sendTimetableUpdate({ type: 'deleted', id });
+    return payload;
+  }
   if (!isSupabaseConfigured()) {
     const existing: any[] = lsGet('gyandeep-timetable', []);
     lsSet('gyandeep-timetable', existing.filter(e => e.id !== id));
+    websocketService.sendTimetableUpdate({ type: 'deleted', id });
     return { ok: true };
   }
 
   const { error } = await supabase.from('timetable').delete().eq('id', id);
   if (error) throw new Error(error.message);
+  websocketService.sendTimetableUpdate({ type: 'deleted', id });
   return { ok: true };
 };
 
 // ─── Tickets ─────────────────────────────────────────────────────────────────
 
 export const fetchTickets = async () => {
+  if (useServerApi()) {
+    const rows = await apiRequest('/api/tickets', { method: 'GET' });
+    return Array.isArray(rows) ? rows : [];
+  }
+
   if (!isSupabaseConfigured()) return lsGet('gyandeep-tickets', []);
 
   const { data, error } = await supabase.from('tickets').select('*').order('created_at', { ascending: false });
@@ -550,16 +658,28 @@ export const fetchTickets = async () => {
     category: t.category,
     status: t.status,
     replies: t.replies || [],
-    createdAt: t.created_at
+    createdAt: t.created_at,
+    version: t.version || 1,
   }));
 };
 
 export const createTicket = async (ticket: any) => {
-  const newTicket = { ...ticket, id: `t_${Date.now()}`, status: 'open', createdAt: new Date().toISOString(), replies: [] };
+  const newTicket = { ...ticket, id: `t_${Date.now()}`, status: 'open', createdAt: new Date().toISOString(), replies: [], version: 1 };
+
+  if (useServerApi()) {
+    const payload = await apiRequest('/api/tickets', {
+      method: 'POST',
+      headers: { 'Idempotency-Key': idempotencyKey('ticket-create') },
+      body: JSON.stringify(ticket),
+    });
+    websocketService.sendTicketsUpdate({ type: 'created', id: payload?.ticket?.id || newTicket.id });
+    return payload?.ticket || newTicket;
+  }
 
   if (!isSupabaseConfigured()) {
     const existing: any[] = lsGet('gyandeep-tickets', []);
     lsSet('gyandeep-tickets', [newTicket, ...existing]);
+    websocketService.sendTicketsUpdate({ type: 'created', id: newTicket.id });
     return newTicket;
   }
 
@@ -574,16 +694,28 @@ export const createTicket = async (ticket: any) => {
     replies: []
   });
   if (error) throw new Error(error.message);
+  websocketService.sendTicketsUpdate({ type: 'created', id: newTicket.id });
   return newTicket;
 };
 
-export const replyToTicket = async (ticketId: string, reply: any) => {
+export const replyToTicket = async (ticketId: string, reply: any, expectedVersion?: number) => {
+  if (useServerApi()) {
+    const payload = await apiRequest(`/api/tickets/${ticketId}/reply`, {
+      method: 'POST',
+      headers: { 'Idempotency-Key': idempotencyKey('ticket-reply') },
+      body: JSON.stringify({ ...reply, expectedVersion }),
+    });
+    websocketService.sendTicketsUpdate({ type: 'replied', id: ticketId });
+    return payload;
+  }
+
   if (!isSupabaseConfigured()) {
     const tickets: any[] = lsGet('gyandeep-tickets', []);
     lsSet('gyandeep-tickets', tickets.map(t => t.id === ticketId
       ? { ...t, replies: [...(t.replies || []), { ...reply, id: `r_${Date.now()}`, createdAt: new Date().toISOString() }] }
       : t
     ));
+    websocketService.sendTicketsUpdate({ type: 'replied', id: ticketId });
     return { ok: true };
   }
 
@@ -593,24 +725,43 @@ export const replyToTicket = async (ticketId: string, reply: any) => {
 
   const { error } = await supabase.from('tickets').update({ replies }).eq('id', ticketId);
   if (error) throw new Error(error.message);
+  websocketService.sendTicketsUpdate({ type: 'replied', id: ticketId });
   return { ok: true };
 };
 
-export const closeTicket = async (ticketId: string) => {
+export const closeTicket = async (ticketId: string, expectedVersion?: number) => {
+  if (useServerApi()) {
+    const payload = await apiRequest(`/api/tickets/${ticketId}/close`, {
+      method: 'POST',
+      headers: { 'Idempotency-Key': idempotencyKey('ticket-close') },
+      body: JSON.stringify({ expectedVersion }),
+    });
+    websocketService.sendTicketsUpdate({ type: 'closed', id: ticketId });
+    return payload;
+  }
+
   if (!isSupabaseConfigured()) {
     const tickets: any[] = lsGet('gyandeep-tickets', []);
     lsSet('gyandeep-tickets', tickets.map(t => t.id === ticketId ? { ...t, status: 'closed' } : t));
+    websocketService.sendTicketsUpdate({ type: 'closed', id: ticketId });
     return { ok: true };
   }
 
   const { error } = await supabase.from('tickets').update({ status: 'closed' }).eq('id', ticketId);
   if (error) throw new Error(error.message);
+  websocketService.sendTicketsUpdate({ type: 'closed', id: ticketId });
   return { ok: true };
 };
 
 // ─── Notifications ───────────────────────────────────────────────────────────
 
 export const fetchNotifications = async (userId: string) => {
+  // Server API path (consistent with grades / timetable / tickets)
+  if (useServerApi()) {
+    const rows = await apiRequest('/api/notifications', { method: 'GET' });
+    return Array.isArray(rows) ? rows : [];
+  }
+
   if (!isSupabaseConfigured()) return lsGet(`gyandeep-notifications-${userId}`, []);
 
   const { data, error } = await supabase
@@ -635,6 +786,21 @@ export const fetchNotifications = async (userId: string) => {
 export const createNotification = async (notif: any) => {
   const newNotif = { ...notif, id: `n_${Date.now()}`, read: false, createdAt: new Date().toISOString() };
 
+  // Server API path — idempotency-keyed so rapid double-clicks don't duplicate
+  if (useServerApi()) {
+    const payload = await apiRequest('/api/notifications', {
+      method: 'POST',
+      headers: { 'Idempotency-Key': idempotencyKey('notif-create') },
+      body: JSON.stringify({
+        userId: notif.userId || 'all',
+        title: notif.title,
+        message: notif.message,
+        type: notif.type || 'info',
+      }),
+    });
+    return payload?.notification || newNotif;
+  }
+
   if (!isSupabaseConfigured()) {
     const key = `gyandeep-notifications-${notif.userId || 'global'}`;
     const existing: any[] = lsGet(key, []);
@@ -654,6 +820,45 @@ export const createNotification = async (notif: any) => {
   return newNotif;
 };
 
+
+export const markNotificationRead = async (id: string) => {
+  if (useServerApi()) {
+    return apiRequest(`/api/notifications/${id}/read`, { method: 'PATCH' });
+  }
+  // localStorage fallback — iterate all per-user keys
+  if (!isSupabaseConfigured()) {
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (!k?.startsWith('gyandeep-notifications-')) continue;
+      const items: any[] = lsGet(k, []);
+      const updated = items.map(n => n.id === id ? { ...n, read: true } : n);
+      if (updated.some((n, i) => n.read !== items[i]?.read)) lsSet(k, updated);
+    }
+    return { ok: true };
+  }
+  const { error } = await supabase.from('notifications').update({ read: true }).eq('id', id);
+  if (error) throw new Error(error.message);
+  return { ok: true };
+};
+
+export const deleteNotification = async (id: string) => {
+  if (useServerApi()) {
+    return apiRequest(`/api/notifications/${id}`, { method: 'DELETE' });
+  }
+  if (!isSupabaseConfigured()) {
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (!k?.startsWith('gyandeep-notifications-')) continue;
+      const items: any[] = lsGet(k, []);
+      lsSet(k, items.filter(n => n.id !== id));
+    }
+    return { ok: true };
+  }
+  const { error } = await supabase.from('notifications').delete().eq('id', id);
+  if (error) throw new Error(error.message);
+  return { ok: true };
+};
+
 // ─── Integrations (stubs) ───────────────────────────────────────────────────
 
 export const syncCalendar = async (title: string, start: string, end: string) => {
@@ -667,21 +872,12 @@ export const uploadToDrive = async (name: string, url: string) => {
 // ─── Analytics ───────────────────────────────────────────────────────────────
 
 export const getAnalyticsInsights = async (studentData: any, type?: string) => {
-  const apiBase = import.meta.env.VITE_API_URL || '';
+  // Correct backend path: /api/analytics/insights (not /api/analytics-insights)
   try {
-    const { data: session } = await supabase.auth.getSession();
-    const token = session.session?.access_token;
-
-    const res = await fetch(`${apiBase}/api/analytics-insights`, {
+    return await apiRequest('/api/analytics/insights', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(token ? { 'Authorization': `Bearer ${token}` } : {})
-      },
-      body: JSON.stringify({ studentData, type })
+      body: JSON.stringify({ studentData, type }),
     });
-    if (!res.ok) throw new Error('Failed to get insights');
-    return res.json();
   } catch {
     return { insights: [] };
   }
@@ -753,4 +949,33 @@ export const sendEmailVerification = async (email: string) => {
 export const checkEmailVerification = async (email: string, code: string) => {
   if (!isSupabaseConfigured()) return { ok: true };
   return { ok: true };
+};
+
+
+export const sendEmailNotification = async (payload: { to: string | string[]; subject: string; html: string }) => {
+  const token = getStoredToken();
+  const res = await fetch('/api/email-notification', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: JSON.stringify(payload),
+  });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(body.error || 'Failed to send notification email');
+  return body;
+};
+
+export const checkEmailServiceHealth = async () => {
+  if (useServerApi()) {
+    return apiRequest('/api/admin/email/health', { method: 'GET' });
+  }
+  return {
+    ok: true,
+    transport: 'unknown',
+    smtpConfigured: false,
+    resendConfigured: false,
+    message: 'Server API not available from current frontend config',
+  };
 };

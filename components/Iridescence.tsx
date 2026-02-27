@@ -66,7 +66,7 @@ void main() {
 `;
 
 const Iridescence: React.FC<IridescenceProps> = ({
-  color = [0.5, 0.6, 0.8],
+  color = [0.58, 0.58, 0.58],
   speed = 1.0,
   amplitude = 0.1,
   mouseReact = true,

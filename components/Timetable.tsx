@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { fetchTimetable, addTimetableEntry, deleteTimetableEntry } from '../services/dataService';
+import { websocketService } from '../services/websocketService';
 
 // --- Types ---
 
@@ -112,6 +113,7 @@ const Timetable: React.FC<TimetableProps> = ({
   const [submitting, setSubmitting] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [isMobile, setIsMobile] = useState(false);
+  const [lastSyncAt, setLastSyncAt] = useState<string>('Never');
 
   // Detect mobile viewport
   useEffect(() => {
@@ -128,6 +130,7 @@ const Timetable: React.FC<TimetableProps> = ({
       setError(null);
       const data = await fetchTimetable();
       setEntries(Array.isArray(data) ? data : []);
+      setLastSyncAt(new Date().toLocaleTimeString());
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Failed to load timetable');
     } finally {
@@ -137,6 +140,12 @@ const Timetable: React.FC<TimetableProps> = ({
 
   useEffect(() => {
     loadTimetable();
+
+    const unsubscribe = websocketService.on('timetable-changed', () => {
+      loadTimetable();
+    });
+
+    return () => unsubscribe();
   }, []);
 
   // Filter by classId if provided
@@ -629,6 +638,9 @@ const Timetable: React.FC<TimetableProps> = ({
             </svg>
             Weekly Timetable
           </h2>
+          <p className="text-xs text-gray-400 mt-0.5">
+            Last synced: {lastSyncAt} · Source: live server
+          </p>
           <p className="text-xs text-gray-400 mt-0.5">
             {classId ? `Filtered by class` : 'All classes'} &middot; {filteredEntries.length} {filteredEntries.length === 1 ? 'entry' : 'entries'}
           </p>

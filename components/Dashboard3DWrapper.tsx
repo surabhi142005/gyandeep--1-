@@ -21,7 +21,7 @@ const Dashboard3DWrapper: React.FC<Dashboard3DWrapperProps> = ({
     return (
         <div className="fixed inset-0 z-50 overflow-hidden">
             {/* Iridescence Background */}
-            <Iridescence color={[0.7, 0.5, 0.9]} mouseReact amplitude={0.2} speed={1.3} />
+            <Iridescence color={[0.58, 0.58, 0.58]} mouseReact amplitude={0.2} speed={1.3} />
 
             {/* Dashboard Content */}
             <div className="relative z-10">

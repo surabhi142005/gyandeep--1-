@@ -22,7 +22,15 @@
       "Bash(__NEW_LINE_a16562818268f157__ echo \"\")",
       "Bash(__NEW_LINE_d9cd863152b15e70__ echo \"\")",
       "Bash(head:*)",
-      "Bash(cd:*)"
+      "Bash(cd:*)",
+      "Bash(cd \"C:/Users/SUNIL KORE/Downloads/gyandeep \\(1\\)\" && npm run dev 2>&1)",
+      "Bash(npx kill-port:*)",
+      "Bash(start:*)",
+      "Bash(cd C:\\\\Users\\\\SUNIL KORE\\\\Downloads\\\\gyandeep \\(1\\):*)",
+      "Bash(cd \"C:\\\\Users\\\\SUNIL KORE\\\\Downloads\\\\gyandeep \\(1\\)\" && git push origin main 2>&1)",
+      "Bash(find:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)"
     ]
   }
 }
