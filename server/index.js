@@ -783,6 +783,35 @@ app.post('/api/email-notification', requireAuth, ensureRole('teacher', 'admin'),
   return res.json({ ok: true, provider: 'smtp', results })
 }))
 
+// -- AI Email Compose (Gemini-powered) -----------------------------------------
+app.post('/api/ai-email', requireAuth, ensureRole('teacher', 'admin'), aiRateLimit, asyncRoute(async (req, res) => {
+  const { prompt, recipients, context } = req.body || {}
+  if (!prompt || !recipients) return res.status(400).json({ error: 'prompt and recipients required' })
+
+  const llm = getLLMService()
+  const aiPrompt = `You are an email assistant for a school called Gyandeep. Write a professional email based on this request:
+"${String(prompt).slice(0, 500)}"
+${context ? `Context: ${String(context).slice(0, 500)}` : ''}
+Return ONLY a JSON object with "subject" and "html" fields. The html should be well-formatted with inline styles.`
+
+  const raw = await llm.generate(aiPrompt)
+  let parsed
+  try {
+    const match = raw.match(/\{[\s\S]*\}/)
+    parsed = JSON.parse(match ? match[0] : raw)
+  } catch {
+    return res.status(500).json({ error: 'AI failed to generate valid email' })
+  }
+
+  const safeRecipients = (Array.isArray(recipients) ? recipients : [recipients]).map(r => String(r).trim()).filter(Boolean)
+
+  for (const to of safeRecipients) {
+    await sendEmail({ to, subject: parsed.subject, html: parsed.html })
+  }
+
+  return res.json({ ok: true, subject: parsed.subject, sentTo: safeRecipients.length })
+}))
+
 // -- Notifications -------------------------------------------------------------
 const notificationsFile = path.join(dataDir, 'notifications.json')
 

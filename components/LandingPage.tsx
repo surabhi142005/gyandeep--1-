@@ -195,7 +195,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, theme }) => {
             transition={{ type: 'spring', stiffness: 200, damping: 15, delay: 0.1 }}
             className="inline-flex items-center justify-center w-24 h-24 rounded-3xl bg-white/90 shadow-2xl shadow-indigo-500/20 mb-8 backdrop-blur-xl"
           >
-            <span className="text-6xl">🕯️</span>
+            <img src="/logo.png" alt="Gyandeep" className="w-16 h-16 rounded-xl" />
           </motion.div>
 
           {/* Heading */}

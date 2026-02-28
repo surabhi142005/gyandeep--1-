@@ -11,6 +11,7 @@ import WebcamCapture from './WebcamCapture';
 import { uploadClassNotes } from '../services/dataService';
 import { TeacherDashboardProps } from './TeacherDashboardProps';
 import AnnouncementBoard from './AnnouncementBoard';
+import ElectricBorder from './ui/ElectricBorder';
 import { useTeacherSession } from '../hooks/useTeacherSession';
 import { exportToCSV } from '../services/exportService';
 
@@ -37,7 +38,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ teacher, students, 
   );
   const [manualLat, setManualLat] = useState('');
   const [manualLng, setManualLng] = useState('');
-  const [attendanceRadius, setAttendanceRadius] = useState(100);
+  const [attendanceRadius, setAttendanceRadius] = useState(10);
   const [isGeneratingCode, setIsGeneratingCode] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const { generateQuiz: generateQuizWorker, isGenerating: workerGenerating, progress: workerProgress, error: workerError } = useQuizWorker();
@@ -247,25 +248,47 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ teacher, students, 
   const handleNotesUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
-    if (file.size > 1024 * 1024) { setError("File is too large (> 1MB)."); return; }
-    if (!['text/plain', 'text/markdown'].includes(file.type)) { setError("Unsupported file format (.txt or .md only)."); return; }
+
+    const TEXT_TYPES = ['text/plain', 'text/markdown'];
+    const BINARY_TYPES = ['application/pdf', 'image/jpeg', 'image/png'];
+    const isText = TEXT_TYPES.includes(file.type);
+    const isBinary = BINARY_TYPES.includes(file.type);
+
+    if (!isText && !isBinary) {
+      setError("Unsupported format. Accepted: .txt, .md, .pdf, .jpg, .jpeg, .png");
+      return;
+    }
+    if (isText && file.size > 1024 * 1024) { setError("Text file too large (> 1MB)."); return; }
+    if (isBinary && file.size > 100 * 1024 * 1024) { setError("File too large (> 100MB)."); return; }
 
     setIsUploading(true);
     setIsGeneratingQuiz(true);
     clearMessages();
 
     try {
-      const notesText = await file.text();
-      if (!notesText.trim()) throw new Error("The uploaded file is empty.");
-      onUpdateSession({ notes: notesText, quiz: null, quizPublished: false });
-      try {
-        const uploaded = await uploadClassNotes({ classId: teacher.id, subjectId: classSession.subject, content: notesText })
-        setSuccessMessage(`Notes saved. URL: ${uploaded.url}`)
-      } catch (e) {
-        console.error('Failed to save notes to server:', e);
+      let extractedText: string;
+
+      if (isBinary) {
+        // Upload file to server for text extraction (PDF parse / OCR)
+        const uploaded = await uploadClassNotes({ classId: teacher.id, subjectId: classSession.subject, file });
+        extractedText = (uploaded as any).extractedText || '';
+        if (!extractedText.trim()) throw new Error("Could not extract text from the uploaded file.");
+        setSuccessMessage(`Notes extracted and saved. URL: ${uploaded.url}`);
+      } else {
+        extractedText = await file.text();
+        if (!extractedText.trim()) throw new Error("The uploaded file is empty.");
+        try {
+          const uploaded = await uploadClassNotes({ classId: teacher.id, subjectId: classSession.subject, content: extractedText });
+          setSuccessMessage(`Notes saved. URL: ${uploaded.url}`);
+        } catch (e) {
+          console.error('Failed to save notes to server:', e);
+        }
       }
+
+      onUpdateSession({ notes: extractedText, quiz: null, quizPublished: false });
+
       const { quiz } = await generateQuizWorker({
-        notesText,
+        notesText: extractedText,
         subject: classSession.subject,
       });
       try {
@@ -473,8 +496,8 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ teacher, students, 
                 <input
                   id="radius-slider"
                   type="range"
-                  min="25"
-                  max="500"
+                  min="5"
+                  max="100"
                   step="25"
                   value={attendanceRadius}
                   onChange={(e) => setAttendanceRadius(Number(e.target.value))}
@@ -564,6 +587,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ teacher, students, 
             />
 
             {classSession.code && (
+              <ElectricBorder className="rounded-lg">
               <div className="bg-white p-6 rounded-lg shadow-md">
                 <div className="flex justify-between items-center mb-4">
                   <h2 className="text-xl font-semibold text-gray-700">{t('Class Notes & Quiz')}</h2>
@@ -642,10 +666,12 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ teacher, students, 
                 </div>
                 <div className="mb-4">
                   <label className="block text-sm font-medium text-gray-700 mb-2">Or Upload Notes File</label>
-                  <input type="file" accept=".txt,.md" onChange={handleNotesUpload} disabled={isUploading || isGeneratingQuiz} className={`block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:${colors.lightBg} file:${colors.lightText} ${colors.lightHover}`} />
+                  <input type="file" accept=".txt,.md,.pdf,.jpg,.jpeg,.png" onChange={handleNotesUpload} disabled={isUploading || isGeneratingQuiz} className={`block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:${colors.lightBg} file:${colors.lightText} ${colors.lightHover}`} />
+                  <p className="text-xs text-gray-400 mt-1">TXT/MD up to 1MB, PDF/JPEG/PNG up to 100MB</p>
                 </div>
                 {(isUploading || isGeneratingQuiz) && (<div className="mt-4 flex items-center text-gray-600"><Spinner size="w-5 h-5" color={colors.text} /><span className="ml-2">{isUploading ? "Reading..." : workerProgress || 'Generating quiz...'}</span></div>)}
               </div>
+              </ElectricBorder>
             )}
 
             {classSession.quiz && !classSession.quizPublished && (

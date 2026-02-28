@@ -134,6 +134,26 @@ class GeminiAdapter {
     return result
   }
 
+  async extractTextFromImage(imageBuffer, mimeType) {
+    await this._init()
+    const base64 = imageBuffer.toString('base64')
+    const response = await this._generate(
+      'gemini-2.0-flash',
+      [
+        {
+          role: 'user',
+          parts: [
+            { inlineData: { mimeType, data: base64 } },
+            { text: 'Extract all text from this image. Return only the extracted text, no commentary.' },
+          ],
+        },
+      ],
+      {},
+      'extractTextFromImage',
+    )
+    return response.text || ''
+  }
+
   async analyticsInsights(studentData, type = 'general') {
     const prompt = type === 'at-risk'
       ? `Analyze student performance data and identify at-risk students. Return JSON:\n{"atRiskStudents":[{"studentId":"...","studentName":"...","riskLevel":"high|medium|low","reasons":["..."],"suggestions":["..."]}]}\n\nData:\n${JSON.stringify(studentData)}`

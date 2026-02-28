@@ -107,6 +107,7 @@ router.post('/login', authRateLimit, asyncRoute(async (req, res) => {
   const hash = user.passwordHash || user.password
   const ok = await bcrypt.compare(String(password), hash)
   if (!ok) return res.status(401).json({ error: 'Invalid credentials' })
+  if (user.active === false) return res.status(403).json({ error: 'Account deactivated. Contact administrator.' })
   const token = signToken(user)
   // Audit log
   try { await dbRun(`INSERT INTO audit_logs (ts, type, userId, details) VALUES (?,?,?,?)`,

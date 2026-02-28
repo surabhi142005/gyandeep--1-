@@ -6,7 +6,7 @@ import type { Coordinates } from '../types';
 import Spinner from './Spinner';
 import WebcamCapture from './WebcamCapture';
 import AdminFaceViewer from './AdminFaceViewer';
-import { adminOverride, bulkImportUsers, fetchQuestionBank, updateQuestionInBank, deleteQuestionFromBank, addQuestionsToBank, fetchTagPresets, updateTagPresets, checkEmailServiceHealth, sendEmailNotification } from '../services/dataService';
+import { adminOverride, bulkImportUsers, fetchQuestionBank, updateQuestionInBank, deleteQuestionFromBank, addQuestionsToBank, fetchTagPresets, updateTagPresets, checkEmailServiceHealth, sendEmailNotification, sendAIEmail } from '../services/dataService';
 import { registerFace, verifyFace, hashPassword } from '../services/authService';
 import { t } from '../services/i18n';
 
@@ -157,6 +157,10 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ admin, users, onUpdateU
   const [emailHealthLoading, setEmailHealthLoading] = useState(false);
   const [testEmailTo, setTestEmailTo] = useState(admin.email || '');
   const [emailStatusMessage, setEmailStatusMessage] = useState<string | null>(null);
+  const [aiEmailPrompt, setAiEmailPrompt] = useState('');
+  const [aiEmailRecipients, setAiEmailRecipients] = useState('');
+  const [aiEmailSending, setAiEmailSending] = useState(false);
+  const [aiEmailStatus, setAiEmailStatus] = useState<string | null>(null);
 
   const [showFaceViewer, setShowFaceViewer] = useState(false);
   const [verifyingForUser, setVerifyingForUser] = useState<AnyUser | null>(null);
@@ -471,6 +475,16 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ admin, users, onUpdateU
   const handleRemoveUser = (userId: string) => {
     if (window.confirm("Are you sure you want to remove this user?")) {
       onUpdateUsers(users.filter(user => user.id !== userId));
+    }
+  };
+
+  const handleToggleActive = (userId: string) => {
+    const user = users.find(u => u.id === userId);
+    if (!user) return;
+    const isActive = user.active !== false;
+    const action = isActive ? 'deactivate' : 'activate';
+    if (window.confirm(`Are you sure you want to ${action} ${user.name}?`)) {
+      onUpdateUsers(users.map(u => u.id === userId ? { ...u, active: !isActive } : u));
     }
   };
 
@@ -789,6 +803,53 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ admin, users, onUpdateU
                   </div>
                 </div>
                 {emailStatusMessage && <p className="mt-2 text-xs text-gray-600">{emailStatusMessage}</p>}
+              </div>
+
+              {/* AI Email Compose */}
+              <div className="bg-white rounded-2xl shadow-xl border border-gray-200 p-5">
+                <h4 className="text-sm font-bold text-gray-700 mb-3">AI Email Compose</h4>
+                <p className="text-xs text-gray-500 mb-2">Describe what you want to email and AI will compose it.</p>
+                <div className="space-y-2">
+                  <input
+                    type="text"
+                    value={aiEmailRecipients}
+                    onChange={e => setAiEmailRecipients(e.target.value)}
+                    placeholder="Comma-separated emails"
+                    className="w-full px-3 py-2 text-xs border border-gray-300 rounded-lg"
+                  />
+                  <textarea
+                    value={aiEmailPrompt}
+                    onChange={e => setAiEmailPrompt(e.target.value)}
+                    placeholder="e.g. Send a welcome email to new students about orientation next Monday"
+                    className="w-full px-3 py-2 text-xs border border-gray-300 rounded-lg resize-none"
+                    rows={3}
+                  />
+                  <button
+                    onClick={async () => {
+                      if (!aiEmailPrompt.trim() || !aiEmailRecipients.trim()) {
+                        setAiEmailStatus('Enter recipients and a prompt.');
+                        return;
+                      }
+                      setAiEmailSending(true);
+                      setAiEmailStatus(null);
+                      try {
+                        const recipients = aiEmailRecipients.split(',').map(e => e.trim()).filter(Boolean);
+                        const result = await sendAIEmail({ prompt: aiEmailPrompt, recipients });
+                        setAiEmailStatus(`Sent to ${result.sentTo} recipient(s). Subject: "${result.subject}"`);
+                        setAiEmailPrompt('');
+                      } catch (err: any) {
+                        setAiEmailStatus(err.message || 'Failed to send AI email');
+                      } finally {
+                        setAiEmailSending(false);
+                      }
+                    }}
+                    disabled={aiEmailSending}
+                    className={`w-full px-3 py-1.5 text-xs text-white rounded-lg transition-all ${aiEmailSending ? 'bg-gray-400' : `${colors.primary} ${colors.hover}`}`}
+                  >
+                    {aiEmailSending ? 'Composing & Sending...' : 'Compose & Send with AI'}
+                  </button>
+                </div>
+                {aiEmailStatus && <p className="mt-2 text-xs text-gray-600">{aiEmailStatus}</p>}
               </div>
 
               <div className={`${colors.card} rounded-2xl shadow-xl border ${colors.border} p-8 transform hover:scale-105 transition-all duration-300 hover:shadow-2xl`}>
@@ -1111,33 +1172,36 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ admin, users, onUpdateU
                                   <span className={`inline-block px-2 py-1 text-xs font-semibold rounded-full border ${getRoleBadgeColor(user.role)} mt-1`}>
                                     {ROLE_DISPLAY_NAMES[user.role]}
                                   </span>
+                                  {user.active === false && (
+                                    <span className="inline-block px-2 py-1 text-xs font-semibold rounded-full bg-red-100 text-red-700 border border-red-300 mt-1 ml-1">
+                                      Deactivated
+                                    </span>
+                                  )}
                                 </div>
                               </div>
 
                               <div className="flex flex-wrap items-center gap-2">
+                                <button
+                                  onClick={() => setCapturingForUser(user)}
+                                  className={`px-3 py-1 text-xs font-medium ${colors.badge} rounded-full hover:shadow-md transition-all duration-200`}
+                                >
+                                  {user.faceImage ? '🔄 Update Face' : '👤 Add Face'}
+                                </button>
+                                {user.faceImage && (
+                                  <button
+                                    onClick={() => setVerifyingForUser(user)}
+                                    className="px-3 py-1 text-xs font-medium bg-green-100 text-green-800 rounded-full hover:bg-green-200 transition-all duration-200"
+                                  >
+                                    🔓 Face Login
+                                  </button>
+                                )}
                                 {user.role !== UserRoleEnum.ADMIN && (
-                                  <>
-                                    <button
-                                      onClick={() => setCapturingForUser(user)}
-                                      className={`px-3 py-1 text-xs font-medium ${colors.badge} rounded-full hover:shadow-md transition-all duration-200`}
-                                    >
-                                      {user.faceImage ? '🔄 Update Face' : '👤 Add Face'}
-                                    </button>
-                                    {user.faceImage && (
-                                      <button
-                                        onClick={() => setVerifyingForUser(user)}
-                                        className="px-3 py-1 text-xs font-medium bg-green-100 text-green-800 rounded-full hover:bg-green-200 transition-all duration-200"
-                                      >
-                                        🔓 Face Login
-                                      </button>
-                                    )}
-                                    <button
-                                      onClick={() => setOverrideForUser(user)}
-                                      className="px-3 py-1 text-xs font-medium bg-yellow-100 text-yellow-800 rounded-full hover:bg-yellow-200 transition-all duration-200"
-                                    >
-                                      🛡️ Override
-                                    </button>
-                                  </>
+                                  <button
+                                    onClick={() => setOverrideForUser(user)}
+                                    className="px-3 py-1 text-xs font-medium bg-yellow-100 text-yellow-800 rounded-full hover:bg-yellow-200 transition-all duration-200"
+                                  >
+                                    🛡️ Override
+                                  </button>
                                 )}
                                 {user.id !== admin.id && (
                                   <>
@@ -1146,6 +1210,12 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ admin, users, onUpdateU
                                       className="px-3 py-1 text-xs font-medium bg-blue-100 text-blue-800 rounded-full hover:bg-blue-200 transition-all duration-200"
                                     >
                                       ✏️ Edit
+                                    </button>
+                                    <button
+                                      onClick={() => handleToggleActive(user.id)}
+                                      className={`px-3 py-1 text-xs font-medium rounded-full transition-all duration-200 ${user.active === false ? 'bg-green-100 text-green-800 hover:bg-green-200' : 'bg-orange-100 text-orange-800 hover:bg-orange-200'}`}
+                                    >
+                                      {user.active === false ? '✅ Activate' : '⛔ Deactivate'}
                                     </button>
                                     <button
                                       onClick={() => handleRemoveUser(user.id)}

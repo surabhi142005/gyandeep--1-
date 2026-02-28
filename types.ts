@@ -24,6 +24,7 @@ export interface User {
   googleId?: string;
   password?: string;
   emailVerified?: boolean;
+  active?: boolean; // false = deactivated by admin
   preferences?: UserPreferences;
   history?: UserHistory[];
 }

@@ -56,7 +56,7 @@ const Login: React.FC<LoginProps> = ({ onLogin, users, theme, onPasswordReset })
 
   // Users for Face ID login (all users now, searchable)
   const allUsersForLogin = useMemo(() =>
-    users.filter(u => u.name && u.id),
+    users.filter(u => u.name && u.id && u.active !== false),
     [users]
   );
 
@@ -125,7 +125,9 @@ const Login: React.FC<LoginProps> = ({ onLogin, users, theme, onPasswordReset })
 
       // Offline / local-user fallback (when server is not running)
       const user = users.find(u => u.email?.toLowerCase() === email.toLowerCase());
-      if (user && await passwordMatches(password, user.password)) {
+      if (user && user.active === false) {
+        setError('Your account has been deactivated. Please contact the administrator.');
+      } else if (user && await passwordMatches(password, user.password)) {
         onLogin(user);
       } else {
         setError(t('Invalid email or password'));
@@ -142,6 +144,10 @@ const Login: React.FC<LoginProps> = ({ onLogin, users, theme, onPasswordReset })
     const selectedUser = users.find(u => u.id === selectedUserId);
     if (!selectedUser) {
       setError('Please select a user.');
+      return;
+    }
+    if (selectedUser.active === false) {
+      setError('Your account has been deactivated. Please contact the administrator.');
       return;
     }
     if (!selectedUser.faceImage) {
@@ -201,7 +207,7 @@ const Login: React.FC<LoginProps> = ({ onLogin, users, theme, onPasswordReset })
         <div className="w-full max-w-md mx-auto">
           <div className="text-center mb-8">
             <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-white shadow-lg mb-4">
-              <span className="text-3xl">🕯️</span>
+              <img src="/logo.png" alt="Gyandeep" className="w-10 h-10 rounded" />
             </div>
             <h1 className={`text-4xl font-bold ${colors.text}`}>Gyandeep</h1>
             <p className="text-gray-500 mt-2 text-sm">AI-Powered Smart Classroom</p>

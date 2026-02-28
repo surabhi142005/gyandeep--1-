@@ -1,30 +1,51 @@
 /**
  * server/routes/notes.js
  *
- * POST /api/notes/upload  — teacher uploads notes (async indexing)
+ * POST /api/notes/upload  — teacher uploads notes (text, PDF, or image; async indexing)
  * GET  /api/notes/list    — list notes for class+subject
  */
 
 import { Router } from 'express'
 import fs from 'fs'
 import path from 'path'
+import multer from 'multer'
 import { requireAuth } from '../middleware/requireAuth.js'
 import { ensureRole } from '../middleware/rbac.js'
 import { asyncRoute } from '../middleware/validate.js'
 import { addJob } from '../jobQueue.js'
+import { getLLMService } from '../services/llmService.js'
 
 const router = Router()
 const storageDir = path.join(process.cwd(), 'server', 'storage')
 const notesDir   = path.join(storageDir, 'notes')
+const uploadsDir = path.join(storageDir, 'uploads')
 
 function ensureDirs() {
   if (!fs.existsSync(notesDir)) fs.mkdirSync(notesDir, { recursive: true })
+  if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true })
 }
+
+// Multer config: 100MB limit, accept specific file types
+const ALLOWED_MIMES = [
+  'text/plain', 'text/markdown',
+  'application/pdf',
+  'image/jpeg', 'image/png',
+]
+
+const upload = multer({
+  dest: uploadsDir,
+  limits: { fileSize: 100 * 1024 * 1024 }, // 100MB
+  fileFilter: (_req, file, cb) => {
+    if (ALLOWED_MIMES.includes(file.mimetype)) {
+      cb(null, true)
+    } else {
+      cb(new Error(`Unsupported file type: ${file.mimetype}. Accepted: PDF, JPEG, PNG, TXT, MD`))
+    }
+  },
+})
 
 /**
  * Sanitize a user-supplied path segment to prevent directory traversal.
- * Strips everything except alphanumeric, hyphen, underscore, and dot.
- * Returns null if the result is empty (invalid input).
  */
 function safeSeg(seg) {
   const s = path.basename(String(seg || '')).replace(/[^a-zA-Z0-9_\-\.]/g, '')
@@ -33,21 +54,50 @@ function safeSeg(seg) {
 
 /**
  * Verify a resolved path is strictly inside a trusted base directory.
- * Guards against symlink attacks and edge cases path.basename misses.
  */
 function insideBase(resolvedPath, base) {
   return resolvedPath.startsWith(base + path.sep) || resolvedPath === base
 }
 
-// ── Upload notes (teacher/admin only) ─────────────────────────────────────────
-// Notes are saved to disk, then an async job indexes them for RAG search.
-router.post('/upload', requireAuth, ensureRole('teacher', 'admin'), asyncRoute(async (req, res) => {
-  const { classId, subjectId, content } = req.body || {}
-  if (!content || !subjectId || !classId) {
-    return res.status(400).json({ error: 'classId, subjectId, and content are required' })
+/**
+ * Extract text from an uploaded file based on its MIME type.
+ */
+async function extractTextFromFile(filePath, mimeType) {
+  if (mimeType === 'text/plain' || mimeType === 'text/markdown') {
+    return fs.readFileSync(filePath, 'utf8')
   }
 
-  // Sanitize path segments — prevents directory traversal attacks
+  if (mimeType === 'application/pdf') {
+    const pdfParse = (await import('pdf-parse')).default
+    const buffer = fs.readFileSync(filePath)
+    const data = await pdfParse(buffer)
+    return data.text || ''
+  }
+
+  if (mimeType === 'image/jpeg' || mimeType === 'image/png') {
+    const llm = getLLMService()
+    if (!llm) throw new Error('LLM service not available for OCR')
+    const buffer = fs.readFileSync(filePath)
+    return llm.extractTextFromImage(buffer, mimeType)
+  }
+
+  throw new Error(`Cannot extract text from ${mimeType}`)
+}
+
+// ── Upload notes (teacher/admin only) ─────────────────────────────────────────
+router.post('/upload', requireAuth, ensureRole('teacher', 'admin'), upload.single('file'), asyncRoute(async (req, res) => {
+  const classId = req.body?.classId
+  const subjectId = req.body?.subjectId
+  const content = req.body?.content
+  const file = req.file
+
+  if (!subjectId || !classId) {
+    return res.status(400).json({ error: 'classId and subjectId are required' })
+  }
+  if (!content && !file) {
+    return res.status(400).json({ error: 'Either content or file is required' })
+  }
+
   const safeClassId   = safeSeg(classId)
   const safeSubjectId = safeSeg(subjectId)
   if (!safeClassId || !safeSubjectId) {
@@ -61,12 +111,57 @@ router.post('/upload', requireAuth, ensureRole('teacher', 'admin'), asyncRoute(a
   }
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
 
+  let extractedText = ''
+  let ext = '.txt'
+
+  if (file) {
+    // Determine extension from mime type
+    const extMap = {
+      'application/pdf': '.pdf',
+      'image/jpeg': '.jpg',
+      'image/png': '.png',
+      'text/plain': '.txt',
+      'text/markdown': '.md',
+    }
+    ext = extMap[file.mimetype] || '.bin'
+
+    try {
+      extractedText = await extractTextFromFile(file.path, file.mimetype)
+    } catch (err) {
+      // Clean up temp file on extraction failure
+      try { fs.unlinkSync(file.path) } catch {}
+      return res.status(422).json({ error: `Text extraction failed: ${err.message}` })
+    }
+
+    // Move file to permanent location
+    const fileName = `${Date.now()}${ext}`
+    const filePath = path.join(dir, fileName)
+    fs.renameSync(file.path, filePath)
+
+    const urlPath = `/storage/notes/${encodeURIComponent(safeClassId)}/${encodeURIComponent(safeSubjectId)}/${fileName}`
+
+    // Index extracted text
+    addJob('embedding-index', {
+      id: `doc-${safeClassId}-${safeSubjectId}-${Date.now()}`,
+      classId: safeClassId,
+      subjectId: safeSubjectId,
+      title: fileName,
+      text: extractedText.slice(0, 50000),
+    }).catch(err => console.error('Embedding index job failed:', err.message))
+
+    return res.json({ ok: true, url: urlPath, extractedText })
+  }
+
+  // JSON content path (backward compat)
+  if (!content) {
+    return res.status(400).json({ error: 'content is required when no file is uploaded' })
+  }
+
   const fileName = `${Date.now()}.txt`
   const filePath = path.join(dir, fileName)
   fs.writeFileSync(filePath, String(content), 'utf8')
   const urlPath = `/storage/notes/${encodeURIComponent(safeClassId)}/${encodeURIComponent(safeSubjectId)}/${fileName}`
 
-  // Fire-and-forget: index notes for RAG search asynchronously
   addJob('embedding-index', {
     id: `doc-${safeClassId}-${safeSubjectId}-${Date.now()}`,
     classId: safeClassId,
@@ -75,12 +170,10 @@ router.post('/upload', requireAuth, ensureRole('teacher', 'admin'), asyncRoute(a
     text: String(content).slice(0, 50000),
   }).catch(err => console.error('Embedding index job failed:', err.message))
 
-  return res.json({ ok: true, url: urlPath })
+  return res.json({ ok: true, url: urlPath, extractedText: String(content) })
 }))
 
 // ── List notes (teacher/admin only) ──────────────────────────────────────────
-// Restricted to teacher/admin: any authenticated student could otherwise
-// enumerate notes filenames for arbitrary class/subject combinations.
 router.get('/list', requireAuth, ensureRole('teacher', 'admin'), asyncRoute(async (req, res) => {
   const safeClassId   = safeSeg(req.query.classId)
   const safeSubjectId = safeSeg(req.query.subjectId)
@@ -92,7 +185,8 @@ router.get('/list', requireAuth, ensureRole('teacher', 'admin'), asyncRoute(asyn
     return res.status(400).json({ error: 'Invalid path' })
   }
   if (!fs.existsSync(dir)) return res.json([])
-  const files = fs.readdirSync(dir).filter(f => f.endsWith('.txt'))
+  const SUPPORTED_EXTS = ['.txt', '.md', '.pdf', '.jpg', '.jpeg', '.png']
+  const files = fs.readdirSync(dir).filter(f => SUPPORTED_EXTS.some(ext => f.endsWith(ext)))
   return res.json(files.map(f => ({
     url:  `/storage/notes/${encodeURIComponent(safeClassId)}/${encodeURIComponent(safeSubjectId)}/${f}`,
     name: f,

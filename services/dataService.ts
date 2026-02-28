@@ -153,17 +153,36 @@ export const assignStudentToClass = async (studentId: string, classId: string | 
 
 // ─── Notes ───────────────────────────────────────────────────────────────────
 
-export const uploadClassNotes = async (params: { classId: string; subjectId: string; content: string }) => {
+export const uploadClassNotes = async (params: { classId: string; subjectId: string; content?: string; file?: File }) => {
+  // Binary file upload via FormData to server API
+  if (params.file && useServerApi()) {
+    const formData = new FormData();
+    formData.append('file', params.file);
+    formData.append('classId', params.classId);
+    formData.append('subjectId', params.subjectId);
+
+    const token = getStoredToken();
+    const res = await fetch(`${API_BASE}/api/notes/upload`, {
+      method: 'POST',
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      body: formData,
+    });
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(body.error || `Upload failed (${res.status})`);
+    return body as { ok: boolean; url: string; extractedText?: string };
+  }
+
   if (!isSupabaseConfigured()) {
     const key = `notes_${params.classId}_${params.subjectId}`;
-    lsSet(key, { content: params.content, updatedAt: new Date().toISOString() });
+    lsSet(key, { content: params.content || '', updatedAt: new Date().toISOString() });
     return { url: `local://${key}` };
   }
 
+  const content = params.content || '';
   const fileName = `${params.classId}/${params.subjectId}/${Date.now()}.txt`;
   const { error: uploadError } = await supabase.storage
     .from('notes')
-    .upload(fileName, new Blob([params.content], { type: 'text/plain' }), { upsert: true });
+    .upload(fileName, new Blob([content], { type: 'text/plain' }), { upsert: true });
 
   if (uploadError) throw new Error(uploadError.message);
 
@@ -964,6 +983,21 @@ export const sendEmailNotification = async (payload: { to: string | string[]; su
   });
   const body = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(body.error || 'Failed to send notification email');
+  return body;
+};
+
+export const sendAIEmail = async (payload: { prompt: string; recipients: string | string[]; context?: string }) => {
+  const token = getStoredToken();
+  const res = await fetch('/api/ai-email', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: JSON.stringify(payload),
+  });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(body.error || 'Failed to send AI email');
   return body;
 };
 

@@ -14,6 +14,7 @@ import { SkeletonDashboard } from './components/SkeletonLoader';
 import { useThemeEngine } from './hooks/useThemeEngine';
 import Header from './components/Header';
 import type { Announcement } from './components/AnnouncementBoard';
+import SplashCursor from './components/ui/SplashCursor';
 
 // Extracted hooks
 import { useAuth } from './hooks/useAuth';
@@ -24,7 +25,6 @@ import { usePerformance } from './hooks/usePerformance';
 const TeacherDashboard  = lazy(() => import('./components/TeacherDashboard'));
 const StudentDashboard  = lazy(() => import('./components/StudentDashboard'));
 const AdminDashboard    = lazy(() => import('./components/AdminDashboard').then(m => ({ default: m.default })));
-const Dashboard3DWrapper = lazy(() => import('./components/Dashboard3DWrapper'));
 const Chatbot           = lazy(() => import('./components/Chatbot'));
 const LandingPage       = lazy(() => import('./components/LandingPage'));
 
@@ -202,6 +202,7 @@ const App: React.FC = () => {
 
     return (
         <>
+            <SplashCursor />
             <Iridescence
                 color={currentUser ? [0.62, 0.62, 0.62] : [0.56, 0.56, 0.56]}
                 mouseReact amplitude={currentUser ? 0.15 : 0.1} speed={currentUser ? 1.2 : 1}

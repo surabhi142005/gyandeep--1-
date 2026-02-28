@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import type { QuizQuestion } from '../types';
+import ElectricBorder from './ui/ElectricBorder';
 
 interface QuizViewProps {
   quiz: QuizQuestion[];
@@ -256,6 +257,7 @@ const QuizView: React.FC<QuizViewProps> = ({ quiz, subject, onSubmit, theme }) =
           </div>
         )}
 
+        <ElectricBorder className="rounded-3xl">
         <motion.div
           initial={{ opacity: 0, scale: 0.9 }}
           animate={{ opacity: 1, scale: 1 }}
@@ -437,6 +439,7 @@ const QuizView: React.FC<QuizViewProps> = ({ quiz, subject, onSubmit, theme }) =
             </AnimatePresence>
           </div>
         </motion.div>
+        </ElectricBorder>
       </div>
     );
   }
