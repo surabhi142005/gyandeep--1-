@@ -1,7 +1,6 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import type { QuizQuestion } from '../types';
-import ElectricBorder from './ui/ElectricBorder';
 
 interface QuizViewProps {
   quiz: QuizQuestion[];
@@ -11,10 +10,10 @@ interface QuizViewProps {
 }
 
 const THEME_COLORS: Record<string, Record<string, string>> = {
-    indigo: { primary: 'bg-indigo-600', hover: 'hover:bg-indigo-700', text: 'text-indigo-600', ring: 'focus:ring-indigo-500', border: 'border-indigo-500', lightBg: 'bg-indigo-100', gradient: 'from-indigo-500 to-purple-600' },
-    teal: { primary: 'bg-teal-600', hover: 'hover:bg-teal-700', text: 'text-teal-600', ring: 'focus:ring-teal-500', border: 'border-teal-500', lightBg: 'bg-teal-100', gradient: 'from-teal-500 to-cyan-600' },
-    crimson: { primary: 'bg-red-600', hover: 'hover:bg-red-700', text: 'text-red-600', ring: 'focus:ring-red-500', border: 'border-red-500', lightBg: 'bg-red-100', gradient: 'from-red-500 to-rose-600' },
-    purple: { primary: 'bg-purple-600', hover: 'hover:bg-purple-700', text: 'text-purple-600', ring: 'focus:ring-purple-500', border: 'border-purple-500', lightBg: 'bg-purple-100', gradient: 'from-purple-500 to-pink-600' },
+  indigo: { primary: 'bg-indigo-600', hover: 'hover:bg-indigo-700', text: 'text-indigo-600', ring: 'focus:ring-indigo-500', border: 'border-indigo-500', lightBg: 'bg-indigo-100', gradient: 'from-indigo-500 to-purple-600' },
+  teal: { primary: 'bg-teal-600', hover: 'hover:bg-teal-700', text: 'text-teal-600', ring: 'focus:ring-teal-500', border: 'border-teal-500', lightBg: 'bg-teal-100', gradient: 'from-teal-500 to-cyan-600' },
+  crimson: { primary: 'bg-red-600', hover: 'hover:bg-red-700', text: 'text-red-600', ring: 'focus:ring-red-500', border: 'border-red-500', lightBg: 'bg-red-100', gradient: 'from-red-500 to-rose-600' },
+  purple: { primary: 'bg-purple-600', hover: 'hover:bg-purple-700', text: 'text-purple-600', ring: 'focus:ring-purple-500', border: 'border-purple-500', lightBg: 'bg-purple-100', gradient: 'from-purple-500 to-pink-600' },
 };
 
 // Circular timer ring component
@@ -257,7 +256,6 @@ const QuizView: React.FC<QuizViewProps> = ({ quiz, subject, onSubmit, theme }) =
           </div>
         )}
 
-        <ElectricBorder className="rounded-3xl">
         <motion.div
           initial={{ opacity: 0, scale: 0.9 }}
           animate={{ opacity: 1, scale: 1 }}
@@ -439,7 +437,6 @@ const QuizView: React.FC<QuizViewProps> = ({ quiz, subject, onSubmit, theme }) =
             </AnimatePresence>
           </div>
         </motion.div>
-        </ElectricBorder>
       </div>
     );
   }
@@ -498,13 +495,12 @@ const QuizView: React.FC<QuizViewProps> = ({ quiz, subject, onSubmit, theme }) =
           <button
             key={q.id}
             onClick={() => { setCurrentQuestion(idx); setSelectedOption(null); }}
-            className={`w-8 h-8 rounded-full text-xs font-bold transition-all duration-200 ${
-              idx === currentQuestion
+            className={`w-8 h-8 rounded-full text-xs font-bold transition-all duration-200 ${idx === currentQuestion
                 ? 'bg-indigo-600 text-white shadow-lg scale-110'
                 : answers[q.id]
-                ? 'bg-indigo-100 text-indigo-700 hover:bg-indigo-200'
-                : 'bg-gray-100 text-gray-400 hover:bg-gray-200'
-            }`}
+                  ? 'bg-indigo-100 text-indigo-700 hover:bg-indigo-200'
+                  : 'bg-gray-100 text-gray-400 hover:bg-gray-200'
+              }`}
           >
             {idx + 1}
           </button>
@@ -539,11 +535,10 @@ const QuizView: React.FC<QuizViewProps> = ({ quiz, subject, onSubmit, theme }) =
                   whileTap={{ scale: 0.99 }}
                   className={`flex items-center gap-3 p-4 border-2 rounded-2xl cursor-pointer transition-all duration-200 ${getOptionBgClass(currentQ, option)}`}
                 >
-                  <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-all ${
-                    answers[currentQ.id] === option
+                  <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-all ${answers[currentQ.id] === option
                       ? 'border-indigo-500 bg-indigo-500'
                       : 'border-gray-300'
-                  }`}>
+                    }`}>
                     {answers[currentQ.id] === option && (
                       <motion.div
                         initial={{ scale: 0 }}

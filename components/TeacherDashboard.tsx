@@ -11,7 +11,6 @@ import WebcamCapture from './WebcamCapture';
 import { uploadClassNotes } from '../services/dataService';
 import { TeacherDashboardProps } from './TeacherDashboardProps';
 import AnnouncementBoard from './AnnouncementBoard';
-import ElectricBorder from './ui/ElectricBorder';
 import { useTeacherSession } from '../hooks/useTeacherSession';
 import { exportToCSV } from '../services/exportService';
 
@@ -587,7 +586,6 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ teacher, students, 
             />
 
             {classSession.code && (
-              <ElectricBorder className="rounded-lg">
               <div className="bg-white p-6 rounded-lg shadow-md">
                 <div className="flex justify-between items-center mb-4">
                   <h2 className="text-xl font-semibold text-gray-700">{t('Class Notes & Quiz')}</h2>
@@ -671,7 +669,6 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ teacher, students, 
                 </div>
                 {(isUploading || isGeneratingQuiz) && (<div className="mt-4 flex items-center text-gray-600"><Spinner size="w-5 h-5" color={colors.text} /><span className="ml-2">{isUploading ? "Reading..." : workerProgress || 'Generating quiz...'}</span></div>)}
               </div>
-              </ElectricBorder>
             )}
 
             {classSession.quiz && !classSession.quizPublished && (

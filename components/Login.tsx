@@ -111,7 +111,7 @@ const Login: React.FC<LoginProps> = ({ onLogin, users, theme, onPasswordReset })
         });
         if (res.ok) {
           const { token, user } = await res.json();
-          try { window.localStorage.setItem('gyandeep_token', token); } catch {}
+          try { window.localStorage.setItem('gyandeep_token', token); } catch { }
           onLogin(user);
           return;
         }
@@ -207,7 +207,7 @@ const Login: React.FC<LoginProps> = ({ onLogin, users, theme, onPasswordReset })
         <div className="w-full max-w-md mx-auto">
           <div className="text-center mb-8">
             <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-white shadow-lg mb-4">
-              <img src="/logo.png" alt="Gyandeep" className="w-10 h-10 rounded" />
+              <img src="/logo.png" alt="Gyandeep" className="w-12 h-12 object-contain" />
             </div>
             <h1 className={`text-4xl font-bold ${colors.text}`}>Gyandeep</h1>
             <p className="text-gray-500 mt-2 text-sm">AI-Powered Smart Classroom</p>
