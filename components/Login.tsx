@@ -206,8 +206,8 @@ const Login: React.FC<LoginProps> = ({ onLogin, users, theme, onPasswordReset })
       <div className="min-h-screen flex flex-col items-center justify-center p-4">
         <div className="w-full max-w-md mx-auto">
           <div className="text-center mb-8">
-            <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-white shadow-lg mb-4">
-              <img src="/logo.png" alt="Gyandeep" className="w-12 h-12 object-contain" />
+            <div className="inline-flex items-center justify-center w-20 h-20 sm:w-24 sm:h-24 rounded-2xl bg-white/90 shadow-xl mb-4 backdrop-blur-sm">
+              <img src="/logo.png" alt="Gyandeep" className="w-14 h-14 sm:w-18 sm:h-18 object-contain drop-shadow-[0_2px_6px_rgba(0,0,0,0.4)]" />
             </div>
             <h1 className={`text-4xl font-bold ${colors.text}`}>Gyandeep</h1>
             <p className="text-gray-500 mt-2 text-sm">AI-Powered Smart Classroom</p>

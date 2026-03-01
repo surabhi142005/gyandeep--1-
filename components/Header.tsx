@@ -102,7 +102,7 @@ const Header: React.FC<HeaderProps> = ({
             {/* Left: Logo + nav */}
             <div className="flex items-center gap-4">
               <div className="flex items-center gap-2">
-                <img src="/logo.png" alt="Gyandeep" className="w-8 h-8 object-contain" />
+                <img src="/logo.png" alt="Gyandeep" className="w-8 h-8 sm:w-10 sm:h-10 object-contain drop-shadow-[0_2px_4px_rgba(0,0,0,0.5)]" />
                 <span className="font-bold text-lg bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent hidden sm:block">
                   Gyandeep
                 </span>

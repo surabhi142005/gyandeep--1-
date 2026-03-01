@@ -217,6 +217,31 @@ export const listClassNotes = async (params: { classId: string; subjectId: strin
   });
 };
 
+// ─── Centralized Notes ──────────────────────────────────────────────────────
+
+export const fetchCentralizedNotes = async (params: { subjectId: string; unitNumber?: number; classId?: string }) => {
+  const qs = new URLSearchParams({ subjectId: params.subjectId });
+  if (params.unitNumber != null) qs.set('unitNumber', String(params.unitNumber));
+  if (params.classId) qs.set('classId', params.classId);
+  return apiRequest(`/api/notes/centralized?${qs.toString()}`, { method: 'GET' });
+};
+
+export const fetchCentralizedNotesCombined = async (params: { subjectId: string; classId?: string }) => {
+  const qs = new URLSearchParams({ subjectId: params.subjectId });
+  if (params.classId) qs.set('classId', params.classId);
+  return apiRequest(`/api/notes/centralized/combined?${qs.toString()}`, { method: 'GET' });
+};
+
+export const uploadCentralizedNotes = async (payload: {
+  classId?: string; subjectId: string; unitNumber: number; unitName: string;
+  title: string; content: string; noteType?: string;
+}) => {
+  return apiRequest('/api/notes/centralized', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+};
+
 // ─── Question Bank ───────────────────────────────────────────────────────────
 
 export const fetchQuestionBank = async () => {

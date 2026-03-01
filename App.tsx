@@ -8,7 +8,7 @@ import { fetchUsers, fetchClasses } from './services/dataService';
 import { setLocale } from './services/i18n';
 import AdminSetup from './components/AdminSetup';
 import UserProfile from './components/UserProfile';
-import Iridescence from './components/Iridescence';
+import LiquidChrome from './components/LiquidChrome';
 import AccessibilityPanel from './components/AccessibilityPanel';
 import { SkeletonDashboard } from './components/SkeletonLoader';
 import { useThemeEngine } from './hooks/useThemeEngine';
@@ -203,7 +203,7 @@ const App: React.FC = () => {
     return (
         <>
             <SplashCursor />
-            <Iridescence
+            <LiquidChrome
                 color={currentUser ? [0.62, 0.62, 0.62] : [0.56, 0.56, 0.56]}
                 mouseReact amplitude={currentUser ? 0.15 : 0.1} speed={currentUser ? 1.2 : 1}
             />

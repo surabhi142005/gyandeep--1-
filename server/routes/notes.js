@@ -14,6 +14,7 @@ import { ensureRole } from '../middleware/rbac.js'
 import { asyncRoute } from '../middleware/validate.js'
 import { addJob } from '../jobQueue.js'
 import { getLLMService } from '../services/llmService.js'
+import { run as dbRun, all as dbAll, get as dbGet } from '../database.js'
 
 const router = Router()
 const storageDir = path.join(process.cwd(), 'server', 'storage')
@@ -191,6 +192,75 @@ router.get('/list', requireAuth, ensureRole('teacher', 'admin'), asyncRoute(asyn
     url:  `/storage/notes/${encodeURIComponent(safeClassId)}/${encodeURIComponent(safeSubjectId)}/${f}`,
     name: f,
   })))
+}))
+
+// ── Centralized unit-wise notes ──────────────────────────────────────────────
+
+// POST /centralized — teacher uploads unit-wise notes
+router.post('/centralized', requireAuth, ensureRole('teacher', 'admin'), asyncRoute(async (req, res) => {
+  const { classId, subjectId, unitNumber, unitName, title, content, noteType } = req.body || {}
+  if (!subjectId || unitNumber == null || !unitName || !title) {
+    return res.status(400).json({ error: 'subjectId, unitNumber, unitName, and title are required' })
+  }
+  const validTypes = ['class_notes', 'quiz_notes']
+  const type = validTypes.includes(noteType) ? noteType : 'class_notes'
+  const id = `cn_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
+  await dbRun(
+    `INSERT INTO centralized_notes (id, classId, subjectId, unitNumber, unitName, title, content, noteType, teacherId, createdAt)
+     VALUES (?,?,?,?,?,?,?,?,?,?)`,
+    [id, classId || null, subjectId, Number(unitNumber), unitName, title, content || '', type, req.user.id, Date.now()]
+  )
+  return res.json({ ok: true, id })
+}))
+
+// GET /centralized — list notes by subject+unit (any authenticated user)
+router.get('/centralized', requireAuth, asyncRoute(async (req, res) => {
+  const { subjectId, unitNumber, classId } = req.query
+  if (!subjectId) return res.status(400).json({ error: 'subjectId is required' })
+
+  let sql = `SELECT * FROM centralized_notes WHERE subjectId = ?`
+  const params = [subjectId]
+
+  if (unitNumber != null && unitNumber !== '') {
+    sql += ` AND unitNumber = ?`
+    params.push(Number(unitNumber))
+  }
+  if (classId) {
+    sql += ` AND (classId = ? OR classId IS NULL)`
+    params.push(classId)
+  }
+  sql += ` ORDER BY unitNumber ASC, createdAt DESC`
+
+  const rows = await dbAll(sql, params)
+  return res.json(rows)
+}))
+
+// GET /centralized/combined — all notes for a subject grouped by unit
+router.get('/centralized/combined', requireAuth, asyncRoute(async (req, res) => {
+  const { subjectId, classId } = req.query
+  if (!subjectId) return res.status(400).json({ error: 'subjectId is required' })
+
+  let sql = `SELECT * FROM centralized_notes WHERE subjectId = ?`
+  const params = [subjectId]
+  if (classId) {
+    sql += ` AND (classId = ? OR classId IS NULL)`
+    params.push(classId)
+  }
+  sql += ` ORDER BY unitNumber ASC, createdAt DESC`
+
+  const rows = await dbAll(sql, params)
+
+  // Group by unit
+  const units = {}
+  for (const row of rows) {
+    const key = row.unitNumber
+    if (!units[key]) {
+      units[key] = { unitNumber: row.unitNumber, unitName: row.unitName, notes: [] }
+    }
+    units[key].notes.push(row)
+  }
+
+  return res.json(Object.values(units))
 }))
 
 export default router

@@ -105,7 +105,21 @@ router.post('/login', authRateLimit, asyncRoute(async (req, res) => {
   const user = await findUserByEmail(safeEmail)
   if (!user || !(user.passwordHash || user.password)) return res.status(401).json({ error: 'Invalid credentials' })
   const hash = user.passwordHash || user.password
-  const ok = await bcrypt.compare(String(password), hash)
+  let ok = false
+  try { ok = await bcrypt.compare(String(password), hash) } catch {}
+  // Fallback: if stored hash is SHA-256 (64-char hex), compare SHA-256 hashes
+  if (!ok && /^[0-9a-f]{64}$/i.test(hash)) {
+    const { createHash } = await import('crypto')
+    const sha256 = createHash('sha256').update(String(password)).digest('hex')
+    if (sha256 === hash.toLowerCase()) {
+      ok = true
+      // Migrate to bcrypt for future logins
+      try {
+        const bcryptHash = await bcrypt.hash(String(password), 10)
+        await dbRun(`UPDATE users SET password = ? WHERE id = ?`, [bcryptHash, user.id])
+      } catch (e) { console.error('Failed to migrate password hash:', e.message) }
+    }
+  }
   if (!ok) return res.status(401).json({ error: 'Invalid credentials' })
   if (user.active === false) return res.status(403).json({ error: 'Account deactivated. Contact administrator.' })
   const token = signToken(user)

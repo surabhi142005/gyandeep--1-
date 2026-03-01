@@ -261,6 +261,24 @@ export const setupSchema = async () => {
         await run(`DELETE FROM idempotency_keys WHERE createdAt < ?`, [Date.now() - 7 * 24 * 60 * 60 * 1000])
         console.log('Idempotency table ready')
 
+        // Centralized Notes Table (unit-wise notes for exam prep)
+        await run(`CREATE TABLE IF NOT EXISTS centralized_notes (
+            id TEXT PRIMARY KEY,
+            classId TEXT,
+            subjectId TEXT NOT NULL,
+            unitNumber INTEGER NOT NULL,
+            unitName TEXT NOT NULL,
+            title TEXT NOT NULL,
+            content TEXT,
+            filePath TEXT,
+            noteType TEXT NOT NULL DEFAULT 'class_notes',
+            teacherId TEXT,
+            createdAt INTEGER NOT NULL
+        )`)
+        await run(`CREATE INDEX IF NOT EXISTS idx_cnotes_subject_unit ON centralized_notes(subjectId, unitNumber)`)
+        await run(`CREATE INDEX IF NOT EXISTS idx_cnotes_class ON centralized_notes(classId)`)
+        console.log('Centralized notes table ready')
+
         console.log('Database schema synced.')
     } catch (err) {
         console.error('Error setting up schema:', err)

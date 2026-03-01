@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import type { Student, ClassSession, HistoricalSessionRecord } from '../types';
 import WebcamCapture from './WebcamCapture';
 import StudentFaceRegistration from './StudentFaceRegistration';
@@ -10,6 +10,7 @@ import PerformanceChart from './PerformanceChart';
 import Leaderboard from './Leaderboard';
 import AnnouncementBoard from './AnnouncementBoard';
 import type { Announcement } from './AnnouncementBoard';
+import { fetchCentralizedNotesCombined } from '../services/dataService';
 
 interface StudentDashboardProps {
   student: Student;
@@ -44,9 +45,31 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ student, classSessi
   const prevSessionRef = useRef<ClassSession | undefined>(undefined);
   const [selectedPreviousNoteInfo, setSelectedPreviousNoteInfo] = useState<{ id: number; subject: string; date: string } | null>(null);
   const [selectedPreviousNoteText, setSelectedPreviousNoteText] = useState<string | null>(null);
+  const [examNotesSubject, setExamNotesSubject] = useState(classSession.subject || '');
+  const [examUnits, setExamUnits] = useState<{ unitNumber: number; unitName: string; notes: any[] }[]>([]);
+  const [examNotesLoading, setExamNotesLoading] = useState(false);
+  const [expandedUnit, setExpandedUnit] = useState<number | null>(null);
 
 
   const colors = useMemo(() => THEME_COLORS[theme] || THEME_COLORS.indigo, [theme]);
+
+  // Fetch centralized exam notes when subject changes
+  const loadExamNotes = useCallback(async (subject: string) => {
+    if (!subject) return;
+    setExamNotesLoading(true);
+    try {
+      const units = await fetchCentralizedNotesCombined({ subjectId: subject, classId: student.classId || undefined });
+      setExamUnits(Array.isArray(units) ? units : []);
+    } catch {
+      setExamUnits([]);
+    } finally {
+      setExamNotesLoading(false);
+    }
+  }, [student.classId]);
+
+  useEffect(() => {
+    if (examNotesSubject) loadExamNotes(examNotesSubject);
+  }, [examNotesSubject, loadExamNotes]);
 
   useEffect(() => {
     setQuizTaken(false);
@@ -315,38 +338,92 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ student, classSessi
               )}
             </div>
 
-            {/* New section for Previous Notes */}
+            {/* Exam Notes - Centralized Unit-Wise Notes */}
             <div className="bg-white p-6 rounded-lg shadow-md">
-              <h2 className="text-xl font-semibold text-gray-700 mb-4">Previous Class Notes</h2>
-              {availablePreviousNotes.length > 0 ? (
-                <>
-                  <label htmlFor="previous-notes-select" className="block text-sm font-medium text-gray-700 mb-2">Select a session's notes:</label>
-                  <select
-                    id="previous-notes-select"
-                    onChange={handleSelectPreviousNote}
-                    value={selectedPreviousNoteInfo?.id || ''}
-                    className={`w-full p-2 border border-gray-300 rounded-md shadow-sm mb-4 ${colors.ring} ${colors.border}`}
-                  >
-                    <option value="">-- Select Notes --</option>
-                    {availablePreviousNotes.map(session => (
-                      <option key={session.id} value={session.id}>
-                        {new Date(session.date).toLocaleDateString()} - {session.subject}
-                      </option>
-                    ))}
-                  </select>
-                  {selectedPreviousNoteText && selectedPreviousNoteInfo && (
-                    <div className="mt-4 p-4 bg-gray-50 rounded-md border border-gray-200">
-                      <p className="text-sm font-semibold text-gray-800 mb-2">Notes from {selectedPreviousNoteInfo.subject} on {new Date(selectedPreviousNoteInfo.date).toLocaleDateString()}</p>
-                      <div className="prose max-w-none max-h-60 overflow-y-auto">
-                        <pre className="whitespace-pre-wrap font-sans text-sm">{selectedPreviousNoteText}</pre>
-                      </div>
+              <h2 className="text-xl font-semibold text-gray-700 mb-4">Exam Notes</h2>
+              <div className="mb-4">
+                <label htmlFor="exam-notes-subject" className="block text-sm font-medium text-gray-700 mb-1">Select Subject:</label>
+                <select
+                  id="exam-notes-subject"
+                  value={examNotesSubject}
+                  onChange={(e) => setExamNotesSubject(e.target.value)}
+                  className={`w-full p-2 border border-gray-300 rounded-md shadow-sm ${colors.ring} ${colors.border}`}
+                >
+                  <option value="">-- Choose Subject --</option>
+                  {Array.from(new Set([
+                    classSession.subject,
+                    ...student.performance.map(p => p.subject)
+                  ].filter(Boolean))).map(subj => (
+                    <option key={subj} value={subj}>{subj}</option>
+                  ))}
+                </select>
+              </div>
+              {examNotesLoading ? (
+                <div className="flex justify-center py-4"><Spinner /></div>
+              ) : examUnits.length > 0 ? (
+                <div className="space-y-2">
+                  {examUnits.map(unit => (
+                    <div key={unit.unitNumber} className="border rounded-lg overflow-hidden">
+                      <button
+                        onClick={() => setExpandedUnit(expandedUnit === unit.unitNumber ? null : unit.unitNumber)}
+                        className="w-full flex justify-between items-center p-3 bg-gray-50 hover:bg-gray-100 transition-colors text-left"
+                      >
+                        <span className="font-semibold text-gray-700">Unit {unit.unitNumber}: {unit.unitName}</span>
+                        <span className="text-xs text-gray-500">{unit.notes.length} note{unit.notes.length !== 1 ? 's' : ''} {expandedUnit === unit.unitNumber ? '▲' : '▼'}</span>
+                      </button>
+                      {expandedUnit === unit.unitNumber && (
+                        <div className="p-3 space-y-3 max-h-80 overflow-y-auto">
+                          {unit.notes.map((note: any) => (
+                            <div key={note.id} className="p-3 bg-gray-50 rounded-md border border-gray-200">
+                              <div className="flex justify-between items-center mb-1">
+                                <span className="text-sm font-semibold text-gray-800">{note.title}</span>
+                                <span className={`text-xs px-2 py-0.5 rounded-full ${note.noteType === 'quiz_notes' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'}`}>
+                                  {note.noteType === 'quiz_notes' ? 'Quiz' : 'Class'}
+                                </span>
+                              </div>
+                              {note.content && (
+                                <pre className="whitespace-pre-wrap font-sans text-sm text-gray-600 mt-1">{note.content}</pre>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
-                  )}
-                </>
+                  ))}
+                </div>
+              ) : examNotesSubject ? (
+                <p className="text-gray-500 text-center">No exam notes available for this subject yet.</p>
               ) : (
-                <p className="text-gray-500 text-center">No previous notes available yet.</p>
+                <p className="text-gray-500 text-center">Select a subject to view unit-wise notes.</p>
               )}
             </div>
+
+            {/* Previous Class Notes (from sessions) */}
+            {availablePreviousNotes.length > 0 && (
+              <div className="bg-white p-6 rounded-lg shadow-md">
+                <h2 className="text-xl font-semibold text-gray-700 mb-4">Previous Session Notes</h2>
+                <select
+                  onChange={handleSelectPreviousNote}
+                  value={selectedPreviousNoteInfo?.id || ''}
+                  className={`w-full p-2 border border-gray-300 rounded-md shadow-sm mb-4 ${colors.ring} ${colors.border}`}
+                >
+                  <option value="">-- Select Notes --</option>
+                  {availablePreviousNotes.map(session => (
+                    <option key={session.id} value={session.id}>
+                      {new Date(session.date).toLocaleDateString()} - {session.subject}
+                    </option>
+                  ))}
+                </select>
+                {selectedPreviousNoteText && selectedPreviousNoteInfo && (
+                  <div className="p-4 bg-gray-50 rounded-md border border-gray-200">
+                    <p className="text-sm font-semibold text-gray-800 mb-2">Notes from {selectedPreviousNoteInfo.subject} on {new Date(selectedPreviousNoteInfo.date).toLocaleDateString()}</p>
+                    <div className="prose max-w-none max-h-60 overflow-y-auto">
+                      <pre className="whitespace-pre-wrap font-sans text-sm">{selectedPreviousNoteText}</pre>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
 
             <div className="bg-white p-6 rounded-lg shadow-md">
               <h2 className="text-xl font-semibold text-gray-700 mb-4">Account Settings</h2>

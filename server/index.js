@@ -1135,8 +1135,8 @@ initDB()
   .then(() => setupSchema())
   .catch(err => console.warn('DB init failed (continuing without DB):', err?.message || err))
   .finally(() => {
-    app.listen(port, () => {
-      console.log(`🚀 Gyandeep API running on http://localhost:${port}`)
+    app.listen(port, '0.0.0.0', () => {
+      console.log(`🚀 Gyandeep API running on http://0.0.0.0:${port}`)
       console.log(`   AI service: ${getLLMService() ? 'enabled' : 'disabled (set GEMINI_API_KEY)'}`)
       console.log(`   Job queue:  ${isRedisMode() ? 'BullMQ (Redis)' : 'in-process fallback'}`)
     })

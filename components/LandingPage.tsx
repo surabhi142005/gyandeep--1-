@@ -193,9 +193,9 @@ const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, theme }) => {
             initial={{ scale: 0, rotate: -180 }}
             animate={{ scale: 1, rotate: 0 }}
             transition={{ type: 'spring', stiffness: 200, damping: 15, delay: 0.1 }}
-            className="inline-flex items-center justify-center w-24 h-24 rounded-3xl bg-white/90 shadow-2xl shadow-indigo-500/20 mb-8 backdrop-blur-xl"
+            className="inline-flex items-center justify-center w-28 h-28 sm:w-32 sm:h-32 rounded-3xl bg-white/90 shadow-2xl shadow-indigo-500/20 mb-8 backdrop-blur-xl"
           >
-            <img src="/logo.png" alt="Gyandeep" className="w-16 h-16 object-contain" />
+            <img src="/logo.png" alt="Gyandeep" className="w-20 h-20 sm:w-24 sm:h-24 object-contain drop-shadow-[0_2px_6px_rgba(0,0,0,0.4)]" />
           </motion.div>
 
           {/* Heading */}
