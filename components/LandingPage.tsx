@@ -72,7 +72,7 @@ const FeatureCard: React.FC<{ feature: typeof features[0]; index: number }> = ({
           {feature.icon}
         </motion.span>
         <h3 className="font-bold text-gray-800 text-lg mb-2">{feature.title}</h3>
-        <p className="text-sm text-gray-600 leading-relaxed">{feature.desc}</p>
+        <p className="text-sm text-gray-700 leading-relaxed">{feature.desc}</p>
       </div>
     </motion.div>
   );
@@ -98,7 +98,7 @@ const ScrollScene: React.FC<{ scene: typeof scenes[0]; index: number }> = ({ sce
           Step {index + 1}
         </div>
         <h3 className="text-2xl md:text-3xl font-bold text-gray-800 mb-3">{scene.title}</h3>
-        <p className="text-gray-600 text-lg leading-relaxed max-w-md">{scene.desc}</p>
+        <p className="text-gray-700 text-lg leading-relaxed max-w-md">{scene.desc}</p>
       </motion.div>
       <motion.div
         initial={{ opacity: 0, x: isEven ? 60 : -60 }}
@@ -153,7 +153,7 @@ const StatCounter: React.FC<{ value: string; label: string; delay: number }> = (
       <div className="text-3xl md:text-4xl font-extrabold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">
         {value}
       </div>
-      <div className="text-sm text-gray-500 mt-1">{label}</div>
+      <div className="text-sm text-gray-700 mt-1">{label}</div>
     </motion.div>
   );
 };
@@ -167,7 +167,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, theme }) => {
   const heroScale = useTransform(scrollYProgress, [0, 0.5], [1, 0.95]);
 
   return (
-    <div className="min-h-screen overflow-hidden">
+    <div className="min-h-screen overflow-hidden bg-white/60 backdrop-blur-sm">
       {/* Hero Section with Parallax */}
       <div ref={heroRef} className="relative min-h-screen flex flex-col items-center justify-center text-center px-4 py-20 overflow-hidden">
         {/* Floating particles */}
@@ -205,7 +205,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, theme }) => {
             transition={{ duration: 0.7, delay: 0.3 }}
             className="text-6xl md:text-7xl lg:text-8xl font-extrabold tracking-tight mb-6"
           >
-            <span className="bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-500 bg-clip-text text-transparent">
+            <span className="bg-gradient-to-r from-indigo-700 via-purple-700 to-pink-600 bg-clip-text text-transparent drop-shadow-lg">
               Gyandeep
             </span>
           </motion.h1>
@@ -215,7 +215,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, theme }) => {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.7, delay: 0.5 }}
-            className="text-xl md:text-2xl text-gray-600 max-w-2xl mx-auto mb-3 font-medium"
+            className="text-xl md:text-2xl text-gray-800 max-w-2xl mx-auto mb-3 font-semibold"
           >
             AI-Powered Smart Classroom System
           </motion.p>
@@ -223,7 +223,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, theme }) => {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.7, delay: 0.6 }}
-            className="text-gray-400 max-w-lg mx-auto mb-10 text-base"
+            className="text-gray-700 max-w-lg mx-auto mb-10 text-base"
           >
             Transform your classroom with face recognition, AI quizzes, real-time attendance, and gamified learning.
           </motion.p>
@@ -253,7 +253,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, theme }) => {
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.98 }}
               onClick={() => document.getElementById('features')?.scrollIntoView({ behavior: 'smooth' })}
-              className="text-gray-600 font-semibold py-4 px-8 rounded-2xl text-lg border border-gray-200 hover:border-gray-300 hover:bg-white/60 backdrop-blur transition-all duration-300"
+              className="text-gray-800 font-semibold py-4 px-8 rounded-2xl text-lg border border-gray-300 bg-white/80 hover:bg-white hover:border-gray-400 backdrop-blur transition-all duration-300"
             >
               Learn More
             </motion.button>
@@ -270,9 +270,9 @@ const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, theme }) => {
           <motion.div
             animate={{ y: [0, 12, 0] }}
             transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
-            className="w-6 h-10 rounded-full border-2 border-gray-300 flex items-start justify-center p-1.5"
+            className="w-6 h-10 rounded-full border-2 border-gray-500 flex items-start justify-center p-1.5"
           >
-            <div className="w-1.5 h-2.5 rounded-full bg-gray-400" />
+            <div className="w-1.5 h-2.5 rounded-full bg-gray-600" />
           </motion.div>
         </motion.div>
       </div>
@@ -298,7 +298,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, theme }) => {
           <h2 className="text-3xl md:text-4xl font-extrabold text-gray-800 mb-4">
             How It Works
           </h2>
-          <p className="text-gray-500 text-lg max-w-2xl mx-auto">
+          <p className="text-gray-700 text-lg max-w-2xl mx-auto">
             From uploading notes to tracking progress, Gyandeep handles everything.
           </p>
         </motion.div>
@@ -320,7 +320,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, theme }) => {
           <h2 className="text-3xl md:text-4xl font-extrabold text-gray-800 mb-4">
             What makes Gyandeep special?
           </h2>
-          <p className="text-gray-500 text-lg max-w-2xl mx-auto">
+          <p className="text-gray-700 text-lg max-w-2xl mx-auto">
             A complete platform for the modern classroom
           </p>
         </motion.div>
@@ -343,7 +343,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, theme }) => {
           <h2 className="text-3xl md:text-4xl font-extrabold text-gray-800 mb-4">
             Ready to transform your classroom?
           </h2>
-          <p className="text-gray-500 text-lg mb-8 max-w-xl mx-auto">
+          <p className="text-gray-700 text-lg mb-8 max-w-xl mx-auto">
             Join thousands of educators using AI to create engaging learning experiences.
           </p>
           <motion.button
@@ -358,7 +358,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, theme }) => {
       </div>
 
       {/* Footer */}
-      <footer className="text-center py-6 text-xs text-gray-400 border-t border-gray-100">
+      <footer className="text-center py-6 text-xs text-gray-600 border-t border-gray-200">
         <p>Gyandeep — Built with React, Gemini AI & Three.js</p>
       </footer>
     </div>

@@ -2,7 +2,6 @@ import React, { useState, useMemo } from 'react';
 import type { Admin } from '../types';
 import { UserRole as UserRoleEnum } from '../types';
 import Spinner from './Spinner';
-import { hashPassword } from '../services/authService';
 
 interface AdminSetupProps {
   onSetupComplete: (adminData: Omit<Admin, 'faceImage'>) => void;
@@ -46,20 +45,63 @@ const AdminSetup: React.FC<AdminSetupProps> = ({ onSetupComplete, theme }) => {
     }
 
     setIsLoading(true);
-    // Hash password and then complete setup
     (async () => {
       try {
-        const hashed = await hashPassword(adminPassword);
-        const newAdmin: Omit<Admin, 'faceImage'> = {
-          id: 'a1', // Default ID for the first admin
-          name: adminName.trim(),
-          role: UserRoleEnum.ADMIN,
-          email: adminEmail.trim(),
-          password: hashed,
-        };
-        onSetupComplete(newAdmin);
-      } catch (err: any) {
-        setError("Error securing password: " + err.message);
+        const apiBase = (import.meta as any).env?.VITE_API_URL || '';
+        // Register via server API so password is bcrypt-hashed in the DB
+        const res = await fetch(`${apiBase}/api/auth/register`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: adminEmail.trim(), password: adminPassword, name: adminName.trim() }),
+        });
+        if (res.ok) {
+          const { token, user } = await res.json();
+          try { window.localStorage.setItem('gyandeep_token', token); } catch {}
+          // Promote to admin in DB
+          try {
+            await fetch(`${apiBase}/api/users/bulk`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+              body: JSON.stringify([{ ...user, role: 'admin' }]),
+            });
+          } catch {}
+          const newAdmin: Omit<Admin, 'faceImage'> = {
+            id: user.id,
+            name: user.name,
+            role: UserRoleEnum.ADMIN,
+            email: user.email,
+            password: adminPassword,
+          };
+          onSetupComplete(newAdmin);
+        } else {
+          // Server unavailable — fallback to local-only setup
+          const { hashPassword } = await import('../services/authService');
+          const hashed = await hashPassword(adminPassword);
+          const newAdmin: Omit<Admin, 'faceImage'> = {
+            id: 'a1',
+            name: adminName.trim(),
+            role: UserRoleEnum.ADMIN,
+            email: adminEmail.trim(),
+            password: hashed,
+          };
+          onSetupComplete(newAdmin);
+        }
+      } catch {
+        // Server unreachable — fallback to local-only setup
+        try {
+          const { hashPassword } = await import('../services/authService');
+          const hashed = await hashPassword(adminPassword);
+          const newAdmin: Omit<Admin, 'faceImage'> = {
+            id: 'a1',
+            name: adminName.trim(),
+            role: UserRoleEnum.ADMIN,
+            email: adminEmail.trim(),
+            password: hashed,
+          };
+          onSetupComplete(newAdmin);
+        } catch (err: any) {
+          setError("Error securing password: " + err.message);
+        }
       } finally {
         setIsLoading(false);
       }
@@ -67,13 +109,13 @@ const AdminSetup: React.FC<AdminSetupProps> = ({ onSetupComplete, theme }) => {
   };
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50 p-4">
+    <div className="min-h-screen flex flex-col items-center justify-center p-4">
       <div className="w-full max-w-md mx-auto">
         <div className="text-center mb-8">
-          <h1 className={`text-4xl font-bold ${colors.text}`}>Gyandeep</h1>
-          <p className="text-gray-600 mt-2">Initial Setup: Create Administrator Account</p>
+          <h1 className="text-4xl font-bold text-gray-900 drop-shadow-[0_1px_2px_rgba(255,255,255,0.8)]">Gyandeep</h1>
+          <p className="text-gray-800 mt-2 font-medium drop-shadow-[0_1px_1px_rgba(255,255,255,0.6)]">Initial Setup: Create Administrator Account</p>
         </div>
-        <div className="bg-white rounded-xl shadow-2xl p-8">
+        <div className="bg-white rounded-xl shadow-2xl p-8 border border-gray-200">
           <h2 className="text-2xl font-bold text-center text-gray-800 mb-6">Administrator Details</h2>
           {error && <p className="text-red-600 text-center mb-4 text-sm bg-red-50 p-2 rounded-md">{error}</p>}
           <form onSubmit={handleSubmit} className="space-y-4">
