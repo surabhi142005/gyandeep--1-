@@ -1,94 +1,80 @@
-import { supabase } from './supabaseClient';
-import type { RealtimeChannel } from '@supabase/supabase-js';
+/**
+ * services/websocketService.ts
+ *
+ * SSE-based realtime service replacing Supabase Realtime.
+ * Same public interface: on(), emit(), connect(), disconnect().
+ */
 
-const BROADCAST_EVENTS = [
-  'attendance-changed',
-  'performance-changed',
-  'grades-changed',
-  'timetable-changed',
-  'tickets-changed',
-  'quiz-submission',
-  'session-changed',
-  'session-ended',
-  'engagement-update',
-  'blockchain-update',
-  'digital-twin-changed',
-  'new-chat-message'
-] as const;
+import { getStoredToken } from './authService';
+
+const API_BASE = import.meta.env.VITE_API_URL || '';
 
 class WebSocketService {
-    private channel: RealtimeChannel | null = null;
-    private notificationChannel: RealtimeChannel | null = null;
+    private eventSource: EventSource | null = null;
     private connected: boolean = false;
     private listeners: Map<string, Set<(data: any) => void>> = new Map();
+    private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
     private userId: string | null = null;
+    private userRole: string | null = null;
 
     /**
-     * Connect to Supabase Realtime.
+     * Connect to SSE stream.
      */
-    connect(userId: string, userRole: string, _token?: string, _url?: string): void {
-        if (this.connected) return;
+    connect(userId: string, userRole: string): void {
+        if (this.connected && this.eventSource) return;
         this.userId = userId;
+        this.userRole = userRole;
 
-        // Create broadcast channel for custom classroom events
-        this.channel = supabase.channel('classroom', {
-            config: {
-                broadcast: { self: true },
-                presence: { key: userId }
-            }
-        });
-
-        // Subscribe to all broadcast events
-        for (const event of BROADCAST_EVENTS) {
-            this.channel.on('broadcast', { event }, ({ payload }) => {
-                this.notifyListeners(event, payload);
-            });
+        const token = getStoredToken();
+        if (!token) {
+            console.warn('Cannot connect SSE: no auth token');
+            return;
         }
 
-        // Track presence
-        this.channel.on('presence', { event: 'sync' }, () => {
-            const state = this.channel?.presenceState() || {};
-            this.notifyListeners('presence-sync', state);
-        });
+        this.setupEventSource(token);
+    }
 
-        this.channel.subscribe(async (status) => {
-            if (status === 'SUBSCRIBED') {
+    private setupEventSource(token: string): void {
+        try {
+            this.eventSource = new EventSource(`${API_BASE}/api/events?token=${encodeURIComponent(token)}`);
+
+            this.eventSource.onopen = () => {
                 this.connected = true;
-                console.log('Connected to Supabase Realtime');
-
-                // Track user presence
-                await this.channel?.track({ userId, role: userRole, online_at: new Date().toISOString() });
-            }
-        });
-
-        // Subscribe to notification changes via postgres_changes
-        this.notificationChannel = supabase
-            .channel('notifications-changes')
-            .on(
-                'postgres_changes',
-                {
-                    event: 'INSERT',
-                    schema: 'public',
-                    table: 'notifications',
-                    filter: `user_id=eq.${userId}`
-                },
-                (payload) => {
-                    this.notifyListeners('notification', payload.new);
+                if (this.reconnectTimer) {
+                    clearTimeout(this.reconnectTimer);
+                    this.reconnectTimer = null;
                 }
-            )
-            .on(
-                'postgres_changes',
-                {
-                    event: 'INSERT',
-                    schema: 'public',
-                    table: 'notifications',
-                    filter: 'user_id=eq.all'
-                },
-                (payload) => {
-                    this.notifyListeners('notification', payload.new);
+                console.log('Connected to SSE stream');
+            };
+
+            this.eventSource.onmessage = (evt) => {
+                try {
+                    const data = JSON.parse(evt.data);
+                    if (data.event) {
+                        this.notifyListeners(data.event, data.payload);
+                    }
+                } catch {
+                    // ignore malformed messages
                 }
-            )
-            .subscribe();
+            };
+
+            this.eventSource.onerror = () => {
+                this.connected = false;
+                this.eventSource?.close();
+                this.eventSource = null;
+
+                // Auto-reconnect after 5 seconds
+                if (!this.reconnectTimer) {
+                    this.reconnectTimer = setTimeout(() => {
+                        this.reconnectTimer = null;
+                        const t = getStoredToken();
+                        if (t) this.setupEventSource(t);
+                    }, 5000);
+                }
+            };
+        } catch (e) {
+            console.warn('SSE connection failed:', e);
+        }
     }
 
     private notifyListeners(event: string, data: any): void {
@@ -109,14 +95,20 @@ class WebSocketService {
     }
 
     emit(event: string, data: any): void {
-        if (!this.channel) {
-            console.warn('Cannot emit event: Realtime not connected');
+        const token = getStoredToken();
+        if (!token) {
+            console.warn('Cannot emit event: no auth token');
             return;
         }
-        this.channel.send({
-            type: 'broadcast',
-            event,
-            payload: data
+        fetch(`${API_BASE}/api/events/broadcast`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify({ event, payload: data }),
+        }).catch(() => {
+            console.warn('Failed to broadcast event:', event);
         });
     }
 
@@ -127,7 +119,6 @@ class WebSocketService {
     sendPerformanceUpdate(data: any): void {
         this.emit('performance-changed', data);
     }
-
 
     sendGradesUpdate(data: any): void {
         this.emit('grades-changed', data);
@@ -166,17 +157,17 @@ class WebSocketService {
     }
 
     disconnect(): void {
-        if (this.channel) {
-            supabase.removeChannel(this.channel);
-            this.channel = null;
+        if (this.reconnectTimer) {
+            clearTimeout(this.reconnectTimer);
+            this.reconnectTimer = null;
         }
-        if (this.notificationChannel) {
-            supabase.removeChannel(this.notificationChannel);
-            this.notificationChannel = null;
+        if (this.eventSource) {
+            this.eventSource.close();
+            this.eventSource = null;
         }
         this.connected = false;
         this.listeners.clear();
-        console.log('Disconnected from Supabase Realtime');
+        console.log('Disconnected from SSE stream');
     }
 }
 

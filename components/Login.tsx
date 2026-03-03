@@ -3,7 +3,7 @@ import { useState, useMemo } from 'react';
 import type { User, UserRole } from '../types';
 import { UserRole as UserRoleEnum, ROLE_DISPLAY_NAMES } from '../types';
 import WebcamCapture from './WebcamCapture';
-import { verifyFace, passwordMatches, hashPassword, login as supabaseLogin, loginWithGoogle } from '../services/authService';
+import { verifyFace, passwordMatches, hashPassword, login as expressLogin, loginWithGoogle } from '../services/authService';
 import Spinner from './Spinner';
 import { t } from '../services/i18n';
 
@@ -90,34 +90,13 @@ const Login: React.FC<LoginProps> = ({ onLogin, users, theme, onPasswordReset })
     }
     setIsLoggingIn(true);
     try {
-      // Try Supabase auth first
+      // Express JWT login (primary path)
       try {
-        const { user: authUser } = await supabaseLogin(email, password);
-        if (authUser) {
-          // Auth state change listener in App.tsx will handle the rest
-          return;
-        }
-      } catch {
-        // Supabase not configured or auth failed — fall back to legacy
-      }
-
-      // Backend JWT login (always try — vite proxy forwards /api/* to server)
-      const apiBase = import.meta.env.VITE_API_URL || '';
-      try {
-        const res = await fetch(`${apiBase}/api/auth/login`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email, password })
-        });
-        if (res.ok) {
-          const { token, user } = await res.json();
-          try { window.localStorage.setItem('gyandeep_token', token); } catch { }
+        const user = await expressLogin(email, password);
+        if (user) {
           onLogin(user);
           return;
         }
-        const body = await res.json().catch(() => ({}));
-        // If 401, throw proper error; otherwise fall through to offline mode
-        if (res.status === 401) throw new Error(body.error || 'Invalid credentials');
       } catch (fetchErr: any) {
         if (fetchErr.message && fetchErr.message !== 'Failed to fetch') throw fetchErr;
         // Server unreachable — fall through to offline mode
@@ -206,14 +185,14 @@ const Login: React.FC<LoginProps> = ({ onLogin, users, theme, onPasswordReset })
       <div className="min-h-screen flex flex-col items-center justify-center p-4">
         <div className="w-full max-w-md mx-auto">
           <div className="text-center mb-8">
-            <div className="inline-flex items-center justify-center w-20 h-20 sm:w-24 sm:h-24 rounded-2xl bg-white/90 shadow-xl mb-4 backdrop-blur-sm">
+            <div className="inline-flex items-center justify-center w-20 h-20 sm:w-24 sm:h-24 rounded-2xl bg-white shadow-xl mb-4 backdrop-blur-sm">
               <img src="/logo.png" alt="Gyandeep" className="w-14 h-14 sm:w-18 sm:h-18 object-contain drop-shadow-[0_2px_6px_rgba(0,0,0,0.4)]" />
             </div>
-            <h1 className={`text-4xl font-bold ${colors.text}`}>Gyandeep</h1>
-            <p className="text-gray-500 mt-2 text-sm">AI-Powered Smart Classroom</p>
+            <h1 className="text-4xl font-bold text-gray-900 drop-shadow-[0_1px_2px_rgba(255,255,255,0.8)]">Gyandeep</h1>
+            <p className="text-gray-800 mt-2 text-sm font-medium drop-shadow-[0_1px_1px_rgba(255,255,255,0.6)]">AI-Powered Smart Classroom</p>
           </div>
 
-          <div className="bg-white/90 backdrop-blur rounded-2xl shadow-2xl p-6 sm:p-8">
+          <div className="bg-white shadow-2xl rounded-2xl p-6 sm:p-8 border border-gray-200">
 
             {error && (
               <div role="alert" aria-live="assertive" className="mb-4 p-3 bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg flex items-center gap-2">

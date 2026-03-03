@@ -263,4 +263,22 @@ router.post('/email/verify-check', resetRateLimit, asyncRoute(async (req, res) =
   return res.json({ ok: true })
 }))
 
+// ── Get current user from JWT ─────────────────────────────────────────────────
+router.get('/me', requireAuth, asyncRoute(async (req, res) => {
+  const { findUserById } = await import('../controllers/userStore.js')
+  const user = await findUserById(req.user.id)
+  if (!user) return res.status(404).json({ error: 'User not found' })
+  return res.json(toPublicUser(user))
+}))
+
+// ── Register face image ──────────────────────────────────────────────────────
+router.post('/face/register', requireAuth, asyncRoute(async (req, res) => {
+  const { imageDataUrl } = req.body || {}
+  if (!imageDataUrl) return res.status(400).json({ error: 'imageDataUrl is required' })
+  const { updateUser: updateUserFn } = await import('../controllers/userStore.js')
+  const updated = await updateUserFn(req.user.id, { faceImage: imageDataUrl })
+  if (!updated) return res.status(404).json({ error: 'User not found' })
+  return res.json({ ok: true })
+}))
+
 export default router

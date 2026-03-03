@@ -2,7 +2,7 @@
  * hooks/useAuth.ts
  *
  * Authentication state extracted from App.tsx.
- * Uses localStorage JWT when Supabase is not configured (self-hosted mode).
+ * Uses localStorage JWT with Express backend.
  */
 
 import { useState, useEffect } from 'react';
@@ -10,8 +10,7 @@ import type { AnyUser } from '../types';
 import type { ToastType } from '../components/ToastNotification';
 import { websocketService } from '../services/websocketService';
 import { getCurrentPosition } from '../services/locationService';
-import { supabase, isSupabaseConfigured } from '../services/supabaseClient';
-import { getCurrentUser, requestPasswordReset } from '../services/authService';
+import { getCurrentUser, getStoredToken, requestPasswordReset } from '../services/authService';
 import type { Coordinates } from '../types';
 
 interface UseAuthOptions {
@@ -30,22 +29,16 @@ export function useAuth({ allUsers, setAllUsers, showNotification }: UseAuthOpti
   });
   const [userLocation, setUserLocation] = useState<Coordinates | null>(null);
 
-  // ── Supabase auth state listener (only when properly configured) ───────────
+  // ── Hydrate user from JWT on mount ──────────────────────────────────────────
   useEffect(() => {
-    if (!isSupabaseConfigured) return;
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (event === 'SIGNED_IN' && session?.user) {
-        try {
-          const user = await getCurrentUser();
-          if (user) handleLogin(user as AnyUser);
-        } catch (e) {
-          console.error('Failed to load user after Supabase auth change:', e);
-        }
-      } else if (event === 'SIGNED_OUT') {
-        handleLogout();
-      }
+    const token = getStoredToken();
+    if (!token) return;
+    // If we already have a cached user, try to refresh from server in background
+    getCurrentUser().then(user => {
+      if (user) handleLogin(user as AnyUser);
+    }).catch(() => {
+      // Server unreachable — keep cached user if available
     });
-    return () => subscription.unsubscribe();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

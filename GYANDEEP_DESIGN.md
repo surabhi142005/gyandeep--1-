@@ -1,5 +1,5 @@
 # GYANDEEP — Complete System Design Document
-**AI-Powered Smart Classroom System | Version 1.0 | Feb 2026**
+**AI-Powered Smart Classroom System | Version 2.0 | March 2026**
 
 ---
 
@@ -17,7 +17,7 @@
 │  └──────────┘  └──────────┘  └──────────┘  └──────────────┘    │
 │                                                                 │
 │  React 19 + Vite + Tailwind CSS + Framer Motion                │
-│  WebSocket (Supabase Realtime) | Face-api.js                   │
+│  SSE (Server-Sent Events) | Face-api.js                        │
 └──────────────────────────┬──────────────────────────────────────┘
                            │ REST API + WebSocket
                            ▼
@@ -38,10 +38,10 @@
 ┌─────────────────────────────────────────────────────────────────┐
 │                       DATA LAYER                                │
 │                                                                 │
-│  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────────┐    │
-│  │ SQLite   │  │ Supabase │  │  Redis   │  │  File Store  │    │
-│  │ (Local)  │  │(Postgres)│  │ (Cache)  │  │  (JSON/Blob) │    │
-│  └──────────┘  └──────────┘  └──────────┘  └──────────────┘    │
+│  ┌──────────┐  ┌──────────┐  ┌──────────────┐                   │
+│  │ SQLite   │  │  Redis   │  │  File Store  │                   │
+│  │ (WAL)    │  │ (Cache)  │  │  (JSON/Blob) │                   │
+│  └──────────┘  └──────────┘  └──────────────┘                   │
 │                                                                 │
 │  WAL mode | ACID Transactions | Attendance Buffer               │
 │  Prometheus Metrics | NDJSON Audit Archives                     │
@@ -55,12 +55,12 @@
       │
       ▼
 ┌──────────┐    ┌──────────┐    ┌──────────┐    ┌──────────┐
-│  React   │───▶│  Fetch   │───▶│ Express  │───▶│ SQLite / │
-│   UI     │    │  + JWT   │    │  Server  │    │ Supabase │
-│          │◀───│  Header  │◀───│  + RBAC  │◀───│   DB     │
+│  React   │───▶│  Fetch   │───▶│ Express  │───▶│  SQLite  │
+│   UI     │    │  + JWT   │    │  Server  │    │   DB     │
+│          │◀───│  Header  │◀───│  + RBAC  │◀───│  (WAL)   │
 └──────────┘    └──────────┘    └──────────┘    └──────────┘
       │                              │
-      │     WebSocket Broadcast      │
+      │       SSE Broadcast          │
       ◀──────────────────────────────┘
 ```
 
@@ -107,8 +107,8 @@
 │  ┌─────────────────┐    ┌─────────────────┐                     │
 │  │  M7: ADMIN      │    │  M8: REALTIME   │                     │
 │  │                 │    │                 │                     │
-│  │ • Bulk Import   │    │ • WebSocket     │                     │
-│  │ • Audit Logs    │    │ • Live Updates  │                     │
+│  │ • Bulk Import   │    │ • SSE (Server-  │                     │
+│  │ • Audit Logs    │    │   Sent Events)  │                     │
 │  │ • Email Health  │    │ • Notifications │                     │
 │  │ • User Mgmt    │    │ • Presence      │                     │
 │  │ • Timetable    │    │   Tracking      │                     │
@@ -612,21 +612,21 @@
 │ Architecture       │ 3-tier (React + Express + SQLite/PG)     │
 │ Frontend           │ React 19, Vite, Tailwind, Framer Motion  │
 │ Backend            │ Node.js, Express, JWT, RBAC              │
-│ Database           │ SQLite (local) / PostgreSQL (Supabase)   │
+│ Database           │ SQLite (WAL mode, single-file)            │
 │ AI Engine          │ Google Gemini Pro & Flash                 │
-│ Realtime           │ Supabase Realtime / Socket.io            │
+│ Realtime           │ Server-Sent Events (SSE)                  │
 │ Face ID            │ face-api.js (128-float descriptors)      │
 │ Job Queue          │ BullMQ (Redis) / in-process fallback     │
 │ Auth               │ JWT + bcrypt + Google OAuth + Face ID    │
 │ Idempotency        │ Idempotency-Key header on all mutations  │
 │ Concurrency        │ Optimistic locking (version field)       │
 │ Monitoring         │ Prometheus metrics + /health endpoint    │
-│ Deployment         │ Docker + Vercel + GitHub Actions         │
+│ Deployment         │ Docker + GitHub Actions                   │
 └────────────────────┴──────────────────────────────────────────┘
 ```
 
 ---
 
-**Document Version:** 1.0  
-**Last Updated:** Feb 27, 2026  
+**Document Version:** 2.0
+**Last Updated:** March 3, 2026
 **Team:** Gyandeep Development Team

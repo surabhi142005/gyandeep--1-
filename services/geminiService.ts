@@ -13,22 +13,15 @@ export interface QuizGenerationOptions {
 
 const getApiBase = () => import.meta.env.VITE_API_URL || '';
 
-const getAuthHeaders = async (): Promise<Record<string, string>> => {
+const getAuthHeaders = (): Record<string, string> => {
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-  // Try Supabase session first, then fall back to localStorage JWT
-  let token: string | null = null;
-  try {
-    const { supabase } = await import('./supabaseClient');
-    const { data } = await supabase.auth.getSession();
-    token = data.session?.access_token ?? null;
-  } catch { /* supabase not configured */ }
-  if (!token) token = localStorage.getItem('gyandeep_token');
+  const token = localStorage.getItem('gyandeep_token');
   if (token) headers['Authorization'] = `Bearer ${token}`;
   return headers;
 };
 
 export const generateQuizFromNotes = async ({ notesText, subject, enableThinkingMode }: QuizGenerationOptions): Promise<QuizQuestion[]> => {
-  const headers = await getAuthHeaders();
+  const headers = getAuthHeaders();
   const res = await fetch(`${getApiBase()}/api/quiz`, {
     method: 'POST',
     headers,
@@ -51,7 +44,7 @@ export interface ChatbotRequest {
 }
 
 export const getChatbotResponse = async ({ prompt, location, model }: ChatbotRequest): Promise<ChatbotResponse> => {
-  const headers = await getAuthHeaders();
+  const headers = getAuthHeaders();
   const res = await fetch(`${getApiBase()}/api/chat`, {
     method: 'POST',
     headers,

@@ -1,15 +1,11 @@
 /**
  * services/authService.ts
  *
- * Dual-mode auth:
- *  - Self-hosted mode (default): uses /api/auth/* JWT endpoints
- *  - Supabase mode: used when VITE_SUPABASE_URL is a real URL
- *
+ * JWT-only auth via Express backend.
  * Face recognition proxies to /api/auth/face (Python service on :5001)
  * with local pixel-diff fallback when the Python service is unavailable.
  */
 
-import { supabase, isSupabaseConfigured } from './supabaseClient';
 import { calculateDistance } from './locationService';
 import type { Coordinates } from '../types';
 
@@ -30,24 +26,9 @@ function authHeader(): Record<string, string> {
   return token ? { Authorization: `Bearer ${token}` } : {};
 }
 
-// ── Self-hosted JWT auth ───────────────────────────────────────────────────────
+// ── Public API ────────────────────────────────────────────────────────────────
 
-async function jwtLogin(email: string, password: string) {
-  const res = await fetch(`${API_BASE}/api/auth/login`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email, password }),
-  });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err.error || 'Invalid credentials');
-  }
-  const data = await res.json();
-  if (data.token) saveToken(data.token);
-  return data.user;
-}
-
-async function jwtRegister(email: string, password: string, name: string, role = 'student') {
+export async function register(email: string, password: string, name: string, role = 'student') {
   const res = await fetch(`${API_BASE}/api/auth/register`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -62,35 +43,22 @@ async function jwtRegister(email: string, password: string, name: string, role =
   return data.user;
 }
 
-// ── Public API ────────────────────────────────────────────────────────────────
-
-export async function register(email: string, password: string, name: string, role = 'student') {
-  if (isSupabaseConfigured) {
-    const { data, error } = await supabase.auth.signUp({ email, password, options: { data: { name, role } } });
-    if (error) throw new Error(error.message);
-    return data;
-  }
-  return jwtRegister(email, password, name, role);
-}
-
 export async function login(email: string, password: string) {
-  if (isSupabaseConfigured) {
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) throw new Error(error.message);
-    return data;
+  const res = await fetch(`${API_BASE}/api/auth/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email, password }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || 'Invalid credentials');
   }
-  return jwtLogin(email, password);
+  const data = await res.json();
+  if (data.token) saveToken(data.token);
+  return data.user;
 }
 
 export async function loginWithGoogle() {
-  if (isSupabaseConfigured) {
-    const { data, error } = await supabase.auth.signInWithOAuth({
-      provider: 'google', options: { redirectTo: `${window.location.origin}/` },
-    });
-    if (error) throw new Error(error.message);
-    return data;
-  }
-  // Self-hosted Google OAuth redirects through Express/Passport
   window.location.href = `${API_BASE}/auth/google`;
   return null;
 }
@@ -98,42 +66,27 @@ export async function loginWithGoogle() {
 export async function logout() {
   try { localStorage.removeItem('gyandeep_token'); } catch {}
   try { localStorage.removeItem('gyandeep_current_user'); } catch {}
-  if (isSupabaseConfigured) {
-    const { error } = await supabase.auth.signOut();
-    if (error) console.warn('Supabase sign-out error:', error.message);
-  }
 }
 
 export async function getCurrentUser() {
-  if (isSupabaseConfigured) {
-    const { data: { user }, error } = await supabase.auth.getUser();
-    if (error || !user) return null;
-    const { data: profile } = await supabase.from('profiles').select('*').eq('id', user.id).single();
-    if (!profile) return null;
-    return {
-      id: user.id, email: user.email, name: profile.name,
-      role: profile.role, faceImage: profile.face_image,
-      preferences: profile.preferences || {}, history: profile.history || [],
-      assignedSubjects: profile.assigned_subjects || [], performance: profile.performance || [],
-      classId: profile.class_id, xp: profile.xp || 0, badges: profile.badges || [],
-      coins: profile.coins || 0, level: profile.level || 1,
-    };
-  }
-  // Self-hosted: user is stored in localStorage by useAuth
+  const token = getStoredToken();
+  if (!token) return null;
   try {
-    const raw = localStorage.getItem('gyandeep_current_user');
-    return raw ? JSON.parse(raw) : null;
-  } catch { return null; }
+    const res = await fetch(`${API_BASE}/api/auth/me`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) return null;
+    return await res.json();
+  } catch {
+    // Server unreachable — fall back to cached user
+    try {
+      const raw = localStorage.getItem('gyandeep_current_user');
+      return raw ? JSON.parse(raw) : null;
+    } catch { return null; }
+  }
 }
 
 export async function requestPasswordReset(email: string) {
-  if (isSupabaseConfigured) {
-    const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${window.location.origin}/reset-password`,
-    });
-    if (error) throw new Error(error.message);
-    return { ok: true };
-  }
   const res = await fetch(`${API_BASE}/api/auth/password/request`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -145,23 +98,22 @@ export async function requestPasswordReset(email: string) {
 // ── Face Recognition ──────────────────────────────────────────────────────────
 
 /**
- * Register a face image.
- * Stores the base64 image locally on the user record (faceImage field).
- * Optionally uploads to Supabase Storage if configured.
+ * Register a face image via the Express backend.
  */
 export async function registerFace(userId: string, imageDataUrl: string): Promise<{ ok: boolean }> {
-  if (isSupabaseConfigured) {
-    try {
-      const blob = await fetch(imageDataUrl).then(r => r.blob());
-      await supabase.storage.from('faces').upload(`${userId}/face.jpg`, blob, {
-        contentType: 'image/jpeg', upsert: true,
-      });
-      await supabase.from('profiles').update({ face_image: imageDataUrl }).eq('id', userId);
-    } catch (e) {
-      console.warn('Supabase face upload failed, storing locally:', e);
-    }
+  const token = getStoredToken();
+  const res = await fetch(`${API_BASE}/api/auth/face/register`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: JSON.stringify({ imageDataUrl }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || 'Face registration failed');
   }
-  // Always also store in allUsers state via the onUpdateFaceImage callback
   return { ok: true };
 }
 

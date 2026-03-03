@@ -62,7 +62,6 @@ export default defineConfig({
           if (id.includes('react') || id.includes('react-dom')) return 'vendor-react';
           if (id.includes('framer-motion'))                      return 'vendor-motion';
           if (id.includes('recharts') || id.includes('chart.js') || id.includes('react-chartjs')) return 'vendor-charts';
-          if (id.includes('@supabase'))                          return 'vendor-supabase';
           return 'vendor';
         },
       },

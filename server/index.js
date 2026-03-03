@@ -440,6 +440,7 @@ app.post('/api/grades', requireAuth, ensureRole('teacher', 'admin'), asyncRoute(
     )
     return { ok: true, grade: entry }
   })
+  broadcastSSE('grades-changed', { type: 'created', id: entry.id })
   return res.json(payload)
 }))
 
@@ -463,6 +464,7 @@ app.post('/api/grades/bulk', requireAuth, ensureRole('teacher', 'admin'), asyncR
     })
     return { ok: true, count: entries.length }
   })
+  broadcastSSE('grades-changed', { type: 'bulk-created', count: entries.length })
   return res.json(payload)
 }))
 
@@ -471,6 +473,7 @@ app.delete('/api/grades/:id', requireAuth, ensureRole('teacher', 'admin'), async
     await dbRun(`DELETE FROM grades WHERE id = ?`, [req.params.id])
     return { ok: true }
   })
+  broadcastSSE('grades-changed', { type: 'deleted', id: req.params.id })
   return res.json(payload)
 }))
 
@@ -516,6 +519,7 @@ app.post('/api/timetable', requireAuth, ensureRole('admin', 'teacher'), asyncRou
     return { ok: true, count: normalized.length }
   })
 
+  broadcastSSE('timetable-changed', { type: 'replaced', count: payload?.count })
   return res.json(payload)
 }))
 
@@ -547,6 +551,7 @@ app.post('/api/timetable/entry', requireAuth, ensureRole('admin', 'teacher'), as
     return { ok: true, entry }
   })
 
+  broadcastSSE('timetable-changed', { type: 'created', id: payload?.entry?.id })
   return res.json(payload)
 }))
 
@@ -561,6 +566,7 @@ app.delete('/api/timetable/:id', requireAuth, ensureRole('admin', 'teacher'), as
     }
     return { ok: true }
   })
+  broadcastSSE('timetable-changed', { type: 'deleted', id: req.params.id })
   return res.json(payload)
 }))
 
@@ -656,6 +662,7 @@ app.post('/api/tickets', requireAuth, asyncRoute(async (req, res) => {
     return { ok: true, ticket }
   })
 
+  broadcastSSE('tickets-changed', { type: 'created', id: payload?.ticket?.id })
   return res.json(payload)
 }))
 
@@ -707,6 +714,7 @@ app.post('/api/tickets/:id/reply', requireAuth, asyncRoute(async (req, res) => {
     return { ok: true }
   })
 
+  broadcastSSE('tickets-changed', { type: 'replied', id: req.params.id })
   return res.json(payload)
 }))
 
@@ -735,6 +743,7 @@ app.post('/api/tickets/:id/close', requireAuth, ensureRole('admin', 'teacher'), 
     return { ok: true }
   })
 
+  broadcastSSE('tickets-changed', { type: 'closed', id: req.params.id })
   return res.json(payload)
 }))
 
@@ -832,6 +841,7 @@ app.post('/api/notifications', requireAuth, ensureRole('admin', 'teacher'), asyn
     await mutateJSON(notificationsFile, [], arr => { arr.push(notif); return arr })
     return { ok: true, notification: notif }
   })
+  broadcastSSE('notification', payload?.notification || {})
   return res.json(payload)
 }))
 
@@ -1068,6 +1078,72 @@ app.get('/metrics', asyncRoute(async (req, res) => {
   res.set('Content-Type', register.contentType)
   res.end(await register.metrics())
 }))
+
+// ── Audit Logs ───────────────────────────────────────────────────────────────
+app.post('/api/audit-logs', requireAuth, ensureRole('admin'), asyncRoute(async (req, res) => {
+  const { type, userId, details } = req.body || {}
+  if (!type) return res.status(400).json({ error: 'type is required' })
+  await dbRun(
+    `INSERT INTO audit_logs (ts, type, userId, details) VALUES (?,?,?,?)`,
+    [Date.now(), String(type), userId || req.user.id, JSON.stringify(details || {})]
+  )
+  return res.json({ ok: true })
+}))
+
+// ── SSE Realtime ─────────────────────────────────────────────────────────────
+import { EventEmitter } from 'events'
+const sseEmitter = new EventEmitter()
+sseEmitter.setMaxListeners(200)
+
+const sseClients = new Set()
+
+app.get('/api/events', (req, res) => {
+  // Validate token from query string
+  const token = req.query.token
+  if (!token) return res.status(401).json({ error: 'token required' })
+  try {
+    jwt.verify(token, JWT_SECRET)
+  } catch {
+    return res.status(401).json({ error: 'Invalid token' })
+  }
+
+  res.writeHead(200, {
+    'Content-Type': 'text/event-stream',
+    'Cache-Control': 'no-cache',
+    Connection: 'keep-alive',
+    'X-Accel-Buffering': 'no',
+  })
+  res.write(':\n\n') // initial comment to flush headers
+
+  const onEvent = (data) => {
+    res.write(`data: ${JSON.stringify(data)}\n\n`)
+  }
+  sseEmitter.on('broadcast', onEvent)
+  sseClients.add(res)
+
+  // Heartbeat every 30s to keep connection alive
+  const heartbeat = setInterval(() => {
+    res.write(':\n\n')
+  }, 30000)
+
+  req.on('close', () => {
+    sseEmitter.off('broadcast', onEvent)
+    sseClients.delete(res)
+    clearInterval(heartbeat)
+  })
+})
+
+app.post('/api/events/broadcast', requireAuth, asyncRoute(async (req, res) => {
+  const { event, payload } = req.body || {}
+  if (!event) return res.status(400).json({ error: 'event is required' })
+  sseEmitter.emit('broadcast', { event, payload: payload || {} })
+  return res.json({ ok: true })
+}))
+
+// Helper to broadcast SSE events from mutation endpoints
+function broadcastSSE(event, payload) {
+  sseEmitter.emit('broadcast', { event, payload: payload || {} })
+}
 
 // ── Health check ──────────────────────────────────────────────────────────────
 
