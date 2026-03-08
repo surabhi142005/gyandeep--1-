@@ -49,22 +49,15 @@ const AdminSetup: React.FC<AdminSetupProps> = ({ onSetupComplete, theme }) => {
       try {
         const apiBase = (import.meta as any).env?.VITE_API_URL || '';
         // Register via server API so password is bcrypt-hashed in the DB
+        // First user is automatically admin
         const res = await fetch(`${apiBase}/api/auth/register`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email: adminEmail.trim(), password: adminPassword, name: adminName.trim() }),
+          body: JSON.stringify({ email: adminEmail.trim(), password: adminPassword, name: adminName.trim(), role: 'admin' }),
         });
         if (res.ok) {
           const { token, user } = await res.json();
           try { window.localStorage.setItem('gyandeep_token', token); } catch {}
-          // Promote to admin in DB
-          try {
-            await fetch(`${apiBase}/api/users/bulk`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-              body: JSON.stringify([{ ...user, role: 'admin' }]),
-            });
-          } catch {}
           const newAdmin: Omit<Admin, 'faceImage'> = {
             id: user.id,
             name: user.name,

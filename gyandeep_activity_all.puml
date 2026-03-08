@@ -1,0 +1,69 @@
+@startuml
+skinparam activityBackgroundColor #FFFFFF
+skinparam activityBorderColor #333333
+skinparam activityStartColor #4CAF50
+skinparam activityEndColor #F44336
+skinparam arrowColor #333333
+skinparam noteBackgroundColor #FFFFCC
+skinparam noteBorderColor #333333
+
+title Gyandeep Activity Diagram - All Roles
+
+|User|
+start
+:Open Gyandeep App;
+
+if (New User?) then (Yes)
+  :Register Account;
+  :Admin Approves;
+else (No)
+  :Login;
+endif
+
+|User|
+if (Role = Student) then
+  :Student Dashboard;
+  :View Classes;
+  :Join Session by Code;
+  :Mark Attendance (GPS Verified);
+  :Take Quiz;
+  :View Grades;
+  :View Analytics;
+  :Download NFT Certificate;
+  
+elseif (Role = Teacher) then
+  :Teacher Dashboard;
+  :Manage Subjects;
+  :Create Class Session;
+  :Generate Session Code;
+  :Take Attendance;
+  :Upload Notes;
+  :Create Quiz;
+  :Grade Students;
+  :View Analytics;
+  
+else (Role = Admin)
+  :Admin Dashboard;
+  :Manage Users;
+  :Manage Subjects;
+  :Manage Classes;
+  :View Analytics;
+  :Question Bank;
+  :Email System;
+endif
+
+|User|
+:Logout;
+stop
+
+note right
+  Key Features:
+  - Face ID Login
+  - Location-based Attendance
+  - Quiz & Grading
+  - Blockchain Records
+  - NFT Certificates
+  - AI Analytics
+end note
+
+@enduml

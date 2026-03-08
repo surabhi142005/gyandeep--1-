@@ -25,7 +25,7 @@ function requireLLM(req, res, next) {
 }
 
 // ── Synchronous quiz generation (cached) ─────────────────────────────────────
-router.post('/', aiRateLimit, requireAuth, ensureRole('teacher', 'admin'), requireLLM, asyncRoute(async (req, res) => {
+router.post('/', aiRateLimit, requireAuth, ensureRole('teacher'), requireLLM, asyncRoute(async (req, res) => {
   const { notesText, subject, enableThinkingMode } = req.body || {}
   if (!notesText || !subject) return res.status(400).json({ error: 'notesText and subject are required' })
 
@@ -47,7 +47,7 @@ router.post('/', aiRateLimit, requireAuth, ensureRole('teacher', 'admin'), requi
 }))
 
 // ── Async quiz generation (fire-and-forget) ───────────────────────────────────
-router.post('/async', aiRateLimit, requireAuth, ensureRole('teacher', 'admin'), requireLLM, asyncRoute(async (req, res) => {
+router.post('/async', aiRateLimit, requireAuth, ensureRole('teacher'), requireLLM, asyncRoute(async (req, res) => {
   const { notesText, subject } = req.body || {}
   if (!notesText || !subject) return res.status(400).json({ error: 'notesText and subject are required' })
   const notesHash = hashNotes(String(notesText))

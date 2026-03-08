@@ -92,12 +92,6 @@ io.on('connection', (socket) => {
         io.emit('engagement-update', metric);
     });
 
-    // Handle blockchain transaction updates
-    socket.on('blockchain-transaction', (txData) => {
-        console.log('Blockchain transaction:', txData);
-        io.emit('blockchain-update', txData);
-    });
-
     // Handle digital twin state updates
     socket.on('digital-twin-update', (state) => {
         console.log('Digital twin update:', state);

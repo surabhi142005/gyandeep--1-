@@ -14,7 +14,7 @@ import { SkeletonDashboard } from './components/SkeletonLoader';
 import { useThemeEngine } from './hooks/useThemeEngine';
 import Header from './components/Header';
 import type { Announcement } from './components/AnnouncementBoard';
-import SplashCursor from './components/ui/SplashCursor';
+
 
 // Extracted hooks
 import { useAuth } from './hooks/useAuth';
@@ -22,11 +22,11 @@ import { useClassSession } from './hooks/useClassSession';
 import { usePerformance } from './hooks/usePerformance';
 
 // Lazy-loaded heavy components
-const TeacherDashboard  = lazy(() => import('./components/TeacherDashboard'));
-const StudentDashboard  = lazy(() => import('./components/StudentDashboard'));
-const AdminDashboard    = lazy(() => import('./components/AdminDashboard').then(m => ({ default: m.default })));
-const Chatbot           = lazy(() => import('./components/Chatbot'));
-const LandingPage       = lazy(() => import('./components/LandingPage'));
+const TeacherDashboard = lazy(() => import('./components/TeacherDashboard'));
+const StudentDashboard = lazy(() => import('./components/StudentDashboard'));
+const AdminDashboard = lazy(() => import('./components/AdminDashboard').then(m => ({ default: m.default })));
+const Chatbot = lazy(() => import('./components/Chatbot'));
+const LandingPage = lazy(() => import('./components/LandingPage'));
 
 // ── localStorage helper ───────────────────────────────────────────────────────
 function useLocalStorage<T>(key: string, initialValue: T): [T, React.Dispatch<React.SetStateAction<T>>] {
@@ -49,29 +49,29 @@ function useLocalStorage<T>(key: string, initialValue: T): [T, React.Dispatch<Re
 // ── App ───────────────────────────────────────────────────────────────────────
 const App: React.FC = () => {
     // ── Preferences & UI state ────────────────────────────────────────────────
-    const [theme, setTheme]                         = useLocalStorage('gyandeep-theme', 'indigo');
-    const [highContrast, setHighContrast]           = useLocalStorage('gyandeep-high-contrast', false);
-    const [fontScale, setFontScale]                 = useLocalStorage('gyandeep-font-scale', 1);
-    const [reducedMotion, setReducedMotion]         = useLocalStorage('gyandeep-reduced-motion', false);
+    const [theme, setTheme] = useLocalStorage('gyandeep-theme', 'indigo');
+    const [highContrast, setHighContrast] = useLocalStorage('gyandeep-high-contrast', false);
+    const [fontScale, setFontScale] = useLocalStorage('gyandeep-font-scale', 1);
+    const [reducedMotion, setReducedMotion] = useLocalStorage('gyandeep-reduced-motion', false);
     const [screenReaderHints, setScreenReaderHints] = useLocalStorage('gyandeep-screen-reader-hints', false);
-    const [voiceEnabled, setVoiceEnabled]           = useLocalStorage('gyandeep-voice-enabled', false);
-    const [darkMode, setDarkMode]                   = useLocalStorage('gyandeep-dark-mode', false);
-    const [currentLocale, setCurrentLocale]         = useState('en');
-    const [showProfile, setShowProfile]             = useState(false);
-    const [showLanding, setShowLanding]             = useState(true);
-    const [notification, setNotification]           = useState<{ message: string; type: ToastType } | null>(null);
+    const [voiceEnabled, setVoiceEnabled] = useLocalStorage('gyandeep-voice-enabled', false);
+    const [darkMode, setDarkMode] = useLocalStorage('gyandeep-dark-mode', false);
+    const [currentLocale, setCurrentLocale] = useState('en');
+    const [showProfile, setShowProfile] = useState(false);
+    const [showLanding, setShowLanding] = useState(true);
+    const [notification, setNotification] = useState<{ message: string; type: ToastType } | null>(null);
 
     // ── App data ──────────────────────────────────────────────────────────────
-    const [allUsers, setAllUsers]       = useLocalStorage<AnyUser[]>('gyandeep-users', []);
+    const [allUsers, setAllUsers] = useLocalStorage<AnyUser[]>('gyandeep-users', []);
     const [allSubjects, setAllSubjects] = useLocalStorage<SubjectConfig[]>('gyandeep-subjects', [
         { id: 'math', name: 'Mathematics' },
         { id: 'science', name: 'Science' },
         { id: 'history', name: 'History' },
         { id: 'english', name: 'English' },
     ]);
-    const [allClasses, setAllClasses]   = useLocalStorage<ClassConfig[]>('gyandeep-classes', []);
+    const [allClasses, setAllClasses] = useLocalStorage<ClassConfig[]>('gyandeep-classes', []);
     const [isSetupComplete, setIsSetupComplete] = useState(() => allUsers.length > 0);
-    const [announcements, setAnnouncements]     = useLocalStorage<Announcement[]>('gyandeep-announcements', []);
+    const [announcements, setAnnouncements] = useLocalStorage<Announcement[]>('gyandeep-announcements', []);
 
     const students = useMemo(() => allUsers.filter(u => u.role === UserRoleEnum.STUDENT) as Student[], [allUsers]);
 
@@ -102,7 +102,7 @@ const App: React.FC = () => {
         fetchClasses().then(classes => {
             if (Array.isArray(classes)) setAllClasses(classes);
         }).catch(err => console.error('Failed to fetch classes:', err));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     // ── Login wrapper (init teacher session on login) ─────────────────────────
@@ -136,13 +136,21 @@ const App: React.FC = () => {
         setAnnouncements(prev => [newAnnouncement, ...prev]);
     };
 
+    // Sync in-memory user list after Login component completes its own password reset flow
+    const handlePasswordResetSync = (email: string, hashedPassword: string): boolean => {
+        setAllUsers(prev => prev.map(u =>
+            u.email?.toLowerCase() === email.toLowerCase() ? { ...u, password: hashedPassword } : u
+        ));
+        return true;
+    };
+
     // ── Render ────────────────────────────────────────────────────────────────
     const renderDashboard = () => {
         if (!isSetupComplete) {
             return <AdminSetup onSetupComplete={handleAdminSetup} theme={theme} />;
         }
         if (!currentUser) {
-            return <Login onLogin={handleLogin} users={allUsers} theme={theme} onPasswordReset={handlePasswordReset} />;
+            return <Login onLogin={handleLogin} users={allUsers} theme={theme} onPasswordReset={handlePasswordResetSync} />;
         }
         return (
             <Suspense fallback={<SkeletonDashboard />}>
@@ -202,7 +210,7 @@ const App: React.FC = () => {
 
     return (
         <>
-            <SplashCursor />
+
             <LiquidChrome
                 color={currentUser ? [0.62, 0.62, 0.62] : [0.56, 0.56, 0.56]}
                 mouseReact amplitude={currentUser ? 0.15 : 0.1} speed={currentUser ? 1.2 : 1}

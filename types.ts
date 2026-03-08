@@ -117,50 +117,6 @@ export interface ClassConfig {
   name: string;
 }
 
-// ========== Blockchain Types ==========
-
-export interface BlockchainRecord {
-  recordId: number;
-  transactionHash: string;
-  blockNumber: number;
-  timestamp: number;
-  verified: boolean;
-}
-
-export interface AttendanceBlockchainRecord extends BlockchainRecord {
-  studentId: string;
-  classId: string;
-  location: string;
-}
-
-export interface GradeBlockchainRecord extends BlockchainRecord {
-  studentId: string;
-  quizId: string;
-  subject: string;
-  score: number;
-  maxScore: number;
-  teacherId: string;
-}
-
-export interface NFTCertificate {
-  tokenId: number;
-  studentId: string;
-  courseId: string;
-  courseName: string;
-  grade: string;
-  issueDate: number;
-  metadataURI: string;
-  revoked: boolean;
-  owner: string;
-}
-
-export interface WalletInfo {
-  address: string;
-  connected: boolean;
-  chainId: number;
-  balance: string;
-}
-
 // ========== Digital Twin Types ==========
 
 export interface DigitalTwinState {
@@ -251,7 +207,7 @@ export interface LiveClassMetrics {
 // ========== WebSocket Message Types ==========
 
 export interface WebSocketMessage {
-  type: 'attendance' | 'performance' | 'quiz' | 'session' | 'blockchain' | 'digital-twin' | 'engagement';
+  type: 'attendance' | 'performance' | 'quiz' | 'session' | 'digital-twin' | 'engagement';
   data: any;
   timestamp: number;
   userId?: string;
@@ -277,11 +233,3 @@ export interface PerformanceUpdateMessage extends WebSocketMessage {
   };
 }
 
-export interface BlockchainUpdateMessage extends WebSocketMessage {
-  type: 'blockchain';
-  data: {
-    transactionHash: string;
-    recordType: 'attendance' | 'grade' | 'certificate';
-    status: 'pending' | 'confirmed' | 'failed';
-  };
-}

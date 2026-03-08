@@ -11,6 +11,8 @@ import WebcamCapture from './WebcamCapture';
 import { uploadClassNotes } from '../services/dataService';
 import { TeacherDashboardProps } from './TeacherDashboardProps';
 import AnnouncementBoard from './AnnouncementBoard';
+import AnalyticsDashboard from './AnalyticsDashboard';
+import GradeBook from './GradeBook';
 import { useTeacherSession } from '../hooks/useTeacherSession';
 import { exportToCSV } from '../services/exportService';
 
@@ -763,36 +765,24 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ teacher, students, 
                 </button>
               </div>
             </div>
-            <div className="bg-white p-6 rounded-lg shadow-md">
-              <h2 className="text-xl font-semibold text-gray-700 mb-4">{t('Student Performance')} ({selectedSubject})</h2>
-              <div className="space-y-8 max-h-[60vh] overflow-y-auto pr-2">{students.filter(student => selectedClassFilter === 'All' || student.classId === selectedClassFilter).map(student => (<div key={student.id}><div className="flex items-center gap-2 mb-2"><input type="checkbox" checked={selectedPerformanceIds.includes(student.id)} onChange={e => setSelectedPerformanceIds(prev => e.target.checked ? [...prev, student.id] : prev.filter(id => id !== student.id))} /><h3 className="text-lg font-semibold text-gray-600">{student.name}</h3></div><PerformanceChart data={student.performance.filter(p => p.subject === selectedSubject)} title="" theme={theme} /></div>))}</div>
-              <div className="mt-3 flex justify-end gap-2">
-                <button onClick={() => {
-                  const rows: string[][] = [['student', 'subject', 'date', 'score']];
-                  students.forEach(st => {
-                    st.performance.filter(p => !selectedSubject || p.subject === selectedSubject).forEach(p => {
-                      rows.push([st.name, p.subject, p.date, String(p.score)]);
-                    })
-                  });
-                  exportToCSV(rows, `performance_${selectedSubject || 'all'}_${new Date().toISOString().slice(0, 10)}.csv`);
-                }} className={`text-sm px-3 py-1 rounded ${colors.lightText} ${colors.lightHover}`}>
-                  {t('Export CSV')}
-                </button>
-                <button onClick={() => {
-                  const rows: string[][] = [['student', 'subject', 'date', 'score']];
-                  students.filter(s => selectedPerformanceIds.includes(s.id)).forEach(st => {
-                    st.performance.filter(p => !selectedSubject || p.subject === selectedSubject).forEach(p => {
-                      rows.push([st.name, p.subject, p.date, String(p.score)]);
-                    })
-                  });
-                  exportToCSV(rows, `performance_selected_${selectedSubject || 'all'}_${new Date().toISOString().slice(0, 10)}.csv`);
-                }} className={`text-sm px-3 py-1 rounded ${colors.lightText} ${colors.lightHover}`}>
-                  {t('Export Selected')}
-                </button>
-              </div>
-            </div>
           </div>
         </main>
+        <div className="p-4 md:p-8 pt-0 space-y-8">
+          <AnalyticsDashboard
+            students={students}
+            attendance={attendance}
+            subjects={allSubjects}
+            currentUserRole="teacher"
+            theme={theme}
+          />
+          <GradeBook
+            students={students}
+            currentUserId={teacher.id}
+            currentUserRole="teacher"
+            subjects={allSubjects}
+            theme={theme}
+          />
+        </div>
       </div>
       {showFaceRegistration && (
         <WebcamCapture

@@ -71,14 +71,21 @@ function postJSON(targetUrl, body, extraHeaders = {}) {
 
 // ── Register ──────────────────────────────────────────────────────────────────
 router.post('/register', authRateLimit, asyncRoute(async (req, res) => {
-  const { email, password, name } = req.body || {}
+  const { email, password, name, role } = req.body || {}
   if (!email || !password) return res.status(400).json({ error: 'email and password are required' })
   const safeEmail = sanitizeEmail(email)
   // O(1) indexed lookup instead of loading all users
   const existing = await findUserByEmail(safeEmail)
   if (existing) return res.status(409).json({ error: 'User already exists' })
   const passwordHash = await bcrypt.hash(String(password), 12)
-  const user = { id: `u-${Date.now()}`, email: safeEmail, name: name || safeEmail.split('@')[0], passwordHash, role: 'student' }
+  
+  // Check if this is the first user (can be admin) or if request has admin secret
+  const ADMIN_SECRET = process.env.ADMIN_SECRET || 'gyandeep-admin-secret'
+  const requestedRole = req.body.role || 'student'
+  const isFirstUser = await dbGet('SELECT COUNT(*) as count FROM users').then(r => Number(r?.count || 0)) === 0
+  const userRole = (isFirstUser || requestedRole === 'teacher') ? requestedRole : 'student'
+  
+  const user = { id: `u-${Date.now()}`, email: safeEmail, name: name || safeEmail.split('@')[0], passwordHash, role: userRole }
   // Insert single row directly — avoid the delete+reinsert of writeUsers()
   const { run: dbRunDirect } = await import('../database.js')
   try {

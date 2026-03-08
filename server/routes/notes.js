@@ -86,7 +86,7 @@ async function extractTextFromFile(filePath, mimeType) {
 }
 
 // ── Upload notes (teacher/admin only) ─────────────────────────────────────────
-router.post('/upload', requireAuth, ensureRole('teacher', 'admin'), upload.single('file'), asyncRoute(async (req, res) => {
+router.post('/upload', requireAuth, ensureRole('teacher'), upload.single('file'), asyncRoute(async (req, res) => {
   const classId = req.body?.classId
   const subjectId = req.body?.subjectId
   const content = req.body?.content
@@ -175,7 +175,7 @@ router.post('/upload', requireAuth, ensureRole('teacher', 'admin'), upload.singl
 }))
 
 // ── List notes (teacher/admin only) ──────────────────────────────────────────
-router.get('/list', requireAuth, ensureRole('teacher', 'admin'), asyncRoute(async (req, res) => {
+router.get('/list', requireAuth, ensureRole('teacher'), asyncRoute(async (req, res) => {
   const safeClassId   = safeSeg(req.query.classId)
   const safeSubjectId = safeSeg(req.query.subjectId)
   if (!safeClassId || !safeSubjectId) {

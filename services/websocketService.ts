@@ -140,9 +140,6 @@ class WebSocketService {
         this.emit('session-changed', data);
     }
 
-    sendBlockchainUpdate(data: any): void {
-        this.emit('blockchain-update', data);
-    }
 
     sendDigitalTwinUpdate(data: any): void {
         this.emit('digital-twin-changed', data);

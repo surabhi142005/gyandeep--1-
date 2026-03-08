@@ -1,0 +1,62 @@
+@startuml
+skinparam activityBackgroundColor #FFFFFF
+skinparam activityBorderColor #000000
+skinparam activityStartColor #4CAF50
+skinparam activityEndColor #F44336
+skinparam arrowColor #000000
+skinparam swimlaneBackgroundColor #F5F5F5
+skinparam swimlaneBorderColor #333333
+
+title Gyandeep Activity Diagram - Complete Workflow
+
+|Admin|
+start
+:Open Gyandeep App;
+:Login;
+
+|Admin|
+repeat
+  :Select Dashboard Option;
+  
+  if (Manage Users) then
+    :Add New User;
+    :Edit User Details;
+    :Activate/Deactivate User;
+    :Register Face ID;
+  endif
+  
+  if (Manage Subjects) then
+    :Add Subject;
+    :Edit Subject;
+    :Delete Subject;
+  endif
+  
+  if (Manage Classes) then
+    :Add Class;
+    :Assign Students;
+    :Edit Class;
+  endif
+  
+  if (View Analytics) then
+    :View System Analytics;
+    :View User Statistics;
+  endif
+  
+  if (Question Bank) then
+    :Add Questions;
+    :Edit Questions;
+    :Delete Questions;
+  endif
+  
+  if (Send Email) then
+    :Compose with AI;
+    :Send to Recipients;
+  endif
+  
+repeat while (Continue?)
+
+|Admin|
+:Logout;
+stop
+
+@enduml
