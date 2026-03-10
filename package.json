@@ -19,6 +19,7 @@
     "framer-motion": "^12.34.3",
     "lucide-react": "^0.469.0",
     "ogl": "^1.0.11",
+    "postprocessing": "^6.38.3",
     "react": "^18.2.0",
     "react-chartjs-2": "^5.2.0",
     "react-dom": "^18.2.0",

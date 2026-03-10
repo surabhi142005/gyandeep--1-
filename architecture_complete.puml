@@ -1,0 +1,116 @@
+@startuml Gyandeep Complete Architecture
+
+title Gyandeep Three-Layer Architecture
+
+skinparam linetype ortho
+skinparam componentStyle uml2
+
+package "Layer 1: Presentation Layer" <<Frame>> {
+    [Web Browser]
+    
+    package "Frontend Technologies" {
+        [React 18]
+        [TypeScript]
+        [Vite]
+        [Tailwind CSS]
+        [Recharts]
+    }
+    
+    package "Components" {
+        [StudentDashboard]
+        [TeacherDashboard]
+        [AdminDashboard]
+        [Login]
+        [QuizView]
+        [GradeBook]
+        [Chatbot]
+    }
+}
+
+package "Layer 2: Business Logic Layer" <<Frame>> {
+    [Node.js Server]
+    
+    package "Middleware" {
+        [JWT Auth]
+        [RBAC]
+        [Rate Limiter]
+        [Input Validator]
+    }
+    
+    package "Services" {
+        [Auth Service]
+        [User Service]
+        [Grade Service]
+        [Attendance Service]
+        [Quiz Service]
+        [Notes Service]
+        [Timetable Service]
+        [Ticket Service]
+        [AI Service\n(Gemini)]
+        [Email Service]
+    }
+    
+    package "Real-time" {
+        [SSE]
+        [WebSocket]
+    }
+}
+
+package "Layer 3: Data Layer" <<Frame>> {
+    database "SQLite Database" {
+        table "users"
+        table "grades"
+        table "attendance"
+        table "timetable"
+        table "question_bank"
+        table "classes"
+        table "tickets"
+        table "notes"
+        table "audit_logs"
+    }
+    
+    folder "File System" {
+        [Profile Images]
+        [Uploaded Files]
+        [Face Data]
+    }
+}
+
+cloud "External Services" {
+    [Google Gemini AI]
+    [Google OAuth]
+    [Email Providers]
+}
+
+' Relationships
+[Web Browser] --> [Node.js Server] : HTTPS
+[React 18] --> [Node.js Server] : API Calls
+
+[Node.js Server] --> [JWT Auth]
+[Node.js Server] --> [RBAC]
+[Node.js Server] --> [Rate Limiter]
+
+[JWT Auth] --> [Auth Service]
+[RBAC] --> [Auth Service]
+
+[Auth Service] --> table.users
+[Grade Service] --> table.grades
+[Attendance Service] --> table.attendance
+[Quiz Service] --> table.question_bank
+[Notes Service] --> table.notes
+[Timetable Service] --> table.timetable
+[Ticket Service] --> table.tickets
+
+[Node.js Server] --> [SSE]
+[SSE] --> [Web Browser] : Server-Sent Events
+
+[Quiz Service] --> [Google Gemini AI]
+[AI Service\n(Gemini)] --> [Google Gemini AI]
+[Auth Service] --> [Google OAuth]
+[Email Service] --> [Email Providers]
+
+[Node.js Server] --> [Profile Images]
+[Node.js Server] --> [Uploaded Files]
+[Node.js Server] --> [Face Data]
+
+@enduml

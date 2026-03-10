@@ -1,0 +1,28 @@
+@startuml Gyandeep Deployment
+
+skinparam componentStyle uml2
+
+node "Client" {
+    [Browser\nReact App]
+}
+
+node "Server" {
+    [Express API\nPort 3001]
+    database "SQLite" as db
+    folder "File Storage" as storage
+}
+
+cloud "External Services" {
+    [Gemini AI]
+    [Google OAuth]
+    [Email Service]
+}
+
+[Browser\nReact App] --> [Express API\nPort 3001] : HTTP/WebSocket
+[Express API] --> db : SQL
+[Express API] --> storage : Files
+[Express API] --> [Gemini AI] : API
+[Express API] --> [Google OAuth] : OAuth2
+[Express API] --> [Email Service] : SMTP/API
+
+@enduml

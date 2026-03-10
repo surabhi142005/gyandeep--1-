@@ -3,6 +3,12 @@
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
   "framework": "vite",
+  "functions": {
+    "api/**/*.ts": {
+      "runtime": "nodejs18.x",
+      "maxDuration": 60
+    }
+  },
   "rewrites": [
     { "source": "/api/:path*", "destination": "/api/:path*" },
     { "source": "/((?!api|assets|icons|styles|_next).*)", "destination": "/index.html" }
@@ -26,5 +32,14 @@
         }
       ]
     }
-  ]
+  ],
+  "crons": [
+    {
+      "path": "/api/cron/weekly-insights",
+      "schedule": "0 0 * * 0"
+    }
+  ],
+  "experimental": {
+    "webSocket": true
+  }
 }

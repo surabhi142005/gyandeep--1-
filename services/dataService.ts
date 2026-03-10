@@ -2,13 +2,17 @@
  * dataService.ts
  *
  * All data operations go through the Express API (SQLite backend).
- * Falls back to localStorage when the server is unreachable (offline mode).
+ * No localStorage fallback - requires backend connection.
  */
 
 import { websocketService } from './websocketService';
 import { getStoredToken } from './authService';
 
 const API_BASE = import.meta.env.VITE_API_URL || '';
+
+if (!API_BASE) {
+  console.error('[dataService] VITE_API_URL not configured. Set in .env file');
+}
 
 const uid = () => {
   try {
@@ -52,12 +56,8 @@ const lsSet = (key: string, value: unknown) => {
 // ─── Users / Profiles ────────────────────────────────────────────────────────
 
 export const fetchUsers = async () => {
-  try {
-    const data = await apiRequest('/api/users', { method: 'GET' });
-    return Array.isArray(data?.items) ? data.items : Array.isArray(data) ? data : [];
-  } catch {
-    return lsGet('gyandeep-users', []);
-  }
+  const data = await apiRequest('/api/users', { method: 'GET' });
+  return Array.isArray(data?.items) ? data.items : Array.isArray(data) ? data : [];
 };
 
 export const saveUsers = async (users: any[]) => {
@@ -72,12 +72,8 @@ export const bulkImportUsers = async (users: any[]) => saveUsers(users);
 // ─── Classes ─────────────────────────────────────────────────────────────────
 
 export const fetchClasses = async () => {
-  try {
-    const data = await apiRequest('/api/classes', { method: 'GET' });
-    return Array.isArray(data) ? data : [];
-  } catch {
-    return lsGet('gyandeep-classes', []);
-  }
+  const data = await apiRequest('/api/classes', { method: 'GET' });
+  return Array.isArray(data) ? data : [];
 };
 
 export const saveClasses = async (classes: any[]) => {
@@ -122,12 +118,8 @@ export const uploadClassNotes = async (params: { classId: string; subjectId: str
 };
 
 export const listClassNotes = async (params: { classId: string; subjectId: string }) => {
-  try {
-    const qs = new URLSearchParams({ classId: params.classId, subjectId: params.subjectId });
-    return await apiRequest(`/api/notes?${qs.toString()}`, { method: 'GET' });
-  } catch {
-    return [];
-  }
+  const qs = new URLSearchParams({ classId: params.classId, subjectId: params.subjectId });
+  return await apiRequest(`/api/notes?${qs.toString()}`, { method: 'GET' });
 };
 
 // ─── Centralized Notes ──────────────────────────────────────────────────────
@@ -158,12 +150,8 @@ export const uploadCentralizedNotes = async (payload: {
 // ─── Question Bank ───────────────────────────────────────────────────────────
 
 export const fetchQuestionBank = async () => {
-  try {
-    const data = await apiRequest('/api/question-bank', { method: 'GET' });
-    return Array.isArray(data) ? data : [];
-  } catch {
-    return lsGet('gyandeep-question-bank', []);
-  }
+  const data = await apiRequest('/api/question-bank', { method: 'GET' });
+  return Array.isArray(data) ? data : [];
 };
 
 export const addQuestionsToBank = async (questions: any[]) => {
@@ -214,22 +202,6 @@ export const completePasswordReset = async (email: string, newPassword: string) 
   });
 };
 
-// ─── OTP ─────────────────────────────────────────────────────────────────────
-
-export const sendOtp = async (userId: string) => {
-  return apiRequest('/api/auth/otp/send', {
-    method: 'POST',
-    body: JSON.stringify({ userId }),
-  });
-};
-
-export const verifyOtp = async (userId: string, code: string) => {
-  return apiRequest('/api/auth/otp/verify', {
-    method: 'POST',
-    body: JSON.stringify({ userId, code }),
-  });
-};
-
 // ─── Tag Presets ─────────────────────────────────────────────────────────────
 
 const DEFAULT_TAG_PRESETS: Record<string, string[]> = {
@@ -240,12 +212,8 @@ const DEFAULT_TAG_PRESETS: Record<string, string[]> = {
 };
 
 export const fetchTagPresets = async () => {
-  try {
-    const data = await apiRequest('/api/tags-presets', { method: 'GET' });
-    return { ...DEFAULT_TAG_PRESETS, ...data };
-  } catch {
-    return lsGet('gyandeep-tag-presets', DEFAULT_TAG_PRESETS);
-  }
+  const data = await apiRequest('/api/tags-presets', { method: 'GET' });
+  return { ...DEFAULT_TAG_PRESETS, ...data };
 };
 
 export const updateTagPresets = async (subject: string, tags: string[]) => {
@@ -258,12 +226,8 @@ export const updateTagPresets = async (subject: string, tags: string[]) => {
 // ─── Grades ──────────────────────────────────────────────────────────────────
 
 export const fetchGrades = async () => {
-  try {
-    const rows = await apiRequest('/api/grades', { method: 'GET' });
-    return Array.isArray(rows) ? rows : [];
-  } catch {
-    return lsGet('gyandeep-grades', []);
-  }
+  const rows = await apiRequest('/api/grades', { method: 'GET' });
+  return Array.isArray(rows) ? rows : [];
 };
 
 export const addGrade = async (grade: { studentId: string; subject: string; category: string; title: string; score: number; maxScore: number; weight?: number; date?: string; teacherId?: string }) => {
@@ -299,12 +263,8 @@ export const deleteGrade = async (id: string) => {
 // ─── Timetable ───────────────────────────────────────────────────────────────
 
 export const fetchTimetable = async () => {
-  try {
-    const rows = await apiRequest('/api/timetable', { method: 'GET' });
-    return Array.isArray(rows) ? rows : [];
-  } catch {
-    return lsGet('gyandeep-timetable', []);
-  }
+  const rows = await apiRequest('/api/timetable', { method: 'GET' });
+  return Array.isArray(rows) ? rows : [];
 };
 
 export const saveTimetable = async (entries: any[]) => {
@@ -338,12 +298,8 @@ export const deleteTimetableEntry = async (id: string) => {
 // ─── Tickets ─────────────────────────────────────────────────────────────────
 
 export const fetchTickets = async () => {
-  try {
-    const rows = await apiRequest('/api/tickets', { method: 'GET' });
-    return Array.isArray(rows) ? rows : [];
-  } catch {
-    return lsGet('gyandeep-tickets', []);
-  }
+  const rows = await apiRequest('/api/tickets', { method: 'GET' });
+  return Array.isArray(rows) ? rows : [];
 };
 
 export const createTicket = async (ticket: any) => {
@@ -450,12 +406,8 @@ export const adminOverride = async (adminId: string, userId: string, action: str
 // ─── Webhooks ────────────────────────────────────────────────────────────────
 
 export const fetchWebhooks = async () => {
-  try {
-    const data = await apiRequest('/api/webhooks', { method: 'GET' });
-    return Array.isArray(data) ? data : [];
-  } catch {
-    return lsGet('gyandeep-webhooks', []);
-  }
+  const data = await apiRequest('/api/webhooks', { method: 'GET' });
+  return Array.isArray(data) ? data : [];
 };
 
 export const createWebhook = async (webhook: any) => {

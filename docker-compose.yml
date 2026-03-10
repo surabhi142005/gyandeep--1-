@@ -1,26 +1,48 @@
 version: '3.8'
 
 services:
-  gyandeep:
-    build: .
+  # Backend API Server
+  api:
+    build:
+      context: .
+      dockerfile: server/Dockerfile
     ports:
-      - "3000:3000"
       - "3001:3001"
-      - "3002:3002"
-      - "5001:5001"
-      - "5173:5173"
     environment:
       - NODE_ENV=production
       - PORT=3001
-      - WEBSOCKET_PORT=3002
-      - SESSION_SECRET=${SESSION_SECRET}
       - JWT_SECRET=${JWT_SECRET}
+      - SESSION_SECRET=${SESSION_SECRET}
       - GEMINI_API_KEY=${GEMINI_API_KEY}
       - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
       - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
-      - VITE_API_URL=http://localhost:3001
+      - ALLOWED_ORIGINS=http://localhost:5173,http://frontend:5173
     volumes:
-      - ./server/data:/app/server/data
-      - ./server/storage:/app/server/storage
-      - ./python/data:/app/python/data
+      - gyandeep-data:/app/server/data
+      - gyandeep-storage:/app/server/storage
     restart: unless-stopped
+    networks:
+      - gyandeep-network
+
+  # Frontend (Vite dev server for development)
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "5173:5173"
+    environment:
+      - VITE_API_URL=http://api:3001
+    depends_on:
+      - api
+    restart: unless-stopped
+    networks:
+      - gyandeep-network
+
+volumes:
+  gyandeep-data:
+  gyandeep-storage:
+
+networks:
+  gyandeep-network:
+    driver: bridge

@@ -1,0 +1,421 @@
+// Gyandeep Database Schema for PostgreSQL (Neon)
+// Run: npx prisma generate && npx prisma db push
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================
+// USER MANAGEMENT
+// ============================================
+
+model User {
+  id               String    @id @default(cuid())
+  name             String?
+  email            String    @unique
+  role             String    @default("student") // student, teacher, admin
+  password         String?
+  googleId         String?   @unique
+  faceImage        String?
+  active           Boolean   @default(true)
+  emailVerified    Boolean   @default(false)
+  preferences      Json?
+  history          Json?
+  assignedSubjects Json?
+  performance      Json?
+  classId          String?
+
+  // Relationships
+  classSessions       ClassSession[]       @relation("TeacherSessions")
+  centralizedNotes    CentralizedNote[]    @relation("TeacherNotes")
+  gradesGiven         Grade[]              @relation("TeacherGrades")
+  gradesReceived      Grade[]              @relation("StudentGrades")
+  attendances         Attendance[]
+  quizSubmissions     QuizSubmission[]
+  quizAttempts        QuizAttempt[]
+  tickets             Ticket[]
+  ticketReplies       TicketReply[]
+  teacherInsights     TeacherInsight[]
+  auditLogs           AuditLog[]
+  timetableEntries    TimetableEntry[]
+  userNotes          UserNoteAccess[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// ============================================
+// ACADEMIC STRUCTURE
+// ============================================
+
+model Class {
+  id    String @id @default(cuid())
+  name  String @unique
+
+  // Relationships
+  users            User[]
+  classSessions   ClassSession[]
+  centralizedNotes CentralizedNotes[]
+  timetableEntries TimetableEntry[]
+
+  createdAt DateTime @default(now())
+}
+
+model Subject {
+  id   String @id @default(cuid())
+  name String @unique
+
+  // Relationships
+  classSessions     ClassSession[]
+  centralizedNotes  CentralizedNote[]
+  timetableEntries  TimetableEntry[]
+  grades            Grade[]
+
+  createdAt DateTime @default(now())
+}
+
+// ============================================
+// SESSION & QUIZ (Session Notes = Temporary)
+// ============================================
+
+model ClassSession {
+  id              String    @id @default(cuid())
+  code            String    @unique
+  teacherId       String
+  classId         String?
+  subjectId       String
+  expiry          DateTime
+  quizPublished   Boolean   @default(false)
+  quizQuestions   String?   // JSON string for backward compat
+  quizPublishedAt DateTime?
+  sessionStatus   String    @default("active") // active, completed, ended
+
+  // Relationships
+  teacher    User     @relation("TeacherSessions", fields: [teacherId], references: [id])
+  class      Class?   @relation(fields: [classId], references: [id])
+  subject    Subject  @relation(fields: [subjectId], references: [id])
+  
+  sessionNote      SessionNote?
+  quiz             Quiz?
+  quizSubmissions  QuizSubmission[]
+  attendances      Attendance[]
+  grades           Grade[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([teacherId])
+  @@index([code])
+  @@index([expiry])
+}
+
+// Session Notes - TEMPORARY, deleted after grading
+model SessionNote {
+  id            String    @id @default(cuid())
+  sessionId     String    @unique
+  content       String?
+  filePath      String?
+  extractedText String?
+  deletedAt     DateTime?
+
+  // Relationship
+  session ClassSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+}
+
+// Quiz - Generated from session notes
+model Quiz {
+  id            String    @id @default(cuid())
+  sessionId     String    @unique
+  teacherId     String
+  title         String?
+  questionsJson String?
+  published     Boolean   @default(false)
+  publishedAt   DateTime?
+
+  // Relationships
+  session    ClassSession   @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  teacher    User           @relation(fields: [teacherId], references: [id])
+  questions  QuizQuestion[]
+  attempts   QuizAttempt[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([sessionId])
+  @@index([teacherId])
+}
+
+model QuizQuestion {
+  id            String  @id @default(cuid())
+  quizId        String
+  question      String
+  options       String  // JSON array
+  correctAnswer String
+  difficulty    String  @default("medium")
+  tags          String? // JSON array
+  orderIndex    Int     @default(0)
+
+  // Relationship
+  quiz Quiz @relation(fields: [quizId], references: [id], onDelete: Cascade)
+
+  @@index([quizId])
+}
+
+// Quiz Attempts - Student submissions
+model QuizAttempt {
+  id             String   @id @default(cuid())
+  quizId         String
+  studentId      String
+  answersJson    String
+  correctCount   Int
+  totalQuestions Int
+  percentage     Float
+  submittedAt    DateTime @default(now())
+
+  // Relationships
+  quiz    Quiz   @relation(fields: [quizId], references: [id], onDelete: Cascade)
+  student User   @relation(fields: [studentId], references: [id])
+  grade   Grade? @relation
+
+  @@unique([quizId, studentId])
+  @@index([studentId])
+}
+
+// Quiz Submissions - Legacy (kept for backward compat)
+model QuizSubmission {
+  id             String   @id @default(cuid())
+  sessionId      String
+  studentId      String
+  answersJson    String
+  correctCount   Int
+  totalQuestions Int
+  percentage     Float
+  submittedAt    DateTime @default(now())
+  gradeId        String?
+
+  // Relationships
+  session ClassSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  student User         @relation(fields: [studentId], references: [id])
+  grade   Grade?      @relation(fields: [gradeId], references: [id])
+
+  @@unique([sessionId, studentId])
+  @@index([sessionId])
+  @@index([studentId])
+}
+
+// ============================================
+// CENTRALIZED NOTES (Persistent - never deleted)
+// ============================================
+
+model CentralizedNote {
+  id          String   @id @default(cuid())
+  classId     String?
+  subjectId   String
+  unitNumber  Int
+  unitName    String
+  title       String
+  content     String?
+  filePath    String?
+  noteType    String   @default("class_notes") // class_notes, quiz_notes
+  teacherId   String?
+
+  // Relationships
+  class    Class?    @relation(fields: [classId], references: [id], onDelete: SetNull)
+  subject  Subject   @relation(fields: [subjectId], references: [id])
+  teacher  User?     @relation("TeacherNotes", fields: [teacherId], references: [id])
+  accesses UserNoteAccess[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([subjectId, unitNumber])
+  @@index([classId])
+  @@index([teacherId])
+}
+
+// User Note Access - Track which students accessed centralized notes
+model UserNoteAccess {
+  id         String   @id @default(cuid())
+  userId     String
+  noteId     String
+  accessedAt DateTime @default(now())
+
+  // Relationships
+  user User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  note CentralizedNote @relation(fields: [noteId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([noteId])
+}
+
+// ============================================
+// ATTENDANCE & GRADES
+// ============================================
+
+model Attendance {
+  id          String   @id @default(cuid())
+  sessionId   String
+  studentId   String
+  status      String   @default("present") // present, absent
+  verifiedAt  DateTime?
+
+  // Relationships
+  session ClassSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  student User         @relation(fields: [studentId], references: [id])
+
+  @@unique([sessionId, studentId])
+  @@index([sessionId])
+}
+
+model Grade {
+  id         String   @id @default(cuid())
+  studentId  String
+  subject    String
+  category   String   // quiz, exam, assignment
+  title      String
+  score      Float
+  maxScore   Float
+  weight     Float    @default(1)
+  date       String
+  teacherId  String?
+  sessionId  String?
+  quizAttemptId String?
+
+  // Relationships
+  student     User          @relation("StudentGrades", fields: [studentId], references: [id])
+  teacher     User?         @relation("TeacherGrades", fields: [teacherId], references: [id])
+  session     ClassSession? @relation(fields: [sessionId], references: [id])
+  quizAttempt QuizAttempt?  @relation(fields: [quizAttemptId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([studentId])
+  @@index([teacherId])
+  @@index([sessionId])
+}
+
+// ============================================
+// TIMETABLE
+// ============================================
+
+model TimetableEntry {
+  id        String   @id @default(cuid())
+  day       String
+  startTime String
+  endTime   String
+  subject   String
+  teacherId String?
+  classId   String?
+  room      String?
+
+  // Relationships
+  teacher User?   @relation(fields: [teacherId], references: [id])
+  class   Class?  @relation(fields: [classId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([day, startTime])
+  @@index([teacherId])
+  @@index([classId])
+}
+
+// ============================================
+// SUPPORT TICKETS
+// ============================================
+
+model Ticket {
+  id          String   @id @default(cuid())
+  userId      String
+  userName    String?
+  subject     String
+  message     String
+  category    String   @default("general")
+  status      String   @default("open") // open, in_progress, resolved, closed
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  version     Int      @default(1)
+
+  // Relationships
+  user    User          @relation(fields: [userId], references: [id])
+  replies TicketReply[]
+
+  @@index([userId])
+  @@index([status])
+}
+
+model TicketReply {
+  id        String   @id @default(cuid())
+  ticketId  String
+  userId    String
+  userName  String?
+  message   String
+  createdAt DateTime @default(now())
+
+  // Relationships
+  ticket Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+
+  @@index([ticketId, createdAt])
+}
+
+// ============================================
+// TEACHER INSIGHTS
+// ============================================
+
+model TeacherInsight {
+  id           String   @id @default(cuid())
+  teacherId    String
+  insightText  String
+  generatedAt DateTime @default(now())
+
+  // Relationships
+  teacher User @relation(fields: [teacherId], references: [id])
+
+  @@unique([teacherId, generatedAt])
+  @@index([teacherId])
+}
+
+// ============================================
+// AUDIT & SYSTEM
+// ============================================
+
+model AuditLog {
+  id      String   @id @default(cuid())
+  ts      DateTime @default(now())
+  type    String
+  userId  String?
+  details Json?
+
+  // Relationships
+  user User? @relation(fields: [userId], references: [id])
+
+  @@index([userId, ts])
+}
+
+model IdempotencyKey {
+  key           String   @id
+  userId        String
+  action        String
+  statusCode    Int
+  responseBody  String
+  createdAt     DateTime @default(now())
+
+  @@index([createdAt])
+}
+
+// ============================================
+// DEFAULT SUBJECTS (seeding)
+// ============================================
+
+model DefaultSubject {
+  id   String @id @default(cuid())
+  name String @unique
+}

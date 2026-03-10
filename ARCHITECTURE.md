@@ -1,29 +1,31 @@
 # Gyandeep Architecture Design
 
-## Three-Layer Architecture
+## Three-Tier Architecture
 
 ```mermaid
 flowchart TB
-    subgraph Layer1["LAYER 1: PRESENTATION"]
+    subgraph Layer1["LAYER 1: PRESENTATION (Frontend)"]
         direction TB
         FE1[React 18]
         FE2[TypeScript]
         FE3[Vite]
         FE4[Tailwind CSS]
+        FE5[Recharts]
     end
 
-    subgraph Layer2["LAYER 2: BUSINESS LOGIC"]
+    subgraph Layer2["LAYER 2: BUSINESS LOGIC (Backend)"]
         direction TB
         BE1[Node.js]
         BE2[Express.js]
         BE3[JWT Auth]
         BE4[RBAC]
+        BE5[WebSocket/SSE]
     end
 
     subgraph Layer3["LAYER 3: DATA"]
         direction TB
         DB1[SQLite]
-        DB2[File System]
+        DB2[File Storage]
     end
 
     Layer1 --> Layer2 --> Layer3
@@ -34,40 +36,17 @@ flowchart TB
 ## Layer 1: Presentation Layer (Frontend)
 
 ### Technology Stack
-- **React 18** - UI library for building user interfaces
+- **React 18** - UI library
 - **TypeScript** - Type-safe JavaScript
-- **Vite** - Build tool for fast development
-- **Tailwind CSS** - Utility-first CSS framework
+- **Vite** - Build tool
+- **Tailwind CSS** - Styling
+- **Recharts** - Charts
+- **face-api.js** - Face recognition
 
 ### Key Components
-1. **User Interfaces**
-   - Login/Authentication screens
-   - Student Dashboard
-   - Teacher Dashboard
-   - Admin Dashboard
-
-2. **Learning Features**
-   - Quiz View
-   - Digital Classroom
-   - Timetable
-   - Grade Book
-
-3. **Analytics & Monitoring**
-   - Realtime Analytics
-   - Performance Charts
-   - Attendance Charts
-   - Engagement Metrics
-
-4. **Blockchain Integration**
-   - Blockchain Wallet
-   - NFT Certificates
-   - Immutable Records
-
-5. **Advanced Features**
-   - 3D Dashboard (React Three Fiber)
-   - Face Recognition (face-api.js)
-   - Voice Service
-   - Chatbot (AI)
+1. **Dashboards**: Student, Teacher, Admin
+2. **Features**: Quiz, Timetable, Grade Book, Notes, Attendance
+3. **AI**: Chatbot (Gemini AI), Voice Service
 
 ---
 
@@ -75,133 +54,97 @@ flowchart TB
 
 ### Technology Stack
 - **Node.js** - JavaScript runtime
-- **Express.js** - Web application framework
-- **JWT** - JSON Web Token for authentication
-- **RBAC** - Role-Based Access Control
+- **Express.js** - Web framework
+- **SQLite3** - Database
+- **JWT** - Authentication
+- **Socket.io** - Real-time updates
 
-### Key Services
-1. **Authentication Service**
-   - User registration and login
-   - JWT token management
-   - Session handling
-   - Role-based permissions (Student, Teacher, Admin)
+### API Endpoints
+| Category | Endpoints |
+|----------|-----------|
+| Auth | `/api/auth/*` - Login, register, password reset, OAuth |
+| Users | `/api/users` - User CRUD |
+| Classes | `/api/classes` - Class management |
+| Grades | `/api/grades` - Grade operations |
+| Timetable | `/api/timetable` - Schedule |
+| Notes | `/api/notes` - Notes upload/retrieval |
+| Quiz | `/api/quiz` - AI quiz generation |
+| Chat | `/api/chat` - AI chatbot |
+| Attendance | `/api/attendance` - Attendance tracking |
+| Analytics | `/api/analytics/*` - AI insights |
+| Tickets | `/api/tickets` - Support tickets |
+| Notifications | `/api/notifications` - Push notifications |
 
-2. **Quiz Service**
-   - Quiz generation
-   - Quiz submission and scoring
-   - Quiz history tracking
-
-3. **Attendance Service**
-   - Location-based attendance marking
-   - Real-time attendance tracking
-   - Attendance reports
-
-4. **Grade Service**
-   - Grade management
-   - Performance tracking
-   - Grade analytics
-
-5. **Notes Service**
-   - Notes upload and storage
-   - File management
-   - Notes sharing
-
-6. **Analytics Service**
-   - Performance analytics
-   - Engagement metrics
-   - Learning insights
-
-7. **Blockchain Service**
-   - Smart contract interaction
-   - Attendance recording on blockchain
-   - Grade verification
-   - NFT certificate minting
-
-8. **AI/ML Services**
-   - Google Gemini AI integration
-   - Learning twin predictions
-   - Chatbot intelligence
+### Real-Time
+- **Server-Sent Events (SSE)** - Live updates for grades, timetable, tickets
+- **WebSocket** - Optional real-time features
 
 ---
 
 ## Layer 3: Data Layer (Storage)
 
-### Technology Stack
-- **SQLite** - Lightweight relational database
-- **File System** - Local storage for files
+### SQLite Database Tables
+- `users` - Students, teachers, admins
+- `classes` - Class configurations
+- `grades` - Student grades
+- `attendance` - Attendance records
+- `timetable_entries` - Schedule
+- `question_bank` - Quiz questions
+- `tickets` - Support tickets
+- `centralized_notes` - Study notes
+- `audit_logs` - System audit trail
 
-### Data Storage
-1. **Database Tables**
-   - Users (students, teachers, admins)
-   - Classes
-   - Attendance records
-   - Grades
-   - Quiz questions
-   - Performance data
-
-2. **File Storage**
-   - Notes and documents
-   - User profile images
-   - Face recognition data
-   - Media files
-
-3. **Blockchain Storage**
-   - Immutable attendance records
-   - Grade verifications
-   - NFT certificates
+### File Storage
+- User profile images
+- Face recognition data
+- Uploaded notes/documents
 
 ---
 
-## User Roles & Permissions
+## Deployment
 
-| Role | Permissions |
-|------|-------------|
-| **Student** | View dashboard, take quizzes, view grades, mark attendance |
-| **Teacher** | Generate quizzes, upload notes, mark attendance, manage grades |
-| **Admin** | Manage users, system configuration, view analytics |
+### Docker Compose
+```yaml
+services:
+  api:
+    build: ./server
+    ports:
+      - "3001:3001"
+    volumes:
+      - gyandeep-data:/app/server/data
+  
+  frontend:
+    build: .
+    ports:
+      - "5173:5173"
+    depends_on:
+      - api
+```
+
+### Environment Variables
+```
+VITE_API_URL=http://localhost:3001
+JWT_SECRET=<strong-secret>
+SESSION_SECRET=<strong-secret>
+GEMINI_API_KEY=<gemini-key>
+```
 
 ---
 
 ## Data Flow
 
-1. **User Request** → React Frontend
-2. **API Call** → Express.js Backend
-3. **Authentication** → JWT Verification
-4. **Authorization** → RBAC Check
-5. **Business Logic** → Process Request
-6. **Data Operation** → SQLite / File System
-7. **Response** → Return to Frontend
+```
+User Action → React UI → Express API → JWT Auth → RBAC → SQLite → Response
+                                        ↓
+                              SSE/WebSocket → Real-time Updates
+```
 
 ---
 
-## Security Features
+## User Roles
 
-1. **Authentication** - JWT-based secure login
-2. **Authorization** - Role-based access control
-3. **Input Validation** - Sanitized user inputs
-4. **Rate Limiting** - Prevent abuse
-5. **Data Encryption** - Secure data storage
-
----
-
-## External Integrations
-
-1. **Google Gemini AI** - AI-powered features
-2. **Blockchain (Ethereum)** - Immutable records
-3. **Server-Sent Events** - Real-time updates
-
----
-
-## Technology Summary
-
-| Category | Technologies |
-|----------|--------------|
-| Frontend | React 18, TypeScript, Vite, Tailwind CSS, React Three Fiber |
-| Backend | Node.js, Express.js |
-| Database | SQLite |
-| Authentication | JWT |
-| AI/ML | Google Gemini AI |
-| Blockchain | Ethereum, Ethers.js |
-| Face Recognition | face-api.js |
-| Charts | Recharts, Chart.js |
-| Real-time | WebSocket, SSE |
+| Role | Permissions |
+|------|-------------|
+| **Student** | View dashboard, take quizzes, view grades, mark attendance |
+| **Teacher** | Generate quizzes, upload notes, mark attendance, manage grades |
+| **Admin** | Manage users, system config, view analytics, face recognition |

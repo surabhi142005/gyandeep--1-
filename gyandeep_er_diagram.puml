@@ -1,0 +1,249 @@
+@startuml Gyandeep_ER_Diagram
+
+' ============================================================
+' Gyandeep ER Diagram - Entity Relationship PlantUML Code
+' ============================================================
+
+' Hide stereotypes
+hide stereotypes
+
+' Style settings
+skinparam entity {
+    BackgroundColor White
+    BorderColor Black
+    ArrowColor Black
+}
+skinparam attribute {
+    BackgroundColor #E8F4FD
+    BorderColor #1E90FF
+}
+
+' ============================================================
+' ENTITIES
+' ============================================================
+
+entity "users" as users {
+    *id : UUID <<PK>>
+    --
+    *email : TEXT
+    *name : TEXT
+    password_hash : TEXT
+    *role : user_role
+    google_id : TEXT
+    face_vector : VECTOR(128)
+    email_verified : BOOLEAN
+    xp : INT
+    coins : INT
+    preferences : JSONB
+    created_at : TIMESTAMPTZ
+    updated_at : TIMESTAMPTZ
+}
+
+entity "subjects" as subjects {
+    *id : UUID <<PK>>
+    --
+    *name : TEXT
+    created_at : TIMESTAMPTZ
+}
+
+entity "classes" as classes {
+    *id : UUID <<PK>>
+    --
+    *name : TEXT
+    teacher_id : UUID <<FK>>
+    created_at : TIMESTAMPTZ
+}
+
+entity "class_enrollments" as enrollments {
+    *class_id : UUID <<PK>> <<FK>>
+    *student_id : UUID <<PK>> <<FK>>
+    --
+    enrolled_at : TIMESTAMPTZ
+}
+
+entity "class_sessions" as sessions {
+    *id : UUID <<PK>>
+    --
+    *class_id : UUID <<FK>>
+    subject_id : UUID <<FK>>
+    *code : CHAR(6)
+    *expiry : TIMESTAMPTZ
+    location : GEOMETRY
+    radius_m : INT
+    notes_url : TEXT
+    notes_hash : TEXT
+    quiz_published : BOOLEAN
+    created_at : TIMESTAMPTZ
+}
+
+entity "attendance" as attendance {
+    *id : BIGSERIAL <<PK>>
+    --
+    *session_id : UUID <<FK>>
+    *student_id : UUID <<FK>>
+    *status : attendance_status
+    geo_location : GEOMETRY
+    *verified_at : TIMESTAMPTZ
+}
+
+entity "quizzes" as quizzes {
+    *id : UUID <<PK>>
+    --
+    *session_id : UUID <<FK>>
+    *questions : JSONB
+    created_at : TIMESTAMPTZ
+}
+
+entity "performance" as performance {
+    *id : BIGSERIAL <<PK>>
+    --
+    *student_id : UUID <<FK>>
+    subject_id : UUID <<FK>>
+    session_id : UUID <<FK>>
+    *score : DECIMAL
+    max_score : DECIMAL
+    *recorded_at : TIMESTAMPTZ
+}
+
+entity "badges" as badges {
+    *id : SERIAL <<PK>>
+    --
+    *name : TEXT
+    *slug : TEXT
+    metadata : JSONB
+}
+
+entity "user_badges" as user_badges {
+    *user_id : UUID <<PK>> <<FK>>
+    *badge_id : INT <<PK>> <<FK>>
+    --
+    awarded_at : TIMESTAMPTZ
+}
+
+entity "question_bank" as question_bank {
+    *id : UUID <<PK>>
+    --
+    *question : TEXT
+    *options : JSONB
+    *correct_answer : TEXT
+    subject : TEXT
+    tags : JSONB
+    difficulty : TEXT
+    notes_hash : TEXT
+    created_at : TIMESTAMPTZ
+}
+
+entity "grades" as grades {
+    *id : UUID <<PK>>
+    --
+    *student_id : UUID <<FK>>
+    teacher_id : UUID <<FK>>
+    *subject : TEXT
+    *category : TEXT
+    *title : TEXT
+    *score : DECIMAL
+    *max_score : DECIMAL
+    weight : DECIMAL
+    *date : DATE
+    created_at : TIMESTAMPTZ
+}
+
+entity "otp_codes" as otp_codes {
+    *id : UUID <<PK>>
+    --
+    *key : TEXT
+    *code : TEXT
+    *purpose : TEXT
+    *expires_at : TIMESTAMPTZ
+    created_at : TIMESTAMPTZ
+}
+
+entity "audit_logs" as audit_logs {
+    *id : BIGSERIAL <<PK>>
+    --
+    *ts : TIMESTAMPTZ
+    *type : TEXT
+    user_id : UUID <<FK>>
+    details : JSONB
+}
+
+entity "notifications" as notifications {
+    *id : UUID <<PK>>
+    --
+    user_id : UUID <<FK>>
+    *title : TEXT
+    *message : TEXT
+    *type : TEXT
+    *read : BOOLEAN
+    created_at : TIMESTAMPTZ
+}
+
+' ============================================================
+' RELATIONSHIPS
+' ============================================================
+
+' Teacher creates Class
+users ||--o{ classes : "teaches"
+
+' Students enroll in Class
+classes ||--o{ enrollments : "has"
+users ||--o{ enrollments : "enrolled_in"
+
+' Teacher starts Class Session
+classes ||--o{ sessions : "conducts"
+subjects ||--o{ sessions : "assigned_to"
+
+' Student marks Attendance in Session
+sessions ||--o{ attendance : "records"
+users ||--o{ attendance : "marked_by"
+
+' Quiz published in Session
+sessions ||--o{ quizzes : "generates"
+
+' Student Performance recorded
+users ||--o{ performance : "achieves"
+sessions ||--o{ performance : "from"
+subjects ||--o{ performance : "in"
+
+' User earns Badges
+users ||--o{ user_badges : "earns"
+badges ||--o{ user_badges : "awarded"
+
+' Teacher creates Grades
+users ||--o{ grades : "receives"
+users ||--o{ grades : "assigns"
+
+' Question Bank linked to Notes
+sessions ||--o{ question_bank : "sources"
+
+' Audit Log tracks User actions
+users ||--o{ audit_logs : "performed_by"
+
+' Notifications sent to Users
+users ||--o{ notifications : "received_by"
+
+' OTP Codes for Users
+users ||--o{ otp_codes : "issued_to"
+
+' ============================================================
+' CARDINALITY NOTATIONS
+' ============================================================
+
+' One Teacher can teach many Classes (1:N)
+' Many Students can enroll in many Classes (N:M)
+
+' One Class Session has many Attendance records (1:N)
+' One Session generates one Quiz (1:1)
+
+' One Student has many Performance records (1:N)
+' One Student receives many Grades (1:N)
+
+' ============================================================
+' LEGEND
+' ============================================================
+
+' <<PK>> = Primary Key
+' <<FK>> = Foreign Key
+' * = Not Null
+
+@enduml

@@ -1,0 +1,231 @@
+@startuml Gyandeep_ER_Detailed
+
+' ============================================================
+' Gyandeep ER Diagram - Complete with All Relationships
+' ============================================================
+
+hide stereotypes
+skinparam linetype ortho
+skinparam entity {
+    BackgroundColor White
+    BorderColor #2C3E50
+}
+skinparam attribute {
+    BackgroundColor #E8F4FD
+    BorderColor #1E90FF
+}
+
+' ============================================================
+' 10 ENTITIES WITH ALL ATTRIBUTES
+' ============================================================
+
+' ----- USERS -----
+rectangle "USERS" {
+    rectangle "PK" #LightBlue {
+        +id : TEXT
+    }
+    rectangle "Attributes" #White {
+        name : TEXT
+        email : TEXT
+        role : TEXT
+        password : TEXT
+        googleId : TEXT
+        faceImage : TEXT
+        emailVerified : INTEGER
+        preferences : TEXT
+        history : TEXT
+        assignedSubjects : TEXT
+        performance : TEXT
+        classId : TEXT
+    }
+}
+
+' ----- CLASSES -----
+rectangle "CLASSES" {
+    rectangle "PK" #LightBlue {
+        +id : TEXT
+    }
+    rectangle "Attributes" #White {
+        name : TEXT
+    }
+}
+
+' ----- GRADES -----
+rectangle "GRADES" {
+    rectangle "PK" #LightBlue {
+        +id : TEXT
+    }
+    rectangle "FK" #LightYellow {
+        studentId : TEXT
+        teacherId : TEXT
+    }
+    rectangle "Attributes" #White {
+        subject : TEXT
+        category : TEXT
+        title : TEXT
+        score : REAL
+        maxScore : REAL
+        weight : REAL
+        date : TEXT
+        createdAt : INTEGER
+    }
+}
+
+' ----- ATTENDANCE -----
+rectangle "ATTENDANCE" {
+    rectangle "PK" #LightBlue {
+        +id : INTEGER
+    }
+    rectangle "FK" #LightYellow {
+        session_id : TEXT
+        student_id : TEXT
+    }
+    rectangle "Attributes" #White {
+        status : TEXT
+        verified_at : TEXT
+    }
+}
+
+' ----- QUESTION_BANK -----
+rectangle "QUESTION_BANK" {
+    rectangle "PK" #LightBlue {
+        +id : TEXT
+    }
+    rectangle "Attributes" #White {
+        question : TEXT
+        options : TEXT
+        correctAnswer : TEXT
+        tags : TEXT
+        difficulty : TEXT
+        subject : TEXT
+    }
+}
+
+' ----- TIMETABLE -----
+rectangle "TIMETABLE" {
+    rectangle "PK" #LightBlue {
+        +id : TEXT
+    }
+    rectangle "FK" #LightYellow {
+        teacherId : TEXT
+        classId : TEXT
+    }
+    rectangle "Attributes" #White {
+        day : TEXT
+        startTime : TEXT
+        endTime : TEXT
+        subject : TEXT
+        room : TEXT
+        createdAt : INTEGER
+        updatedAt : INTEGER
+    }
+}
+
+' ----- TICKETS -----
+rectangle "TICKETS" {
+    rectangle "PK" #LightBlue {
+        +id : TEXT
+    }
+    rectangle "FK" #LightYellow {
+        userId : TEXT
+    }
+    rectangle "Attributes" #White {
+        userName : TEXT
+        subject : TEXT
+        message : TEXT
+        category : TEXT
+        status : TEXT
+        createdAt : INTEGER
+        updatedAt : INTEGER
+        version : INTEGER
+    }
+}
+
+' ----- CENTRALIZED_NOTES -----
+rectangle "CENTRALIZED_NOTES" {
+    rectangle "PK" #LightBlue {
+        +id : TEXT
+    }
+    rectangle "FK" #LightYellow {
+        classId : TEXT
+        subjectId : TEXT
+        teacherId : TEXT
+    }
+    rectangle "Attributes" #White {
+        unitNumber : INTEGER
+        unitName : TEXT
+        title : TEXT
+        content : TEXT
+        filePath : TEXT
+        noteType : TEXT
+        createdAt : INTEGER
+    }
+}
+
+' ----- AUDIT_LOGS -----
+rectangle "AUDIT_LOGS" {
+    rectangle "PK" #LightBlue {
+        +id : INTEGER
+    }
+    rectangle "FK" #LightYellow {
+        userId : TEXT
+    }
+    rectangle "Attributes" #White {
+        ts : INTEGER
+        type : TEXT
+        details : TEXT
+    }
+}
+
+' ----- OTP -----
+rectangle "OTP" {
+    rectangle "PK+FK" #LightBlue {
+        +userId : TEXT
+    }
+    rectangle "Attributes" #White {
+        code : TEXT
+        expires : INTEGER
+    }
+}
+
+' ============================================================
+' RELATIONSHIPS WITH CARDINALITY
+' ============================================================
+
+' Teacher teaches Classes (1:N)
+USERS "1" -down-> "N" CLASSES : teaches
+
+' Student belongs to Class (:1)
+USNERS "N" -up-> "1" CLASSES : belongs_to
+
+' Teacher assigns Grades (1:N)
+USERS "1" -down-> "N" GRADES : assigns
+
+' Student receives Grades (N:1)
+USERS "N" -up-> "1" GRADES : receives
+
+' Student marks Attendance (N:1)
+USERS "N" -up-> "1" ATTENDANCE : marks
+
+' Teacher manages Timetable (1:N)
+USERS "1" -down-> "N" TIMETABLE : manages
+
+' User creates Tickets (N:1)
+USERS "N" -up-> "1" TICKETS : creates
+
+' Teacher uploads Notes (N:1)
+USERS "N" -up-> "1" CENTRALIZED_NOTES : uploads
+
+' User performs Audit Actions)
+USERS " (N:1N" -up-> "1" AUDIT_LOGS : performs
+
+' User owns OTP (1:1)
+USERS "1" -down-> "1" OTP : owns
+
+' Class has Timetable (1:N)
+CLASSES "1" -down-> "N" TIMETABLE : has
+
+' Class has Notes (1:N)
+CLASSES "1" -down-> "N" CENTRALIZED_NOTES : has
+
+@enduml

@@ -1,0 +1,435 @@
+﻿commit 11d3999e22baaa445887ab0bf400cbfed626e8ff
+Author: Gyandeep Dev Team <dev@gyandeep.local>
+Date:   Sun Mar 8 13:32:38 2026 +0530
+
+    Remove dead code and unused blockchain/NFT/components
+
+diff --git a/components/Iridescence.tsx b/components/Iridescence.tsx
+deleted file mode 100644
+index 757d854..0000000
+--- a/components/Iridescence.tsx
++++ /dev/null
+@@ -1,171 +0,0 @@
+-
+-import { Renderer, Program, Mesh, Color, Triangle } from 'ogl';
+-import React, { useEffect, useRef } from 'react';
+-import './Iridescence.css';
+-
+-interface IridescenceProps extends Omit<React.HTMLAttributes<HTMLDivElement>, 'color'> {
+-  color?: [number, number, number];
+-  speed?: number;
+-  amplitude?: number;
+-  mouseReact?: boolean;
+-}
+-
+-const vertexShader = `
+-attribute vec2 uv;
+-attribute vec2 position;
+-
+-varying vec2 vUv;
+-
+-void main() {
+-  vUv = uv;
+-  gl_Position = vec4(position, 0.0, 1.0);
+-}
+-`;
+-
+-const fragmentShader = `
+-precision highp float;
+-
+-uniform float uTime;
+-uniform vec3 uColor;
+-uniform vec3 uResolution;
+-uniform vec2 uMouse;
+-uniform float uAmplitude;
+-uniform float uSpeed;
+-
+-varying vec2 vUv;
+-
+-void main() {
+-  float mr = min(uResolution.x, uResolution.y);
+-  vec2 uv = (vUv.xy * 2.0 - 1.0) * uResolution.xy / mr;
+-
+-  uv += (uMouse - vec2(0.5)) * uAmplitude;
+-
+-  float d = -uTime * 0.5 * uSpeed;
+-  float a = 0.0;
+-  for (float i = 0.0; i < 8.0; ++i) {
+-    a += cos(i - d - a * uv.x);
+-    d += sin(uv.y * i + a);
+-  }
+-  d += uTime * 0.5 * uSpeed;
+-  vec3 col = vec3(cos(uv * vec2(d, a)) * 0.6 + 0.4, cos(a + d) * 0.5 + 0.5);
+-  col = cos(col * cos(vec3(d, a, 2.5)) * 0.5 + 0.5) * uColor;
+-
+-  // Add subtle pulsing glow
+-  float pulse = sin(uTime * 0.8 * uSpeed) * 0.08 + 0.92;
+-  col *= pulse;
+-
+-  // Add depth with vignette
+-  float vignette = 1.0 - 0.3 * length(vUv - 0.5);
+-  col *= vignette;
+-
+-  // Add shimmer highlights
+-  float shimmer = sin(uv.x * 12.0 + uTime * 2.0 * uSpeed) * sin(uv.y * 12.0 + uTime * 1.5 * uSpeed);
+-  col += uColor * shimmer * 0.04;
+-
+-  gl_FragColor = vec4(col, 1.0);
+-}
+-`;
+-
+-const Iridescence: React.FC<IridescenceProps> = ({
+-  color = [0.58, 0.58, 0.58],
+-  speed = 1.0,
+-  amplitude = 0.1,
+-  mouseReact = true,
+-  ...rest
+-}) => {
+-  const ctnDom = useRef<HTMLDivElement | null>(null);
+-  const mousePos = useRef({ x: 0.5, y: 0.5 });
+-
+-  useEffect(() => {
+-    if (!ctnDom.current) return;
+-    const ctn = ctnDom.current;
+-    const renderer = new Renderer();
+-    const gl = renderer.gl;
+-    gl.clearColor(1, 1, 1, 1);
+-
+-    let program: Program | null = null;
+-
+-    function resize() {
+-      const scale = 1;
+-      const width = ctn.offsetWidth * scale || window.innerWidth;
+-      const height = ctn.offsetHeight * scale || window.innerHeight;
+-      renderer.setSize(width, height);
+-      if (program) {
+-        program.uniforms.uResolution.value = new Color(
+-          gl.canvas.width,
+-          gl.canvas.height,
+-          gl.canvas.width / gl.canvas.height
+-        );
+-      }
+-    }
+-
+-    window.addEventListener('resize', resize, false);
+-    resize();
+-
+-    const geometry = new Triangle(gl);
+-    program = new Program(gl, {
+-      vertex: vertexShader,
+-      fragment: fragmentShader,
+-      uniforms: {
+-        uTime: { value: 0 },
+-        uColor: { value: new Color(color[0], color[1], color[2]) },
+-        uResolution: {
+-          value: new Color(gl.canvas.width, gl.canvas.height, gl.canvas.width / gl.canvas.height)
+-        },
+-        uMouse: { value: new Float32Array([mousePos.current.x, mousePos.current.y]) },
+-        uAmplitude: { value: amplitude },
+-        uSpeed: { value: speed }
+-      }
+-    });
+-
+-    const mesh = new Mesh(gl, { geometry, program });
+-    let animateId: number;
+-
+-    const update = (t: number) => {
+-      animateId = requestAnimationFrame(update);
+-      if (program) {
+-        program.uniforms.uTime.value = t * 0.001;
+-      }
+-      renderer.render({ scene: mesh });
+-    };
+-
+-    animateId = requestAnimationFrame(update);
+-    ctn.appendChild(gl.canvas);
+-
+-    const handleMouseMove = (e: MouseEvent) => {
+-      const rect = ctn.getBoundingClientRect();
+-      const x = (e.clientX - rect.left) / rect.width;
+-      const y = 1.0 - (e.clientY - rect.top) / rect.height;
+-      mousePos.current = { x, y };
+-      if (program) {
+-        const mouseUniform = program.uniforms.uMouse.value as Float32Array;
+-        mouseUniform[0] = x;
+-        mouseUniform[1] = y;
+-      }
+-    };
+-
+-    if (mouseReact) {
+-      ctn.addEventListener('mousemove', handleMouseMove);
+-    }
+-
+-    return () => {
+-      cancelAnimationFrame(animateId);
+-      window.removeEventListener('resize', resize);
+-      if (mouseReact) {
+-        ctn.removeEventListener('mousemove', handleMouseMove);
+-      }
+-      if (gl.canvas.parentElement === ctn) {
+-        ctn.removeChild(gl.canvas);
+-      }
+-      const ext = gl.getExtension('WEBGL_lose_context');
+-      if (ext) {
+-        ext.loseContext();
+-      }
+-    };
+-  }, [color, speed, amplitude, mouseReact]);
+-
+-  return <div ref={ctnDom} className="iridescence-container" {...rest} />;
+-};
+-
+-export default Iridescence;
+-
+
+commit dd899cd68c79cbf95b9342af71b8c43d7243cba8
+Author: Gyandeep Dev Team <dev@gyandeep.local>
+Date:   Tue Mar 3 14:42:30 2026 +0530
+
+    feat: AdminSetup server registration, LandingPage UI polish, design docs, seed data
+    
+    - AdminSetup: register via /api/auth/register with bcrypt, promote to admin
+    - LandingPage: improve text contrast (gray-600 ΓåÆ gray-700), add bg blur
+    - Iridescence: minor fix
+    - Add DESIGN_DOCUMENTATION/ with DFD, ER, module, algorithm docs
+    - Add server/seed.js for initial user seeding
+    - Update SQLite databases with bcrypt-hashed passwords
+    
+    Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+
+diff --git a/components/Iridescence.tsx b/components/Iridescence.tsx
+index 551d782..757d854 100644
+--- a/components/Iridescence.tsx
++++ b/components/Iridescence.tsx
+@@ -1,3 +1,4 @@
++
+ import { Renderer, Program, Mesh, Color, Triangle } from 'ogl';
+ import React, { useEffect, useRef } from 'react';
+ import './Iridescence.css';
+
+commit dc4c627eab5496424da9ce3c23a831555ecd939f
+Author: Gyandeep Dev Team <dev@gyandeep.local>
+Date:   Fri Feb 27 19:58:21 2026 +0530
+
+    feat: complete system design, data flow audit, realtime hooks & API fixes
+    
+    - Add GYANDEEP_DESIGN.md: Architectural, Module, Database, ER, Activity, Use Case, Algorithm & Security designs in chart format
+    - Add hooks/useRealtimeData.ts: generic realtime refresh hook with convenience wrappers for grades, timetable, tickets, notifications
+    - Fix dataService.ts: notifications now route through Express API (was bypassing server), fixed analytics endpoint path (/api/analytics/insights)
+    - Add markNotificationRead() and deleteNotification() to frontend dataService
+    - Add PATCH /api/notifications/:id/read and DELETE /api/notifications/:id to server
+    - Add idempotency guard to POST /api/notifications
+    - Vite build passes successfully (exit code 0)
+
+diff --git a/components/Iridescence.tsx b/components/Iridescence.tsx
+index 047f2ba..551d782 100644
+--- a/components/Iridescence.tsx
++++ b/components/Iridescence.tsx
+@@ -66,7 +66,7 @@ void main() {
+ `;
+ 
+ const Iridescence: React.FC<IridescenceProps> = ({
+-  color = [0.5, 0.6, 0.8],
++  color = [0.58, 0.58, 0.58],
+   speed = 1.0,
+   amplitude = 0.1,
+   mouseReact = true,
+
+commit b63c361ee06e1ed99bf5541ca7108deaa2612a97
+Author: Surabhi kore <surabhisunilkore@gmail.com>
+Date:   Sat Feb 21 12:29:54 2026 +0530
+
+    feat: Add JWT authentication, SQLite persistence, and production-ready deployment
+    
+    - JWT-based auth endpoints (/auth/register, /auth/login, /api/auth/current_user)
+    - Protected API routes with requireAuth middleware
+    - WebSocket secured with JWT verification in socket handshake
+    - SQLite database with schema (users, audit logs, classes, questions, OTP)
+    - Database helpers readUsers/writeUsers with file fallback
+    - Migration script to convert users.json to SQLite
+    - Frontend login integration with JWT token storage
+    - WebSocket auto-connect with token on login, disconnect on logout
+    - Docker containerization with DB migration on startup
+    - Updated docker-compose.yml with full environment config
+    - Comprehensive DEPLOYMENT.md and DEPLOYMENT_DOCKER.md guides
+    - .env.example and .env.production templates
+    - Deployment checklist script
+    - Password hashing with bcryptjs
+    - Session and JWT secret management via environment variables
+
+diff --git a/components/Iridescence.tsx b/components/Iridescence.tsx
+new file mode 100644
+index 0000000..047f2ba
+--- /dev/null
++++ b/components/Iridescence.tsx
+@@ -0,0 +1,170 @@
++import { Renderer, Program, Mesh, Color, Triangle } from 'ogl';
++import React, { useEffect, useRef } from 'react';
++import './Iridescence.css';
++
++interface IridescenceProps extends Omit<React.HTMLAttributes<HTMLDivElement>, 'color'> {
++  color?: [number, number, number];
++  speed?: number;
++  amplitude?: number;
++  mouseReact?: boolean;
++}
++
++const vertexShader = `
++attribute vec2 uv;
++attribute vec2 position;
++
++varying vec2 vUv;
++
++void main() {
++  vUv = uv;
++  gl_Position = vec4(position, 0.0, 1.0);
++}
++`;
++
++const fragmentShader = `
++precision highp float;
++
++uniform float uTime;
++uniform vec3 uColor;
++uniform vec3 uResolution;
++uniform vec2 uMouse;
++uniform float uAmplitude;
++uniform float uSpeed;
++
++varying vec2 vUv;
++
++void main() {
++  float mr = min(uResolution.x, uResolution.y);
++  vec2 uv = (vUv.xy * 2.0 - 1.0) * uResolution.xy / mr;
++
++  uv += (uMouse - vec2(0.5)) * uAmplitude;
++
++  float d = -uTime * 0.5 * uSpeed;
++  float a = 0.0;
++  for (float i = 0.0; i < 8.0; ++i) {
++    a += cos(i - d - a * uv.x);
++    d += sin(uv.y * i + a);
++  }
++  d += uTime * 0.5 * uSpeed;
++  vec3 col = vec3(cos(uv * vec2(d, a)) * 0.6 + 0.4, cos(a + d) * 0.5 + 0.5);
++  col = cos(col * cos(vec3(d, a, 2.5)) * 0.5 + 0.5) * uColor;
++
++  // Add subtle pulsing glow
++  float pulse = sin(uTime * 0.8 * uSpeed) * 0.08 + 0.92;
++  col *= pulse;
++
++  // Add depth with vignette
++  float vignette = 1.0 - 0.3 * length(vUv - 0.5);
++  col *= vignette;
++
++  // Add shimmer highlights
++  float shimmer = sin(uv.x * 12.0 + uTime * 2.0 * uSpeed) * sin(uv.y * 12.0 + uTime * 1.5 * uSpeed);
++  col += uColor * shimmer * 0.04;
++
++  gl_FragColor = vec4(col, 1.0);
++}
++`;
++
++const Iridescence: React.FC<IridescenceProps> = ({
++  color = [0.5, 0.6, 0.8],
++  speed = 1.0,
++  amplitude = 0.1,
++  mouseReact = true,
++  ...rest
++}) => {
++  const ctnDom = useRef<HTMLDivElement | null>(null);
++  const mousePos = useRef({ x: 0.5, y: 0.5 });
++
++  useEffect(() => {
++    if (!ctnDom.current) return;
++    const ctn = ctnDom.current;
++    const renderer = new Renderer();
++    const gl = renderer.gl;
++    gl.clearColor(1, 1, 1, 1);
++
++    let program: Program | null = null;
++
++    function resize() {
++      const scale = 1;
++      const width = ctn.offsetWidth * scale || window.innerWidth;
++      const height = ctn.offsetHeight * scale || window.innerHeight;
++      renderer.setSize(width, height);
++      if (program) {
++        program.uniforms.uResolution.value = new Color(
++          gl.canvas.width,
++          gl.canvas.height,
++          gl.canvas.width / gl.canvas.height
++        );
++      }
++    }
++
++    window.addEventListener('resize', resize, false);
++    resize();
++
++    const geometry = new Triangle(gl);
++    program = new Program(gl, {
++      vertex: vertexShader,
++      fragment: fragmentShader,
++      uniforms: {
++        uTime: { value: 0 },
++        uColor: { value: new Color(color[0], color[1], color[2]) },
++        uResolution: {
++          value: new Color(gl.canvas.width, gl.canvas.height, gl.canvas.width / gl.canvas.height)
++        },
++        uMouse: { value: new Float32Array([mousePos.current.x, mousePos.current.y]) },
++        uAmplitude: { value: amplitude },
++        uSpeed: { value: speed }
++      }
++    });
++
++    const mesh = new Mesh(gl, { geometry, program });
++    let animateId: number;
++
++    const update = (t: number) => {
++      animateId = requestAnimationFrame(update);
++      if (program) {
++        program.uniforms.uTime.value = t * 0.001;
++      }
++      renderer.render({ scene: mesh });
++    };
++
++    animateId = requestAnimationFrame(update);
++    ctn.appendChild(gl.canvas);
++
++    const handleMouseMove = (e: MouseEvent) => {
++      const rect = ctn.getBoundingClientRect();
++      const x = (e.clientX - rect.left) / rect.width;
++      const y = 1.0 - (e.clientY - rect.top) / rect.height;
++      mousePos.current = { x, y };
++      if (program) {
++        const mouseUniform = program.uniforms.uMouse.value as Float32Array;
++        mouseUniform[0] = x;
++        mouseUniform[1] = y;
++      }
++    };
++
++    if (mouseReact) {
++      ctn.addEventListener('mousemove', handleMouseMove);
++    }
++
++    return () => {
++      cancelAnimationFrame(animateId);
++      window.removeEventListener('resize', resize);
++      if (mouseReact) {
++        ctn.removeEventListener('mousemove', handleMouseMove);
++      }
++      if (gl.canvas.parentElement === ctn) {
++        ctn.removeChild(gl.canvas);
++      }
++      const ext = gl.getExtension('WEBGL_lose_context');
++      if (ext) {
++        ext.loseContext();
++      }
++    };
++  }, [color, speed, amplitude, mouseReact]);
++
++  return <div ref={ctnDom} className="iridescence-container" {...rest} />;
++};
++
++export default Iridescence;
++

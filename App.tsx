@@ -4,7 +4,7 @@ import { UserRole as UserRoleEnum } from './types';
 import Login from './components/Login';
 import ToastNotification from './components/ToastNotification';
 import type { ToastType } from './components/ToastNotification';
-import { fetchUsers, fetchClasses } from './services/dataService';
+import { fetchUsers, fetchClasses, saveUsers } from './services/dataService';
 import { setLocale } from './services/i18n';
 import AdminSetup from './components/AdminSetup';
 import UserProfile from './components/UserProfile';
@@ -28,7 +28,7 @@ const AdminDashboard = lazy(() => import('./components/AdminDashboard').then(m =
 const Chatbot = lazy(() => import('./components/Chatbot'));
 const LandingPage = lazy(() => import('./components/LandingPage'));
 
-// ── localStorage helper ───────────────────────────────────────────────────────
+// ── localStorage helper (preferences only) ─────────────────────────────────────
 function useLocalStorage<T>(key: string, initialValue: T): [T, React.Dispatch<React.SetStateAction<T>>] {
     const [storedValue, setStoredValue] = useState<T>(() => {
         try {
@@ -48,7 +48,7 @@ function useLocalStorage<T>(key: string, initialValue: T): [T, React.Dispatch<Re
 
 // ── App ───────────────────────────────────────────────────────────────────────
 const App: React.FC = () => {
-    // ── Preferences & UI state ────────────────────────────────────────────────
+    // ── Preferences & UI state (localStorage - user preferences) ─────────────
     const [theme, setTheme] = useLocalStorage('gyandeep-theme', 'indigo');
     const [highContrast, setHighContrast] = useLocalStorage('gyandeep-high-contrast', false);
     const [fontScale, setFontScale] = useLocalStorage('gyandeep-font-scale', 1);
@@ -61,17 +61,18 @@ const App: React.FC = () => {
     const [showLanding, setShowLanding] = useState(true);
     const [notification, setNotification] = useState<{ message: string; type: ToastType } | null>(null);
 
-    // ── App data ──────────────────────────────────────────────────────────────
-    const [allUsers, setAllUsers] = useLocalStorage<AnyUser[]>('gyandeep-users', []);
-    const [allSubjects, setAllSubjects] = useLocalStorage<SubjectConfig[]>('gyandeep-subjects', [
+    // ── App data (from backend API) ───────────────────────────────────────────
+    const [allUsers, setAllUsers] = useState<AnyUser[]>([]);
+    const [allSubjects, setAllSubjects] = useState<SubjectConfig[]>([
         { id: 'math', name: 'Mathematics' },
         { id: 'science', name: 'Science' },
         { id: 'history', name: 'History' },
         { id: 'english', name: 'English' },
     ]);
-    const [allClasses, setAllClasses] = useLocalStorage<ClassConfig[]>('gyandeep-classes', []);
-    const [isSetupComplete, setIsSetupComplete] = useState(() => allUsers.length > 0);
-    const [announcements, setAnnouncements] = useLocalStorage<Announcement[]>('gyandeep-announcements', []);
+    const [allClasses, setAllClasses] = useState<ClassConfig[]>([]);
+    const [isSetupComplete, setIsSetupComplete] = useState(false);
+    const [announcements, setAnnouncements] = useState<Announcement[]>([]);
+    const [isLoading, setIsLoading] = useState(true);
 
     const students = useMemo(() => allUsers.filter(u => u.role === UserRoleEnum.STUDENT) as Student[], [allUsers]);
 
@@ -94,15 +95,27 @@ const App: React.FC = () => {
     // ── Theme engine ──────────────────────────────────────────────────────────
     useThemeEngine({ theme, highContrast, fontScale, reducedMotion, darkMode, voiceEnabled, locale: currentLocale });
 
-    // ── Data initialisation ───────────────────────────────────────────────────
+    // ── Data initialisation from backend API ─────────────────────────────────
     useEffect(() => {
-        fetchUsers().then(users => {
-            if (Array.isArray(users) && users.length > 0) { setAllUsers(users); setIsSetupComplete(true); }
-        }).catch(err => console.error('Failed to fetch users:', err));
-        fetchClasses().then(classes => {
-            if (Array.isArray(classes)) setAllClasses(classes);
-        }).catch(err => console.error('Failed to fetch classes:', err));
-        // eslint-disable-next-line react-hooks/exhaustive-deps
+        const loadData = async () => {
+            try {
+                const [users, classes] = await Promise.all([
+                    fetchUsers(),
+                    fetchClasses()
+                ]);
+                setAllUsers(users || []);
+                setAllClasses(classes || []);
+                if (Array.isArray(users) && users.length > 0) {
+                    setIsSetupComplete(true);
+                }
+            } catch (err) {
+                console.error('Failed to fetch data from server:', err);
+                showNotification('Failed to connect to server. Please ensure backend is running.', 'error');
+            } finally {
+                setIsLoading(false);
+            }
+        };
+        loadData();
     }, []);
 
     // ── Login wrapper (init teacher session on login) ─────────────────────────
@@ -117,14 +130,26 @@ const App: React.FC = () => {
     };
 
     // ── Admin setup ───────────────────────────────────────────────────────────
-    const handleAdminSetup = (adminData: Omit<Admin, 'faceImage'>) => {
+    const handleAdminSetup = async (adminData: Omit<Admin, 'faceImage'>) => {
         const newAdmin: Admin = { ...adminData, role: UserRoleEnum.ADMIN, faceImage: null };
+        try {
+            await saveUsers([newAdmin]);
+        } catch (err) {
+            console.error('Failed to save admin to server:', err);
+        }
         setAllUsers([newAdmin]);
         setIsSetupComplete(true);
     };
 
     // ── User management ───────────────────────────────────────────────────────
-    const handleUsersUpdate = (newUsers: AnyUser[]) => setAllUsers(newUsers);
+    const handleUsersUpdate = async (newUsers: AnyUser[]) => {
+        setAllUsers(newUsers);
+        try {
+            await saveUsers(newUsers);
+        } catch (err) {
+            console.error('Failed to sync users to server:', err);
+        }
+    };
 
     // ── Announcements ─────────────────────────────────────────────────────────
     const handlePostAnnouncement = (text: string) => {
@@ -146,6 +171,16 @@ const App: React.FC = () => {
 
     // ── Render ────────────────────────────────────────────────────────────────
     const renderDashboard = () => {
+        if (isLoading) {
+            return (
+                <div className="flex items-center justify-center min-h-screen">
+                    <div className="text-center">
+                        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mx-auto mb-4"></div>
+                        <p className="text-gray-600">Connecting to server...</p>
+                    </div>
+                </div>
+            );
+        }
         if (!isSetupComplete) {
             return <AdminSetup onSetupComplete={handleAdminSetup} theme={theme} />;
         }
@@ -185,6 +220,7 @@ const App: React.FC = () => {
                         historicalSessions={historicalRecords.filter(rec => rec.notes)}
                         allStudents={students}
                         announcements={announcements}
+                        onUpdateSession={handleUpdateSession}
                     />
                 )}
                 {currentUser.role === UserRoleEnum.ADMIN && (

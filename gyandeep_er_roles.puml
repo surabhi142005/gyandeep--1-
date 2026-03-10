@@ -1,0 +1,284 @@
+@startuml Gyandeep_ER_Roles
+
+' ============================================================
+' Gyandeep ER Diagram - With Teacher, Student, Admin Roles
+' ============================================================
+
+hide stereotypes
+skinparam linetype ortho
+skinparam entity {
+    BackgroundColor White
+    BorderColor #2C3E50
+}
+skinparam attribute {
+    BackgroundColor #E8F4FD
+    BorderColor #1E90FF
+}
+
+' ============================================================
+' ENTITY: TEACHER
+' ============================================================
+entity "TEACHER" as teacher {
+    *id : TEXT <<PK>>
+    --
+    *name : TEXT
+    *email : TEXT
+    *password : TEXT
+    googleId : TEXT
+    faceImage : TEXT
+    emailVerified : INTEGER
+    preferences : TEXT
+    history : TEXT
+    *assignedSubjects : TEXT
+    createdAt : INTEGER
+}
+
+' ============================================================
+' ENTITY: STUDENT
+' ============================================================
+entity "STUDENT" as student {
+    *id : TEXT <<PK>>
+    --
+    *name : TEXT
+    *email : TEXT
+    *password : TEXT
+    googleId : TEXT
+    faceImage : TEXT
+    emailVerified : INTEGER
+    preferences : TEXT
+    history : TEXT
+    *performance : TEXT
+    *classId : TEXT
+    createdAt : INTEGER
+}
+
+' ============================================================
+' ENTITY: ADMIN
+' ============================================================
+entity "ADMIN" as admin {
+    *id : TEXT <<PK>>
+    --
+    *name : TEXT
+    *email : TEXT
+    *password : TEXT
+    googleId : TEXT
+    faceImage : TEXT
+    emailVerified : INTEGER
+    preferences : TEXT
+    history : TEXT
+    createdAt : INTEGER
+}
+
+' ============================================================
+' ENTITY: CLASSES
+' ============================================================
+entity "CLASSES" as classes {
+    *id : TEXT <<PK>>
+    --
+    *name : TEXT
+    teacherId : TEXT <<FK>>
+}
+
+' ============================================================
+' ENTITY: GRADES
+' ============================================================
+entity "GRADES" as grades {
+    *id : TEXT <<PK>>
+    --
+    *studentId : TEXT <<FK>>
+    *subject : TEXT
+    *category : TEXT
+    *title : TEXT
+    *score : REAL
+    *maxScore : REAL
+    weight : REAL
+    *date : TEXT
+    *teacherId : TEXT <<FK>>
+    createdAt : INTEGER
+}
+
+' ============================================================
+' ENTITY: ATTENDANCE
+' ============================================================
+entity "ATTENDANCE" as attendance {
+    *id : INTEGER <<PK>>
+    --
+    *session_id : TEXT
+    *studentId : TEXT <<FK>>
+    *status : TEXT
+    verified_at : TEXT
+}
+
+' ============================================================
+' ENTITY: QUESTION_BANK
+' ============================================================
+entity "QUESTION_BANK" as question_bank {
+    *id : TEXT <<PK>>
+    --
+    *question : TEXT
+    *options : TEXT
+    *correctAnswer : TEXT
+    tags : TEXT
+    difficulty : TEXT
+    subject : TEXT
+    createdBy : TEXT <<FK>>
+}
+
+' ============================================================
+' ENTITY: TIMETABLE
+' ============================================================
+entity "TIMETABLE" as timetable {
+    *id : TEXT <<PK>>
+    --
+    *day : TEXT
+    *startTime : TEXT
+    *endTime : TEXT
+    *subject : TEXT
+    *teacherId : TEXT <<FK>>
+    *classId : TEXT <<FK>>
+    room : TEXT
+    createdAt : INTEGER
+    updatedAt : INTEGER
+}
+
+' ============================================================
+' ENTITY: TICKETS
+' ============================================================
+entity "TICKETS" as tickets {
+    *id : TEXT <<PK>>
+    --
+    *userId : TEXT <<FK>>
+    *userName : TEXT
+    *subject : TEXT
+    *message : TEXT
+    category : TEXT
+    *status : TEXT
+    assignedTo : TEXT <<FK>>
+    createdAt : INTEGER
+    updatedAt : INTEGER
+    version : INTEGER
+}
+
+' ============================================================
+' ENTITY: CENTRALIZED_NOTES
+' ============================================================
+entity "CENTRALIZED_NOTES" as notes {
+    *id : TEXT <<PK>>
+    --
+    *classId : TEXT <<FK>>
+    *subjectId : TEXT
+    unitNumber : INTEGER
+    unitName : TEXT
+    *title : TEXT
+    *content : TEXT
+    filePath : TEXT
+    noteType : TEXT
+    *teacherId : TEXT <<FK>>
+    createdAt : INTEGER
+}
+
+' ============================================================
+' ENTITY: AUDIT_LOGS
+' ============================================================
+entity "AUDIT_LOGS" as audit_logs {
+    *id : INTEGER <<PK>>
+    --
+    *ts : INTEGER
+    *type : TEXT
+    *userId : TEXT <<FK>>
+    details : TEXT
+}
+
+' ============================================================
+' ENTITY: OTP
+' ============================================================
+entity "OTP" as otp {
+    *userId : TEXT <<PK>> <<FK>>
+    --
+    *code : TEXT
+    *expires : INTEGER
+}
+
+' ============================================================
+' RELATIONSHIPS - TEACHER
+' ============================================================
+
+' Teacher teaches Class
+teacher ||--o{ classes : "1 teaches N"
+
+' Teacher assigns Grades
+teacher ||--o{ grades : "1 assigns N"
+
+' Teacher manages Timetable
+teacher ||--o{ timetable : "1 manages N"
+
+' Teacher uploads Notes
+teacher ||--o{ notes : "1 uploads N"
+
+' Teacher creates Questions
+teacher ||--o{ question_bank : "1 creates N"
+
+' Teacher owns OTP
+teacher ||--o{ otp : "1 has"
+
+' Teacher performs Audit
+teacher ||--o{ audit_logs : "1 performs"
+
+' ============================================================
+' RELATIONSHIPS - STUDENT
+' ============================================================
+
+' Student belongs to Class
+student ||--o{ classes : "N belongs_to"
+
+' Student receives Grades
+student ||--o{ grades : "N receives"
+
+' Student marks Attendance
+student ||--o{ attendance : "N marks"
+
+' Student attempts Questions
+student ||--o{ question_bank : "N attempts"
+
+' Student owns OTP
+student ||--o{ otp : "1 has"
+
+' Student performs Audit
+student ||--o{ audit_logs : "N performs"
+
+' Student creates Tickets
+student ||--o{ tickets : "N creates"
+
+' ============================================================
+' RELATIONSHIPS - ADMIN
+' ============================================================
+
+' Admin manages Classes
+admin ||--o{ classes : "1 manages N"
+
+' Admin assigns Tickets
+admin ||--o{ tickets : "1 assigns N"
+
+' Admin owns OTP
+admin ||--o{ otp : "1 has"
+
+' Admin performs Audit
+admin ||--o{ audit_logs : "1 performs"
+
+' Admin uploads Notes
+admin ||--o{ notes : "N uploads"
+
+' ============================================================
+' RELATIONSHIPS - CLASSES
+' ============================================================
+
+' Class has Timetable
+classes ||--o{ timetable : "1 has N"
+
+' Class has Notes
+classes ||--o{ notes : "1 has N"
+
+' Class has Grades
+classes ||--o{ grades : "1 has N"
+
+@enduml

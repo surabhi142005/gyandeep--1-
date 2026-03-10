@@ -1,0 +1,201 @@
+@startuml Gyandeep_ER_Diagram
+
+!define table(x) class x << (T,#FFAAAA) >>
+!define primary_key(x) <u>x</u>
+!define foreign_key(x) #x#
+
+skinparam class {
+    BackgroundColor White
+    ArrowColor #666666
+    BorderColor #333333
+}
+
+title Gyandeep Database - Entity Relationship Diagram
+
+' ============== ENTITIES ==============
+
+table(users) {
+    primary_key(id)
+    email
+    name
+    password_hash
+    role
+    google_id
+    face_vector
+    email_verified
+    xp
+    coins
+    preferences
+    created_at
+    updated_at
+}
+
+table(subjects) {
+    primary_key(id)
+    name
+    created_at
+}
+
+table(classes) {
+    primary_key(id)
+    name
+    foreign_key(teacher_id)
+    created_at
+}
+
+table(class_enrollments) {
+    foreign_key(class_id)
+    foreign_key(student_id)
+    enrolled_at
+}
+
+table(class_sessions) {
+    primary_key(id)
+    foreign_key(class_id)
+    foreign_key(subject_id)
+    code
+    expiry
+    location
+    radius_m
+    quiz_published
+    created_at
+}
+
+table(attendance) {
+    primary_key(id)
+    foreign_key(session_id)
+    foreign_key(student_id)
+    status
+    geo_location
+    verified_at
+}
+
+table(quizzes) {
+    primary_key(id)
+    foreign_key(session_id)
+    questions
+    created_at
+}
+
+table(performance) {
+    primary_key(id)
+    foreign_key(student_id)
+    foreign_key(subject_id)
+    foreign_key(session_id)
+    score
+    max_score
+    recorded_at
+}
+
+table(badges) {
+    primary_key(id)
+    name
+    slug
+    metadata
+}
+
+table(user_badges) {
+    foreign_key(user_id)
+    foreign_key(badge_id)
+    awarded_at
+}
+
+table(centralized_notes) {
+    primary_key(id)
+    foreign_key(class_id)
+    foreign_key(teacher_id)
+    foreign_key(subject_id)
+    unit_number
+    unit_name
+    title
+    content
+    file_path
+    file_type
+    notes_hash
+    created_at
+}
+
+table(grades) {
+    primary_key(id)
+    foreign_key(student_id)
+    foreign_key(teacher_id)
+    subject
+    category
+    title
+    score
+    max_score
+    weight
+    date
+    created_at
+}
+
+table(audit_logs) {
+    primary_key(id)
+    ts
+    type
+    foreign_key(user_id)
+    details
+}
+
+table(notifications) {
+    primary_key(id)
+    foreign_key(user_id)
+    title
+    message
+    type
+    read
+    created_at
+}
+
+' ============== RELATIONSHIPS ==============
+
+users "1" -- "N" classes : teaches (teacher_id)
+users "1" -- "N" class_enrollments : enrolls (student_id)
+classes "1" -- "N" class_enrollments : has
+classes "1" -- "N" class_sessions : contains
+subjects "1" -- "N" class_sessions : scheduled
+class_sessions "1" -- "N" attendance : records
+class_sessions "1" -- "1" quizzes : generates
+users "1" -- "N" attendance : marks (student_id)
+users "1" -- "N" performance : achieves (student_id)
+subjects "1" -- "N" performance : measures
+class_sessions "1" -- "N" performance : evaluates
+users "1" -- "N" user_badges : earns
+badges "1" -- "N" user_badges : awarded
+users "1" -- "N" grades : receives (student_id)
+users "1" -- "N" grades : assigns (teacher_id)
+users "1" -- "N" audit_logs : performs
+users "1" -- "N" notifications : receives
+classes "1" -- "N" centralized_notes : has_notes
+users "1" -- "N" centralized_notes : uploads (teacher_id)
+subjects "1" -- "N" centralized_notes : contains
+centralized_notes "1" -- "1" quizzes : generates
+
+note right of users
+  **Role-based Access:**
+  - student: can enroll, attend, view grades
+  - teacher: manages classes, grades, sessions
+  - admin: system management, user oversight
+end note
+
+note bottom of class_sessions
+  **Geofencing:**
+  Sessions include GPS location
+  and radius for attendance
+  verification
+end note
+
+note bottom of attendance
+  **Partitioned Table:**
+  Monthly partitions by verified_at
+  for performance optimization
+end note
+
+note right of centralized_notes
+  **AI Integration:**
+  Notes uploaded by teachers
+  AI generates 5 MCQs from
+  class-wise notes
+end note
+
+@enduml

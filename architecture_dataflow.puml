@@ -1,0 +1,36 @@
+@startuml Gyandeep Data Flow
+
+actor User
+participant "React UI" as UI
+participant "Express API" as API
+participant "JWT Auth" as Auth
+participant "RBAC" as RBAC
+database "SQLite" as DB
+participant "SSE" as SSE
+
+User -> UI : User Action
+UI -> API : HTTP Request\n(Bearer Token)
+API -> Auth : Verify JWT
+Auth -> API : Valid/Invalid
+
+alt Valid Token
+    API -> RBAC : Check Permissions
+    RBAC -> API : Allowed/Denied
+    
+    alt Allowed
+        API -> DB : SQL Query
+        DB -> API : Result
+        API -> SSE : Broadcast Update
+        SSE -> UI : Real-time Event
+        API -> UI : HTTP Response
+        UI -> User : Render Result
+    else Denied
+        API -> UI : 403 Forbidden
+        UI -> User : Show Error
+    end
+else Invalid Token
+    API -> UI : 401 Unauthorized
+    UI -> User : Redirect to Login
+end
+
+@enduml

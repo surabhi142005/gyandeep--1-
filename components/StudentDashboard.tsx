@@ -24,6 +24,7 @@ interface StudentDashboardProps {
   historicalSessions: HistoricalSessionRecord[];
   allStudents?: Student[];
   announcements?: Announcement[];
+  onUpdateSession?: (sessionUpdate: Partial<ClassSession>) => void;
 }
 
 const THEME_COLORS: Record<string, Record<string, string>> = {
@@ -34,7 +35,7 @@ const THEME_COLORS: Record<string, Record<string, string>> = {
 };
 
 
-const StudentDashboard: React.FC<StudentDashboardProps> = ({ student, classSession, onMarkAttendance, onUpdatePerformance, onLogout, onShowNotification, theme, onUpdateFaceImage, historicalSessions, allStudents = [], announcements = [] }) => {
+const StudentDashboard: React.FC<StudentDashboardProps> = ({ student, classSession, onMarkAttendance, onUpdatePerformance, onLogout, onShowNotification, theme, onUpdateFaceImage, historicalSessions, allStudents = [], announcements = [], onUpdateSession }) => {
   const [code, setCode] = useState('');
   const [showWebcam, setShowWebcam] = useState(false);
   const [isVerifying, setIsVerifying] = useState(false);
@@ -166,6 +167,9 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ student, classSessi
   const handleQuizSubmit = (score: number) => {
     onUpdatePerformance(student.id, classSession.subject, score);
     setQuizTaken(true);
+    if (onUpdateSession && classSession.notes) {
+      onUpdateSession({ notes: null });
+    }
   };
 
   const handleFaceRegister = (imageDataUrl: string) => {

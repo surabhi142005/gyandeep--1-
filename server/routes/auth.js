@@ -5,8 +5,6 @@
  * POST /api/auth/login
  * POST /api/auth/face
  * POST /api/auth/location
- * POST /api/auth/otp/send
- * POST /api/auth/otp/verify
  * POST /api/auth/password/request
  * POST /api/auth/password/verify
  * POST /api/auth/password/complete
@@ -168,38 +166,6 @@ router.post('/location', asyncRoute(async (req, res) => {
   } catch {
     return res.status(403).json({ ok: false, distance: dist, error: 'Outside allowed radius' })
   }
-}))
-
-// ── OTP ───────────────────────────────────────────────────────────────────────
-router.post('/otp/send', resetRateLimit, asyncRoute(async (req, res) => {
-  const { userId, email } = req.body || {}
-  if (!userId) return res.status(400).json({ error: 'userId is required' })
-  // Use crypto.randomBytes for cryptographically secure OTP
-  const code = (parseInt(crypto.randomBytes(3).toString('hex'), 16) % 900000 + 100000).toString()
-  const expires = Date.now() + 5 * 60 * 1000
-  await setCode('otp', userId, code, 300)
-  let targetEmail = email
-  if (!targetEmail) {
-    // O(1) indexed lookup instead of O(n) full scan
-    const { findUserById } = await import('../controllers/userStore.js')
-    const u = await findUserById(userId)
-    targetEmail = u?.email
-  }
-  if (targetEmail) {
-    try { await sendEmailVerification(targetEmail, code) } catch (e) { console.error('OTP email failed:', e.message) }
-  }
-  return res.json({ ok: true, expires })
-}))
-
-router.post('/otp/verify', resetRateLimit, asyncRoute(async (req, res) => {
-  const { userId, code } = req.body || {}
-  if (!userId || !code) return res.status(400).json({ error: 'userId and code are required' })
-  const rec = await getCode('otp', userId)
-  if (!rec || rec.code !== String(code)) return res.status(401).json({ error: 'Invalid or expired code' })
-  await deleteCode('otp', userId)
-  try { await dbRun(`INSERT INTO audit_logs (ts, type, userId, details) VALUES (?,?,?,?)`,
-    [Date.now(), 'otp_verify', userId, JSON.stringify({ ok: true })]) } catch {}
-  return res.json({ ok: true })
 }))
 
 // ── Password reset ────────────────────────────────────────────────────────────

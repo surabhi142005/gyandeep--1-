@@ -348,63 +348,6 @@ app.post('/api/classes/assign', requireAuth, ensureRole('admin', 'teacher'), asy
   return res.json({ ok: true })
 }))
 
-// ── Question Bank ─────────────────────────────────────────────────────────────
-const questionBankFile = path.join(dataDir, 'questionBank.json')
-
-app.get('/api/question-bank', requireAuth, asyncRoute(async (req, res) => {
-  if (!fs.existsSync(questionBankFile)) return res.json([])
-  return res.json(JSON.parse(fs.readFileSync(questionBankFile, 'utf8') || '[]'))
-}))
-
-app.post('/api/question-bank/add', requireAuth, ensureRole('teacher', 'admin'), asyncRoute(async (req, res) => {
-  const { questions } = req.body || {}
-  if (!Array.isArray(questions)) return res.status(400).json({ error: 'questions must be an array' })
-  const existing = fs.existsSync(questionBankFile) ? JSON.parse(fs.readFileSync(questionBankFile, 'utf8') || '[]') : []
-  const tagged = questions.map(q => ({
-    id: q.id || `qb-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-    question: String(q.question || '').slice(0, 2000),
-    options: Array.isArray(q.options) ? q.options.map(o => String(o).slice(0, 500)) : [],
-    correctAnswer: String(q.correctAnswer || '').slice(0, 500),
-    tags: Array.isArray(q.tags) ? q.tags : [],
-    difficulty: q.difficulty || 'medium',
-    subject: q.subject || 'general'
-  }))
-  fs.writeFileSync(questionBankFile, JSON.stringify(existing.concat(tagged), null, 2))
-  return res.json({ ok: true, count: existing.length + tagged.length })
-}))
-
-app.post('/api/question-bank/upsert-quiz', requireAuth, ensureRole('teacher', 'admin'), asyncRoute(async (req, res) => {
-  const { quiz, subject } = req.body || {}
-  if (!Array.isArray(quiz)) return res.status(400).json({ error: 'quiz must be an array' })
-  const existing = fs.existsSync(questionBankFile) ? JSON.parse(fs.readFileSync(questionBankFile, 'utf8') || '[]') : []
-  const toAdd = quiz.map(q => ({
-    id: q.id || `qb-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-    question: String(q.question || ''), options: Array.isArray(q.options) ? q.options : [],
-    correctAnswer: String(q.correctAnswer || ''), tags: Array.isArray(q.tags) ? q.tags : ['generated'],
-    difficulty: q.difficulty || 'medium', subject: subject || q.subject || 'general'
-  }))
-  fs.writeFileSync(questionBankFile, JSON.stringify(existing.concat(toAdd), null, 2))
-  return res.json({ ok: true, count: existing.length + toAdd.length })
-}))
-
-app.post('/api/question-bank/update', requireAuth, ensureRole('teacher', 'admin'), asyncRoute(async (req, res) => {
-  const { id, patch } = req.body || {}
-  if (!id || !patch) return res.status(400).json({ error: 'id and patch required' })
-  const existing = fs.existsSync(questionBankFile) ? JSON.parse(fs.readFileSync(questionBankFile, 'utf8') || '[]') : []
-  const idx = existing.findIndex(q => q.id === id)
-  if (idx === -1) return res.status(404).json({ error: 'question not found' })
-  existing[idx] = { ...existing[idx], ...patch }
-  fs.writeFileSync(questionBankFile, JSON.stringify(existing, null, 2))
-  return res.json({ ok: true })
-}))
-
-app.delete('/api/question-bank/:id', requireAuth, ensureRole('teacher', 'admin'), asyncRoute(async (req, res) => {
-  const { id } = req.params
-  const existing = fs.existsSync(questionBankFile) ? JSON.parse(fs.readFileSync(questionBankFile, 'utf8') || '[]') : []
-  fs.writeFileSync(questionBankFile, JSON.stringify(existing.filter(q => q.id !== id), null, 2))
-  return res.json({ ok: true })
-}))
-
 // ── Grades (SQLite — replaces grades.json for safe concurrent writes) ─────────
 // Each INSERT/DELETE is atomic; no read-modify-write race condition possible.
 

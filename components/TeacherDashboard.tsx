@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import type { User, PerformanceData, Coordinates, QuizQuestion, HistoricalSessionRecord } from '../types';
 import { useQuizWorker } from '../hooks/useQuizWorker';
-import { fetchQuestionBank, upsertQuizToBank, syncCalendar, uploadToDrive, fetchTagPresets } from '../services/dataService';
+import { syncCalendar, uploadToDrive, fetchTagPresets, uploadCentralizedNotes, fetchCentralizedNotesCombined } from '../services/dataService';
 import { t } from '../services/i18n';
 import { getCurrentPosition } from '../services/locationService';
 import Spinner from './Spinner';
@@ -59,6 +59,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ teacher, students, 
 
   const [tagPresets, setTagPresets] = useState<Record<string, string[]>>({});
   const [notesText, setNotesText] = useState(classSession.notes || '');
+  const [selectedQuizClass, setSelectedQuizClass] = useState<string>('');
   const [expiryWarning, setExpiryWarning] = useState<string | null>(null);
   useEffect(() => { fetchTagPresets().then(setTagPresets).catch((err) => { console.error('Failed to load tag presets:', err); }) }, []);
   useEffect(() => setNotesText(classSession.notes || ''), [classSession.notes]);
@@ -292,17 +293,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ teacher, students, 
         notesText: extractedText,
         subject: classSession.subject,
       });
-      try {
-        const bank = await fetchQuestionBank();
-        const extras = (Array.isArray(bank) ? bank : [])
-          .filter(q => (q.subject || '') === classSession.subject)
-          .slice(0, Math.max(0, 5 - quiz.length))
-          .map(q => ({ id: q.id, question: q.question, options: q.options, correctAnswer: q.correctAnswer }));
-        const combined = quiz.concat(extras);
-        onUpdateSession({ quiz: combined });
-      } catch {
-        onUpdateSession({ quiz });
-      }
+      onUpdateSession({ quiz });
       setSuccessMessage("Quiz is ready for your review.");
     } catch (err: any) {
       setError(err instanceof Error ? err.message : String(err));
@@ -318,9 +309,6 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ teacher, students, 
     clearMessages();
     try {
       onUpdateSession({ quizPublished: true });
-      if (classSession.quiz) {
-        await upsertQuizToBank(classSession.quiz, selectedSubject);
-      }
       notify('Quiz Published', `Quiz for ${selectedSubject} is now available`);
       setSuccessMessage("Quiz is now live!");
     } catch (e) {
@@ -642,17 +630,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ teacher, students, 
                           notesText,
                           subject: classSession.subject,
                         });
-                        try {
-                          const bank = await fetchQuestionBank();
-                          const extras = (Array.isArray(bank) ? bank : [])
-                            .filter(q => (q.subject || '') === classSession.subject)
-                            .slice(0, Math.max(0, 5 - quiz.length))
-                            .map(q => ({ id: q.id, question: q.question, options: q.options, correctAnswer: q.correctAnswer }));
-                          const combined = quiz.concat(extras);
-                          onUpdateSession({ quiz: combined });
-                        } catch {
-                          onUpdateSession({ quiz });
-                        }
+                        onUpdateSession({ quiz });
                         setSuccessMessage("Quiz is ready for your review.");
                       } catch (err: any) {
                         setError(err instanceof Error ? err.message : String(err));

@@ -30,7 +30,9 @@
       "Bash(cd \"C:\\\\Users\\\\SUNIL KORE\\\\Downloads\\\\gyandeep \\(1\\)\" && git push origin main 2>&1)",
       "Bash(find:*)",
       "Bash(git add:*)",
-      "Bash(git commit:*)"
+      "Bash(git commit:*)",
+      "Bash(npm run:*)",
+      "Bash(taskkill:*)"
     ]
   }
 }
