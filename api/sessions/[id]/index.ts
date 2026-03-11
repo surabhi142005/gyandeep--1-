@@ -27,8 +27,8 @@ export async function GET(
     const [subject, classData, sessionNotes, quiz] = await Promise.all([
       session.subjectId ? prisma.subject.findMany({ where: { id: session.subjectId } }).then(r => r[0] || null) : null,
       session.classId ? prisma.class.findMany({ where: { id: session.classId } }).then(r => r[0] || null) : null,
-      prisma.sessionNote.findMany({ where: { session_id: params.id } }),
-      prisma.quiz.findMany({ where: { session_id: params.id } }).then(r => r[0] || null),
+      prisma.sessionNote.findMany({ where: { sessionId: params.id } }),
+      prisma.quiz.findMany({ where: { sessionId: params.id }, orderBy: { createdAt: 'desc' } }).then(r => r[0] || null),
     ]);
 
     // Check expiry
@@ -42,7 +42,7 @@ export async function GET(
         return json({ error: 'Quiz not yet published' }, 403);
       }
 
-      const questions = quiz ? await prisma.quizQuestion.findMany({ where: { quiz_id: quiz.id } }) : [];
+      const questions = quiz ? await prisma.quizQuestion.findMany({ where: { quizId: quiz.id }, orderBy: { orderIndex: 'asc' } }) : [];
 
       return json({
         id: session.id,
@@ -68,8 +68,10 @@ export async function GET(
       quizPublished: session.quizPublished,
       hasNotes: !!activeNote,
       notesPreview: activeNote?.extractedText?.slice(0, 500) || null,
-      quizQuestions: quiz?.questions_json ? JSON.parse(quiz.questions_json) : null,
+      quizQuestions: quiz?.questionsJson ? JSON.parse(quiz.questionsJson) : null,
       quizId: quiz?.id || null,
+      endedAt: (session as any).endedAt || null,
+      timetableEntryId: (session as any).timetableEntryId || null,
     });
   } catch (error) {
     console.error('Get session error:', error);

@@ -1,12 +1,12 @@
 /**
- * server/index.js — Gyandeep API Server (refactored)
+ * server/index.js — Gyandeep API Server (MongoDB)
  *
  * Architecture:
  *   server/routes/      — route definitions (thin)
  *   server/controllers/ — business logic
  *   server/middleware/  — auth, rbac, rate-limiting, validation
  *   server/services/    — redis, llm adapter
- *   server/db/          — PostgreSQL pool (optional)
+ *   server/db/         — MongoDB Atlas connection
  */
 
 import express from 'express'
@@ -19,8 +19,9 @@ import session from 'express-session'
 import passport from 'passport'
 import jwt from 'jsonwebtoken'
 import { Strategy as GoogleStrategy } from 'passport-google-oauth20'
+import { ObjectId } from 'mongodb'
 
-import { initDB, setupSchema } from './database.js'
+import { connectDB, getDB, COLLECTIONS, generateId, seedDefaults } from './db/mongo.js'
 import { addJob, getJob, registerProcessor, isRedisMode } from './jobQueue.js'
 import { indexContent, semanticSearch, buildContext, indexStats } from './embeddings.js'
 import { registerAttendanceFlusher, flushAttendanceNow } from './services/redisService.js'
@@ -33,7 +34,6 @@ import { ensureRole } from './middleware/rbac.js'
 import { asyncRoute } from './middleware/validate.js'
 import { toPublicUser } from './middleware/sanitizeResponse.js'
 import { readUsers, writeUsers, updateUser } from './controllers/userStore.js'
-import { run as dbRun, all as dbAll, get as dbGet, runInTransaction } from './database.js'
 import { readJSON, mutateJSON } from './utils/fileStore.js'
 import { sendEmail } from './emailService.js'
 
@@ -43,6 +43,9 @@ import quizRoutes from './routes/quiz.js'
 import attendanceRoutes from './routes/attendance.js'
 import adminRoutes from './routes/admin.js'
 import notesRoutes from './routes/notes.js'
+import notificationRoutes from './routes/notifications.js'
+import announcementRoutes from './routes/announcements.js'
+import classSubjectRoutes from './routes/classSubjects.js'
 
 dotenv.config({ path: '.env.local' })
 dotenv.config()
@@ -128,6 +131,11 @@ app.use('/api/quiz', quizRoutes)
 app.use('/api/attendance', attendanceRoutes)
 app.use('/api/admin', adminRoutes)
 app.use('/api/notes', notesRoutes)
+app.use('/api/notifications', notificationRoutes)
+app.use('/api/announcements', announcementRoutes)
+app.use('/api/notifications', notificationRoutes)
+app.use('/api/announcements', announcementRoutes)
+app.use('/api/class-subjects', classSubjectRoutes)
 
 
 const IDEMPOTENCY_KEY_MAX_LEN = 120
@@ -144,12 +152,14 @@ async function withIdempotency(req, action, handler) {
   const key = getIdempotencyKey(req)
   if (!key) return handler()
 
-  const existing = await dbGet(
-    `SELECT statusCode, responseBody FROM idempotency_keys WHERE key = ? AND userId = ? AND action = ?`,
-    [key, req.user.id, action]
-  ).catch(() => null)
+  const db = getDB()
+  const existing = await db.collection(COLLECTIONS.IDEMPOTENCY_KEYS).findOne({
+    key,
+    userId: req.user.id,
+    action
+  })
 
-  if (existing && Number(existing.statusCode) >= 0) {
+  if (existing && existing.statusCode >= 0) {
     try {
       return JSON.parse(existing.responseBody)
     } catch {
@@ -157,18 +167,20 @@ async function withIdempotency(req, action, handler) {
     }
   }
 
-  const reserved = await dbRun(
-    `INSERT OR IGNORE INTO idempotency_keys (key, userId, action, statusCode, responseBody, createdAt) VALUES (?,?,?,?,?,?)`,
-    [key, req.user.id, action, -1, '{}', Date.now()]
+  const reserved = await db.collection(COLLECTIONS.IDEMPOTENCY_KEYS).updateOne(
+    { key, userId: req.user.id, action },
+    { $setOnInsert: { key, userId: req.user.id, action, statusCode: -1, responseBody: '{}', createdAt: new Date() } },
+    { upsert: true }
   )
 
-  if (reserved.changes === 0) {
-    const ready = await dbGet(
-      `SELECT statusCode, responseBody FROM idempotency_keys WHERE key = ? AND userId = ? AND action = ?`,
-      [key, req.user.id, action]
-    ).catch(() => null)
+  if (!reserved.upsertedId) {
+    const ready = await db.collection(COLLECTIONS.IDEMPOTENCY_KEYS).findOne({
+      key,
+      userId: req.user.id,
+      action
+    })
 
-    if (ready && Number(ready.statusCode) >= 0) {
+    if (ready && ready.statusCode >= 0) {
       try {
         return JSON.parse(ready.responseBody)
       } catch {
@@ -183,16 +195,15 @@ async function withIdempotency(req, action, handler) {
 
   try {
     const payload = await handler()
-    await dbRun(
-      `UPDATE idempotency_keys SET statusCode = ?, responseBody = ?, createdAt = ? WHERE key = ? AND userId = ? AND action = ?`,
-      [200, JSON.stringify(payload), Date.now(), key, req.user.id, action]
+    await db.collection(COLLECTIONS.IDEMPOTENCY_KEYS).updateOne(
+      { key, userId: req.user.id, action },
+      { $set: { statusCode: 200, responseBody: JSON.stringify(payload), createdAt: new Date() } }
     )
     return payload
   } catch (err) {
-    await dbRun(
-      `DELETE FROM idempotency_keys WHERE key = ? AND userId = ? AND action = ? AND statusCode = -1`,
-      [key, req.user.id, action]
-    ).catch(() => { })
+    await db.collection(COLLECTIONS.IDEMPOTENCY_KEYS).deleteOne({
+      key, userId: req.user.id, action, statusCode: -1
+    }).catch(() => { })
     throw err
   }
 }
@@ -204,77 +215,77 @@ async function migrateLegacyTimetableIfNeeded(timetableFile) {
   if (legacyTimetableMigrated) return
   legacyTimetableMigrated = true
 
-  const count = await dbGet('SELECT COUNT(1) AS c FROM timetable_entries').catch(() => ({ c: 0 }))
-  if (Number(count?.c || 0) > 0) return
+  const db = getDB()
+  const count = await db.collection(COLLECTIONS.TIMETABLE).countDocuments()
+  if (count > 0) return
 
   const legacy = readJSON(timetableFile, [])
   if (!Array.isArray(legacy) || legacy.length === 0) return
 
-  const now = Date.now()
-  await runInTransaction(async ({ run }) => {
-    for (const e of legacy) {
-      if (!e || !e.day || !e.startTime || !e.endTime || !e.subject) continue
-      await run(
-        `INSERT OR IGNORE INTO timetable_entries (id, day, startTime, endTime, subject, teacherId, classId, room, createdAt, updatedAt) VALUES (?,?,?,?,?,?,?,?,?,?)`,
-        [
-          e.id || `tt-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-          String(e.day),
-          String(e.startTime),
-          String(e.endTime),
-          String(e.subject),
-          e.teacherId || null,
-          e.classId || null,
-          e.room || null,
-          now,
-          now,
-        ]
-      )
-    }
-  })
-  console.log(`[timetable] Migrated ${legacy.length} legacy JSON entries to SQLite`)
+  const docs = legacy
+    .filter(e => e && e.day && e.startTime && e.endTime && e.subject)
+    .map(e => ({
+      odId: e.id || `tt-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      day: String(e.day),
+      startTime: String(e.startTime),
+      endTime: String(e.endTime),
+      subject: String(e.subject),
+      teacherId: e.teacherId || null,
+      classId: e.classId || null,
+      room: e.room || null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    }))
+
+  if (docs.length > 0) {
+    await db.collection(COLLECTIONS.TIMETABLE).insertMany(docs)
+    console.log(`[timetable] Migrated ${docs.length} legacy JSON entries to MongoDB`)
+  }
 }
 
 async function migrateLegacyTicketsIfNeeded(ticketsFile) {
   if (legacyTicketsMigrated) return
   legacyTicketsMigrated = true
 
-  const count = await dbGet('SELECT COUNT(1) AS c FROM tickets').catch(() => ({ c: 0 }))
-  if (Number(count?.c || 0) > 0) return
+  const db = getDB()
+  const count = await db.collection(COLLECTIONS.TICKETS).countDocuments()
+  if (count > 0) return
 
   const legacy = readJSON(ticketsFile, [])
   if (!Array.isArray(legacy) || legacy.length === 0) return
 
-  await runInTransaction(async ({ run }) => {
-    for (const t of legacy) {
-      if (!t || !t.id || !t.userId || !t.subject || !t.message) continue
-      await run(
-        `INSERT OR IGNORE INTO tickets (id, userId, userName, subject, message, category, status, createdAt, updatedAt, version) VALUES (?,?,?,?,?,?,?,?,?,?)`,
-        [
-          String(t.id),
-          String(t.userId),
-          t.userName || null,
-          String(t.subject),
-          String(t.message),
-          String(t.category || 'general'),
-          String(t.status || 'open'),
-          Number(t.createdAt || Date.now()),
-          Number(t.createdAt || Date.now()),
-          1,
-        ]
-      )
-
-      const replies = Array.isArray(t.replies) ? t.replies : []
-      for (const r of replies) {
-        if (!r || !r.userId || !r.message) continue
-        await run(
-          `INSERT INTO ticket_replies (ticketId, userId, userName, message, createdAt) VALUES (?,?,?,?,?)`,
-          [String(t.id), String(r.userId), r.userName || null, String(r.message), Number(r.createdAt || Date.now())]
-        )
-      }
+  for (const t of legacy) {
+    if (!t || !t.id || !t.userId || !t.subject || !t.message) continue
+    
+    const ticketDoc = {
+      odId: String(t.id),
+      userId: String(t.userId),
+      userName: t.userName || null,
+      subject: String(t.subject),
+      message: String(t.message),
+      category: String(t.category || 'general'),
+      status: String(t.status || 'open'),
+      createdAt: new Date(t.createdAt || Date.now()),
+      updatedAt: new Date(t.updatedAt || Date.now()),
+      version: 1,
     }
-  })
+    await db.collection(COLLECTIONS.TICKETS).insertOne(ticketDoc)
 
-  console.log(`[tickets] Migrated ${legacy.length} legacy JSON tickets to SQLite`)
+    const replies = Array.isArray(t.replies) ? t.replies : []
+    for (const r of replies) {
+      if (!r || !r.userId || !r.message) continue
+      await db.collection(COLLECTIONS.TICKET_REPLIES).insertOne({
+        odId: `reply-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+        ticketId: String(t.id),
+        userId: String(r.userId),
+        userName: r.userName || null,
+        message: String(r.message),
+        createdAt: new Date(r.createdAt || Date.now()),
+      })
+    }
+  }
+
+  console.log(`[tickets] Migrated ${legacy.length} legacy JSON tickets to MongoDB`)
 }
 
 // ── Users (paginated; sensitive fields stripped) ──────────────────────────────
@@ -348,20 +359,18 @@ app.post('/api/classes/assign', requireAuth, ensureRole('admin', 'teacher'), asy
   return res.json({ ok: true })
 }))
 
-// ── Grades (SQLite — replaces grades.json for safe concurrent writes) ─────────
-// Each INSERT/DELETE is atomic; no read-modify-write race condition possible.
+// ── Grades (MongoDB — replaces grades.json for safe concurrent writes) ─────────
 
 app.get('/api/grades', requireAuth, asyncRoute(async (req, res) => {
   const studentId = req.query.studentId ? String(req.query.studentId) : null
   const subject = req.query.subject ? String(req.query.subject) : null
-  let sql = `SELECT * FROM grades`
-  const params = []
-  const where = []
-  if (studentId) { where.push(`studentId = ?`); params.push(studentId) }
-  if (subject) { where.push(`subject = ?`); params.push(subject) }
-  if (where.length) sql += ` WHERE ${where.join(' AND ')}`
-  sql += ` ORDER BY createdAt DESC`
-  const rows = await dbAll(sql, params).catch(() => [])
+  
+  const db = getDB()
+  const query = {}
+  if (studentId) query.studentId = studentId
+  if (subject) query.subject = subject
+  
+  const rows = await db.collection(COLLECTIONS.GRADES).find(query).sort({ createdAt: -1 }).toArray()
   return res.json(rows)
 }))
 
@@ -369,42 +378,53 @@ app.post('/api/grades', requireAuth, ensureRole('teacher', 'admin'), asyncRoute(
   const { studentId, subject, category, title, score, maxScore, weight, date, teacherId } = req.body || {}
   if (!studentId || !subject || !category || !title || score === undefined || !maxScore)
     return res.status(400).json({ error: 'studentId, subject, category, title, score, maxScore required' })
+  
   const entry = {
-    id: `gr-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-    studentId, subject, category, title,
-    score: Number(score), maxScore: Number(maxScore),
-    weight: Number(weight || 1), date: date || new Date().toISOString().split('T')[0],
-    teacherId: teacherId || req.user.id, createdAt: Date.now()
+    odId: `gr-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+    studentId,
+    subject,
+    category,
+    title,
+    score: Number(score),
+    maxScore: Number(maxScore),
+    weight: Number(weight || 1),
+    date: date || new Date().toISOString().split('T')[0],
+    teacherId: teacherId || req.user.id,
+    createdAt: new Date(),
+    updatedAt: new Date(),
   }
+  
   const payload = await withIdempotency(req, 'grades:create', async () => {
-    await dbRun(
-      `INSERT INTO grades (id,studentId,subject,category,title,score,maxScore,weight,date,teacherId,createdAt) VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
-      [entry.id, entry.studentId, entry.subject, entry.category, entry.title, entry.score, entry.maxScore, entry.weight, entry.date, entry.teacherId, entry.createdAt]
-    )
+    await getDB().collection(COLLECTIONS.GRADES).insertOne(entry)
     return { ok: true, grade: entry }
   })
-  broadcastSSE('grades-changed', { type: 'created', id: entry.id })
+  broadcastSSE('grades-changed', { type: 'created', id: entry.odId })
   return res.json(payload)
 }))
 
 app.post('/api/grades/bulk', requireAuth, ensureRole('teacher', 'admin'), asyncRoute(async (req, res) => {
   const { grades } = req.body || {}
   if (!Array.isArray(grades)) return res.status(400).json({ error: 'grades array required' })
+  
   const entries = grades.map(g => ({
-    id: `gr-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-    studentId: g.studentId, subject: g.subject, category: g.category, title: g.title,
-    score: Number(g.score), maxScore: Number(g.maxScore), weight: Number(g.weight || 1),
-    date: g.date || new Date().toISOString().split('T')[0], teacherId: g.teacherId || req.user.id, createdAt: Date.now()
+    odId: `gr-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+    studentId: g.studentId,
+    subject: g.subject,
+    category: g.category,
+    title: g.title,
+    score: Number(g.score),
+    maxScore: Number(g.maxScore),
+    weight: Number(g.weight || 1),
+    date: g.date || new Date().toISOString().split('T')[0],
+    teacherId: g.teacherId || req.user.id,
+    createdAt: new Date(),
+    updatedAt: new Date(),
   }))
+  
   const payload = await withIdempotency(req, 'grades:bulk', async () => {
-    await runInTransaction(async ({ run }) => {
-      for (const e of entries) {
-        await run(
-          `INSERT INTO grades (id,studentId,subject,category,title,score,maxScore,weight,date,teacherId,createdAt) VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
-          [e.id, e.studentId, e.subject, e.category, e.title, e.score, e.maxScore, e.weight, e.date, e.teacherId, e.createdAt]
-        )
-      }
-    })
+    if (entries.length > 0) {
+      await getDB().collection(COLLECTIONS.GRADES).insertMany(entries)
+    }
     return { ok: true, count: entries.length }
   })
   broadcastSSE('grades-changed', { type: 'bulk-created', count: entries.length })
@@ -413,7 +433,7 @@ app.post('/api/grades/bulk', requireAuth, ensureRole('teacher', 'admin'), asyncR
 
 app.delete('/api/grades/:id', requireAuth, ensureRole('teacher', 'admin'), asyncRoute(async (req, res) => {
   const payload = await withIdempotency(req, `grades:delete:${req.params.id}`, async () => {
-    await dbRun(`DELETE FROM grades WHERE id = ?`, [req.params.id])
+    await getDB().collection(COLLECTIONS.GRADES).deleteOne({ odId: req.params.id })
     return { ok: true }
   })
   broadcastSSE('grades-changed', { type: 'deleted', id: req.params.id })
@@ -425,7 +445,7 @@ const timetableFile = path.join(dataDir, 'timetable.json')
 
 app.get('/api/timetable', requireAuth, asyncRoute(async (_req, res) => {
   await migrateLegacyTimetableIfNeeded(timetableFile)
-  const rows = await dbAll(`SELECT * FROM timetable_entries ORDER BY day ASC, startTime ASC, createdAt ASC`).catch(() => [])
+  const rows = await getDB().collection(COLLECTIONS.TIMETABLE).find({}).sort({ day: 1, startTime: 1, createdAt: 1 }).toArray()
   return res.json(rows)
 }))
 
@@ -435,10 +455,15 @@ app.post('/api/timetable', requireAuth, ensureRole('admin', 'teacher'), asyncRou
   if (!Array.isArray(entries)) return res.status(400).json({ error: 'Expected array of timetable entries' })
 
   const payload = await withIdempotency(req, 'timetable:replace', async () => {
+    const db = getDB()
+    
+    // Delete existing entries
+    await db.collection(COLLECTIONS.TIMETABLE).deleteMany({})
+    
     const normalized = entries
       .filter(e => e && e.day && e.startTime && e.endTime && e.subject)
       .map(e => ({
-        id: e.id || `tt-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+        odId: e.id || `tt-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
         day: String(e.day),
         startTime: String(e.startTime),
         endTime: String(e.endTime),
@@ -446,18 +471,13 @@ app.post('/api/timetable', requireAuth, ensureRole('admin', 'teacher'), asyncRou
         teacherId: e.teacherId || req.user.id || null,
         classId: e.classId || null,
         room: e.room || null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
       }))
 
-    await runInTransaction(async ({ run }) => {
-      await run(`DELETE FROM timetable_entries`)
-      const now = Date.now()
-      for (const e of normalized) {
-        await run(
-          `INSERT INTO timetable_entries (id, day, startTime, endTime, subject, teacherId, classId, room, createdAt, updatedAt) VALUES (?,?,?,?,?,?,?,?,?,?)`,
-          [e.id, e.day, e.startTime, e.endTime, e.subject, e.teacherId, e.classId, e.room, now, now]
-        )
-      }
-    })
+    if (normalized.length > 0) {
+      await db.collection(COLLECTIONS.TIMETABLE).insertMany(normalized)
+    }
 
     return { ok: true, count: normalized.length }
   })
@@ -472,9 +492,8 @@ app.post('/api/timetable/entry', requireAuth, ensureRole('admin', 'teacher'), as
   if (!day || !startTime || !endTime || !subject) return res.status(400).json({ error: 'day, startTime, endTime, subject required' })
 
   const payload = await withIdempotency(req, 'timetable:create', async () => {
-    const now = Date.now()
     const entry = {
-      id: `tt-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      odId: `tt-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
       day: String(day),
       startTime: String(startTime),
       endTime: String(endTime),
@@ -482,27 +501,23 @@ app.post('/api/timetable/entry', requireAuth, ensureRole('admin', 'teacher'), as
       teacherId: teacherId || req.user.id,
       classId: classId || null,
       room: room || null,
-      createdAt: now,
-      updatedAt: now,
+      createdAt: new Date(),
+      updatedAt: new Date(),
     }
 
-    await dbRun(
-      `INSERT INTO timetable_entries (id, day, startTime, endTime, subject, teacherId, classId, room, createdAt, updatedAt) VALUES (?,?,?,?,?,?,?,?,?,?)`,
-      [entry.id, entry.day, entry.startTime, entry.endTime, entry.subject, entry.teacherId, entry.classId, entry.room, entry.createdAt, entry.updatedAt]
-    )
-
+    await getDB().collection(COLLECTIONS.TIMETABLE).insertOne(entry)
     return { ok: true, entry }
   })
 
-  broadcastSSE('timetable-changed', { type: 'created', id: payload?.entry?.id })
+  broadcastSSE('timetable-changed', { type: 'created', id: payload?.entry?.odId })
   return res.json(payload)
 }))
 
 app.delete('/api/timetable/:id', requireAuth, ensureRole('admin', 'teacher'), asyncRoute(async (req, res) => {
   await migrateLegacyTimetableIfNeeded(timetableFile)
   const payload = await withIdempotency(req, `timetable:delete:${req.params.id}`, async () => {
-    const r = await dbRun(`DELETE FROM timetable_entries WHERE id = ?`, [req.params.id])
-    if (!r.changes) {
+    const result = await getDB().collection(COLLECTIONS.TIMETABLE).deleteOne({ odId: req.params.id })
+    if (result.deletedCount === 0) {
       const err = new Error('Timetable entry not found')
       err.status = 404
       throw err
@@ -527,81 +542,76 @@ app.post('/api/tags-presets/update', requireAuth, ensureRole('teacher', 'admin')
   return res.json({ ok: true })
 }))
 
-// -- Tickets / Help Desk ------------------------------------------------------
+// -- Tickets / Help Desk (MongoDB) -------------------------------------------
 const ticketsFile = path.join(dataDir, 'tickets.json')
+
+const findTicketById = async (id) => {
+  const db = getDB()
+  const objectId = (() => { try { return new ObjectId(id) } catch { return null } })()
+  const query = objectId ? { $or: [{ _id: objectId }, { _id: id }, { odId: id }, { id }] } : { $or: [{ _id: id }, { odId: id }, { id }] }
+  return await db.collection(COLLECTIONS.TICKETS).findOne(query)
+}
 
 app.get('/api/tickets', requireAuth, asyncRoute(async (req, res) => {
   await migrateLegacyTicketsIfNeeded(ticketsFile)
+  const db = getDB()
+  const match = req.user.role === 'student' ? { userId: req.user.id } : {}
 
-  const where = req.user.role === 'student' ? 'WHERE t.userId = ?' : ''
-  const params = req.user.role === 'student' ? [req.user.id] : []
+  const tickets = await db.collection(COLLECTIONS.TICKETS).aggregate([
+    { $match: match },
+    {
+      $lookup: {
+        from: COLLECTIONS.TICKET_REPLIES,
+        localField: '_id',
+        foreignField: 'ticketId',
+        as: 'replies'
+      }
+    },
+    { $sort: { priority: -1, createdAt: -1, updatedAt: -1 } }
+  ]).toArray()
 
-  const rows = await dbAll(
-    `SELECT t.*, tr.id AS reply_id, tr.userId AS reply_userId, tr.userName AS reply_userName, tr.message AS reply_message, tr.createdAt AS reply_createdAt
-     FROM tickets t
-     LEFT JOIN ticket_replies tr ON tr.ticketId = t.id
-     ${where}
-     ORDER BY t.createdAt DESC, tr.createdAt ASC`,
-    params
-  ).catch(() => [])
+  return res.json(tickets.map(t => ({
+    ...t,
+    id: t.id || t._id?.toString?.(),
+    replies: (t.replies || []).map(r => ({ ...r, id: r._id?.toString?.() || r.id }))
+  })))
+}))
 
-  const byId = new Map()
-  for (const row of rows) {
-    if (!byId.has(row.id)) {
-      byId.set(row.id, {
-        id: row.id,
-        userId: row.userId,
-        userName: row.userName,
-        subject: row.subject,
-        message: row.message,
-        category: row.category,
-        status: row.status,
-        createdAt: row.createdAt,
-        updatedAt: row.updatedAt,
-        version: row.version,
-        replies: [],
-      })
-    }
-    if (row.reply_id) {
-      byId.get(row.id).replies.push({
-        id: row.reply_id,
-        userId: row.reply_userId,
-        userName: row.reply_userName,
-        message: row.reply_message,
-        createdAt: row.reply_createdAt,
-      })
-    }
-  }
-
-  return res.json(Array.from(byId.values()))
+app.get('/api/tickets/unassigned', requireAuth, ensureRole('admin'), asyncRoute(async (_req, res) => {
+  const db = getDB()
+  const tickets = await db.collection(COLLECTIONS.TICKETS).find({
+    status: 'open',
+    $or: [{ assignedToId: { $exists: false } }, { assignedToId: null }]
+  }).sort({ priority: -1, createdAt: -1 }).toArray()
+  return res.json(tickets.map(t => ({ ...t, id: t.id || t._id?.toString?.() })))
 }))
 
 app.post('/api/tickets', requireAuth, asyncRoute(async (req, res) => {
   await migrateLegacyTicketsIfNeeded(ticketsFile)
-  const { subject, message, category } = req.body || {}
+  const { subject, message, category, priority } = req.body || {}
   if (!subject || !message) return res.status(400).json({ error: 'subject and message required' })
+  const validPriority = ['low', 'medium', 'high'].includes(priority) ? priority : 'medium'
 
   const payload = await withIdempotency(req, 'tickets:create', async () => {
-    const now = Date.now()
+    const now = new Date()
+    const ticketId = `tk-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`
     const ticket = {
-      id: `tk-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      _id: ticketId,
+      id: ticketId,
       userId: req.user.id,
       userName: req.user.name || req.user.email,
       subject: String(subject).slice(0, 200),
       message: String(message).slice(0, 5000),
       category: category || 'general',
       status: 'open',
+      priority: validPriority,
+      assignedToId: null,
       createdAt: now,
       updatedAt: now,
       version: 1,
-      replies: [],
     }
 
-    await dbRun(
-      `INSERT INTO tickets (id, userId, userName, subject, message, category, status, createdAt, updatedAt, version) VALUES (?,?,?,?,?,?,?,?,?,?)`,
-      [ticket.id, ticket.userId, ticket.userName, ticket.subject, ticket.message, ticket.category, ticket.status, ticket.createdAt, ticket.updatedAt, ticket.version]
-    )
-
+    await getDB().collection(COLLECTIONS.TICKETS).insertOne(ticket)
     return { ok: true, ticket }
   })
 
@@ -609,88 +619,93 @@ app.post('/api/tickets', requireAuth, asyncRoute(async (req, res) => {
   return res.json(payload)
 }))
 
-app.post('/api/tickets/:id/reply', requireAuth, asyncRoute(async (req, res) => {
+app.post('/api/tickets/:id/reply', requireAuth, ensureRole('admin'), asyncRoute(async (req, res) => {
   await migrateLegacyTicketsIfNeeded(ticketsFile)
-  const { message, expectedVersion } = req.body || {}
+  const { message } = req.body || {}
   if (!message) return res.status(400).json({ error: 'message required' })
 
-  const payload = await withIdempotency(req, `tickets:reply:${req.params.id}`, async () => {
-    const ticketId = req.params.id
-    const reply = {
-      userId: req.user.id,
-      userName: req.user.name || req.user.email,
-      message: String(message).slice(0, 5000),
-      createdAt: Date.now(),
-    }
+  const ticket = await findTicketById(req.params.id)
+  if (!ticket) return res.status(404).json({ error: 'Ticket not found' })
+  if (req.user.role === 'student' && ticket.userId !== req.user.id) return res.status(403).json({ error: 'Forbidden' })
+  if (ticket.status === 'closed') return res.status(409).json({ error: 'Ticket is closed' })
 
-    await runInTransaction(async ({ get, run }) => {
-      const ticket = await get(`SELECT id, userId, status, version FROM tickets WHERE id = ?`, [ticketId])
-      if (!ticket) {
-        const err = new Error('Ticket not found')
-        err.status = 404
-        throw err
-      }
-      if (req.user.role === 'student' && ticket.userId !== req.user.id) {
-        const err = new Error('Forbidden')
-        err.status = 403
-        throw err
-      }
-      if (ticket.status === 'closed') {
-        const err = new Error('Ticket is closed')
-        err.status = 409
-        throw err
-      }
-      if (expectedVersion !== undefined && Number(expectedVersion) !== Number(ticket.version)) {
-        const err = new Error('Ticket was updated by another user. Refresh and retry.')
-        err.status = 409
-        throw err
-      }
+  const reply = {
+    _id: generateId(),
+    ticketId: ticket._id || ticket.id,
+    userId: req.user.id,
+    userName: req.user.name || req.user.email,
+    message: String(message).slice(0, 5000),
+    createdAt: new Date(),
+  }
 
-      await run(
-        `INSERT INTO ticket_replies (ticketId, userId, userName, message, createdAt) VALUES (?,?,?,?,?)`,
-        [ticketId, reply.userId, reply.userName, reply.message, reply.createdAt]
-      )
+  await Promise.all([
+    getDB().collection(COLLECTIONS.TICKET_REPLIES).insertOne(reply),
+    getDB().collection(COLLECTIONS.TICKETS).updateOne(
+      { _id: ticket._id || ticket.id },
+      { $set: { updatedAt: new Date() }, $inc: { version: 1 } }
+    )
+  ])
 
-      await run(`UPDATE tickets SET updatedAt = ?, version = version + 1 WHERE id = ?`, [Date.now(), ticketId])
-    })
+  // Notify ticket owner if someone else replied
+  if (ticket.userId && ticket.userId !== req.user.id) {
+    await getDB().collection(COLLECTIONS.NOTIFICATIONS).insertOne({
+      _id: generateId(),
+      userId: ticket.userId,
+      type: 'ticket_reply',
+      title: 'Ticket reply',
+      message: `Your ticket "${ticket.subject}" has a new reply.`,
+      relatedId: ticket.id || ticket._id?.toString?.(),
+      relatedType: 'ticket',
+      read: false,
+      createdAt: new Date(),
+    }).catch(() => {})
+  }
 
-    return { ok: true }
-  })
-
-  broadcastSSE('tickets-changed', { type: 'replied', id: req.params.id })
-  return res.json(payload)
+  broadcastSSE('tickets-changed', { type: 'replied', id: ticket.id || ticket._id?.toString?.() })
+  return res.json({ ok: true })
 }))
 
-app.post('/api/tickets/:id/close', requireAuth, ensureRole('admin', 'teacher'), asyncRoute(async (req, res) => {
+app.patch('/api/tickets/:id/assign', requireAuth, ensureRole('admin'), asyncRoute(async (req, res) => {
+  const { adminId } = req.body || {}
+  const ticket = await findTicketById(req.params.id)
+  if (!ticket) return res.status(404).json({ error: 'Ticket not found' })
+
+  const assignee = adminId || req.user.id
+  await getDB().collection(COLLECTIONS.TICKETS).updateOne(
+    { _id: ticket._id || ticket.id },
+    { $set: { assignedToId: assignee, updatedAt: new Date() }, $inc: { version: 1 } }
+  )
+
+  // Notify assignee
+  await getDB().collection(COLLECTIONS.NOTIFICATIONS).insertOne({
+    _id: generateId(),
+    userId: assignee,
+    type: 'ticket_reply',
+    title: 'Ticket assigned',
+    message: `Ticket "${ticket.subject}" has been assigned to you.`,
+    relatedId: ticket.id || ticket._id?.toString?.(),
+    relatedType: 'ticket',
+    read: false,
+    createdAt: new Date(),
+  }).catch(() => {})
+
+  return res.json({ ok: true, assignedToId: assignee })
+}))
+
+app.post('/api/tickets/:id/close', requireAuth, ensureRole('admin'), asyncRoute(async (req, res) => {
   await migrateLegacyTicketsIfNeeded(ticketsFile)
+  const ticket = await findTicketById(req.params.id)
+  if (!ticket) return res.status(404).json({ error: 'Ticket not found' })
+  if (ticket.status === 'closed') return res.json({ ok: true, closed: true })
 
-  const payload = await withIdempotency(req, `tickets:close:${req.params.id}`, async () => {
-    const expectedVersion = req.body?.expectedVersion
+  await getDB().collection(COLLECTIONS.TICKETS).updateOne(
+    { _id: ticket._id || ticket.id },
+    { $set: { status: 'closed', updatedAt: new Date() }, $inc: { version: 1 } }
+  )
 
-    await runInTransaction(async ({ get, run }) => {
-      const ticket = await get(`SELECT id, status, version FROM tickets WHERE id = ?`, [req.params.id])
-      if (!ticket) {
-        const err = new Error('Ticket not found')
-        err.status = 404
-        throw err
-      }
-      if (ticket.status === 'closed') return
-      if (expectedVersion !== undefined && Number(expectedVersion) !== Number(ticket.version)) {
-        const err = new Error('Ticket was updated by another user. Refresh and retry.')
-        err.status = 409
-        throw err
-      }
-      await run(`UPDATE tickets SET status = 'closed', updatedAt = ?, version = version + 1 WHERE id = ?`, [Date.now(), req.params.id])
-    })
-
-    return { ok: true }
-  })
-
-  broadcastSSE('tickets-changed', { type: 'closed', id: req.params.id })
-  return res.json(payload)
+  broadcastSSE('tickets-changed', { type: 'closed', id: ticket.id || ticket._id?.toString?.() })
+  return res.json({ ok: true })
 }))
-
-
 
 app.post('/api/email-notification', requireAuth, ensureRole('teacher', 'admin'), asyncRoute(async (req, res) => {
   const { to, subject, html } = req.body || {}
@@ -884,10 +899,11 @@ app.post('/api/analytics/insights', aiRateLimit, requireAuth, ensureRole('teache
 
 // ── Teacher insights (generated by weekly cron) ───────────────────────────────
 app.get('/api/teacher/insights', requireAuth, ensureRole('teacher', 'admin'), asyncRoute(async (req, res) => {
-  const rows = await dbAll(
-    `SELECT insight_text, generated_at FROM teacher_insights WHERE teacher_id = ? ORDER BY generated_at DESC LIMIT 10`,
-    [req.user.id]
-  ).catch(() => [])
+  const rows = await getDB().collection(COLLECTIONS.TEACHER_INSIGHTS)
+    .find({ teacherId: req.user.id })
+    .sort({ generated_at: -1, createdAt: -1 })
+    .limit(10)
+    .toArray()
   return res.json({ insights: rows })
 }))
 
@@ -961,50 +977,19 @@ registerProcessor('embedding-index', async (data) => indexContent(data))
 // ── Register cron jobs ────────────────────────────────────────────────────────
 registerWeeklyInsightsCron()
 
-  // Audit log archival — runs daily at 2:00 AM.
-  // Archives rows older than 90 days to a NDJSON file and deletes them from SQLite
-  // to prevent the table growing to hundreds of millions of rows.
-  ; (async () => {
-    try {
-      const { default: nodeCron } = await import('node-cron')
-      nodeCron.schedule('0 2 * * *', async () => {
-        const cutoff = Date.now() - 90 * 24 * 60 * 60 * 1000   // 90 days ago
-        try {
-          const rows = await dbAll(`SELECT * FROM audit_logs WHERE ts < ? ORDER BY ts ASC`, [cutoff])
-          if (rows && rows.length > 0) {
-            const archiveFile = path.join(dataDir, `audit_archive_${new Date().toISOString().slice(0, 10)}.ndjson`)
-            const lines = rows.map(r => JSON.stringify(r)).join('\n') + '\n'
-            fs.appendFileSync(archiveFile, lines, 'utf8')
-            await dbRun(`DELETE FROM audit_logs WHERE ts < ?`, [cutoff])
-            console.log(`✓ Audit log: archived ${rows.length} records older than 90 days → ${archiveFile}`)
-          }
-        } catch (err) {
-          console.error('Audit log archival error:', err.message)
-        }
-      })
-    } catch { /* node-cron not available */ }
-  })()
+  // Audit log archival — Mongo version could stream to cold storage if needed (omitted for serverless simplicity)
 
 // ── Register attendance flush function ────────────────────────────────────────
 registerAttendanceFlusher(async (records) => {
   if (records.length === 0) return
-  // Wrap all inserts in a single transaction: 750 individual INSERTs with
-  // separate write locks takes 2-3s; one transaction takes ~50ms.
-  try {
-    await dbRun('BEGIN')
-    for (const r of records) {
-      await dbRun(
-        `INSERT OR IGNORE INTO attendance (session_id, student_id, status, verified_at) VALUES (?,?,?,?)`,
-        [r.sessionId, r.studentId, r.status || 'present', r.verifiedAt || new Date().toISOString()]
-      )
-    }
-    await dbRun('COMMIT')
-  } catch (err) {
-    console.error('Attendance flush transaction error:', err.message)
-    try { await dbRun('ROLLBACK') } catch { }
-    // Re-throw so redisService re-queues the records
-    throw err
-  }
+  const docs = records.map(r => ({
+    _id: generateId(),
+    session_id: r.sessionId,
+    student_id: r.studentId,
+    status: r.status || 'present',
+    verified_at: r.verifiedAt || new Date().toISOString(),
+  }))
+  await getDB().collection(COLLECTIONS.ATTENDANCE).insertMany(docs, { ordered: false }).catch(() => {})
 })
 
 // ── Prometheus metrics scrape endpoint ───────────────────────────────────────
@@ -1026,10 +1011,13 @@ app.get('/metrics', asyncRoute(async (req, res) => {
 app.post('/api/audit-logs', requireAuth, ensureRole('admin'), asyncRoute(async (req, res) => {
   const { type, userId, details } = req.body || {}
   if (!type) return res.status(400).json({ error: 'type is required' })
-  await dbRun(
-    `INSERT INTO audit_logs (ts, type, userId, details) VALUES (?,?,?,?)`,
-    [Date.now(), String(type), userId || req.user.id, JSON.stringify(details || {})]
-  )
+  await getDB().collection(COLLECTIONS.AUDIT_LOGS).insertOne({
+    _id: generateId(),
+    ts: Date.now(),
+    type: String(type),
+    userId: userId || req.user.id,
+    details: details || {},
+  })
   return res.json({ ok: true })
 }))
 
@@ -1123,11 +1111,9 @@ app.get('/health', asyncRoute(async (req, res) => {
       lastFlushError: bufStats.lastFlushError || null,
     },
   }
-  try { await dbAll('SELECT 1'); status.db = 'ok' } catch { status.db = 'error' }
+  try { await getDB().command({ ping: 1 }); status.db = 'ok' } catch { status.db = 'error' }
 
-  // Warn if flush has not happened in the last 30 seconds (write bottleneck indicator)
-  const flushLagging = bufStats.flushLagMs !== null && bufStats.flushLagMs > 30_000
-  const healthy = status.db === 'ok' && !flushLagging
+  const healthy = status.db === 'ok'
   return res.status(healthy ? 200 : 503).json({ status: healthy ? 'ok' : 'degraded', checks: status })
 }))
 
@@ -1150,9 +1136,9 @@ process.on('SIGTERM', async () => {
 // ── Start server ──────────────────────────────────────────────────────────────
 const port = process.env.PORT ? Number(process.env.PORT) : 3001
 
-initDB()
-  .then(() => setupSchema())
-  .catch(err => console.warn('DB init failed (continuing without DB):', err?.message || err))
+connectDB()
+  .then(() => seedDefaults?.())
+  .catch(err => console.warn('Mongo connect failed:', err?.message || err))
   .finally(() => {
     app.listen(port, '0.0.0.0', () => {
       console.log(`🚀 Gyandeep API running on http://0.0.0.0:${port}`)

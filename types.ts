@@ -85,6 +85,7 @@ export interface QuizQuestion {
   question: string;
   options: string[];
   correctAnswer: string;
+  quizType?: 'pre' | 'main' | 'post';
 }
 
 export interface Coordinates {
@@ -95,8 +96,11 @@ export interface Coordinates {
 export interface ClassSession {
   code: string | null;
   expiry: number | null; // Using timestamp for easier comparison
+  endedAt?: number | null;
+  timetableEntryId?: string | null;
   notes: string | null;
   quiz: QuizQuestion[] | null;
+  quizType?: 'pre' | 'main' | 'post';
   quizPublished: boolean;
   subject: string;
   teacherLocation: Coordinates | null;

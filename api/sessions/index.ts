@@ -39,12 +39,12 @@ export async function GET(request: NextRequest) {
     const [subjects, classes, quizzes] = await Promise.all([
       prisma.subject.findMany({ where: { id: { $in: subjectIds } } }),
       prisma.class.findMany({ where: { id: { $in: classIds } } }),
-      prisma.quiz.findMany({ where: { session_id: { $in: sessions.map(s => s.id) } } }),
+      prisma.quiz.findMany({ where: { sessionId: { $in: sessions.map(s => s.id) } } }),
     ]);
 
     const subjectMap = new Map(subjects.map(s => [s.id, s]));
     const classMap = new Map(classes.map(c => [c.id, c]));
-    const quizMap = new Map(quizzes.map(q => [q.session_id, q]));
+    const quizMap = new Map(quizzes.map(q => [q.sessionId, q]));
 
     return json(sessions.map(s => {
       const quiz = quizMap.get(s.id);
@@ -57,8 +57,10 @@ export async function GET(request: NextRequest) {
         subject: subjectMap.get(s.subjectId) || null,
         expiry: s.expiry instanceof Date ? s.expiry.getTime() : new Date(s.expiry).getTime(),
         quizPublished: s.quizPublished,
-        hasNotes: !!quiz && quiz.questions_json,
+        hasNotes: !!quiz && quiz.questionsJson,
         sessionStatus: s.sessionStatus,
+        endedAt: (s as any).endedAt || null,
+        timetableEntryId: (s as any).timetableEntryId || null,
         createdAt: s.createdAt instanceof Date ? s.createdAt.getTime() : new Date(s.createdAt).getTime(),
       };
     }));

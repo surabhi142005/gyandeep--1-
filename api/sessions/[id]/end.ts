@@ -26,7 +26,7 @@ export async function POST(
     }
 
     // Delete session notes
-    await prisma.sessionNote.update({
+    await prisma.sessionNote.updateMany({
       where: { sessionId },
       data: {
         deletedAt: new Date(),
@@ -41,6 +41,7 @@ export async function POST(
       data: {
         expiry: new Date(),
         sessionStatus: 'ended',
+        endedAt: new Date(),
       },
     });
 

@@ -9,6 +9,7 @@ import QuizView from './QuizView';
 import PerformanceChart from './PerformanceChart';
 import Leaderboard from './Leaderboard';
 import AnnouncementBoard from './AnnouncementBoard';
+import TicketPanel from './TicketPanel';
 import type { Announcement } from './AnnouncementBoard';
 import { fetchCentralizedNotesCombined } from '../services/dataService';
 
@@ -50,9 +51,12 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ student, classSessi
   const [examUnits, setExamUnits] = useState<{ unitNumber: number; unitName: string; notes: any[] }[]>([]);
   const [examNotesLoading, setExamNotesLoading] = useState(false);
   const [expandedUnit, setExpandedUnit] = useState<number | null>(null);
+  const [notesTab, setNotesTab] = useState<'session' | 'centralized'>('session');
 
 
   const colors = useMemo(() => THEME_COLORS[theme] || THEME_COLORS.indigo, [theme]);
+
+  const sessionEnded = !!classSession.endedAt;
 
   // Fetch centralized exam notes when subject changes
   const loadExamNotes = useCallback(async (subject: string) => {
@@ -238,6 +242,13 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ student, classSessi
           <div>
             <h1 className={`text-2xl font-bold ${colors.text}`}>Student Dashboard</h1>
             <p className="text-gray-600">Hello, {student.name}</p>
+            {classSession.code && (
+              <div className="flex gap-2 mt-2">
+                <span className={`px-2 py-0.5 text-xs font-semibold rounded-full ${sessionEnded ? 'bg-gray-100 text-gray-600' : 'bg-green-100 text-green-700'}`}>
+                  {sessionEnded ? 'Ended' : 'Active'}
+                </span>
+              </div>
+            )}
           </div>
           <button onClick={onLogout} className="bg-red-600 text-white font-semibold py-2 px-4 rounded-lg hover:bg-red-700 transition-colors">
             Logout
@@ -332,13 +343,68 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ student, classSessi
             </div>
 
             <div className="bg-white p-6 rounded-lg shadow-md">
-              <h2 className="text-xl font-semibold text-gray-700 mb-4">Class Notes (Current Session)</h2>
-              {classSession.notes ? (
-                <div className="prose max-w-none max-h-80 overflow-y-auto bg-gray-50 p-4 rounded-md">
-                  <pre className="whitespace-pre-wrap font-sans">{classSession.notes}</pre>
-                </div>
+              <div className="flex gap-2 mb-3">
+                <button
+                  type="button"
+                  className={`px-3 py-1 rounded text-sm ${notesTab === 'session' ? colors.primary + ' text-white' : colors.lightBg + ' ' + colors.text}`}
+                  onClick={() => setNotesTab('session')}
+                >
+                  Session Notes (temporary)
+                </button>
+                <button
+                  type="button"
+                  className={`px-3 py-1 rounded text-sm ${notesTab === 'centralized' ? colors.primary + ' text-white' : colors.lightBg + ' ' + colors.text}`}
+                  onClick={() => setNotesTab('centralized')}
+                >
+                  Centralized Notes (persistent)
+                </button>
+              </div>
+              {notesTab === 'session' ? (
+                <>
+                  <h2 className="text-xl font-semibold text-gray-700 mb-4">Class Notes (Current Session)</h2>
+                  {classSession.notes ? (
+                    <div className="prose max-w-none max-h-80 overflow-y-auto bg-gray-50 p-4 rounded-md">
+                      <pre className="whitespace-pre-wrap font-sans">{classSession.notes}</pre>
+                    </div>
+                  ) : (
+                    <p className="text-gray-500">The teacher has not uploaded notes yet for this session.</p>
+                  )}
+                </>
               ) : (
-                <p className="text-gray-500">The teacher has not uploaded notes yet for this session.</p>
+                <>
+                  <h2 className="text-xl font-semibold text-gray-700 mb-4">Centralized Notes</h2>
+                  {examNotesLoading ? (
+                    <div className="flex justify-center py-4"><Spinner /></div>
+                  ) : examUnits.length > 0 ? (
+                    <div className="space-y-2">
+                      {examUnits.map(unit => (
+                        <div key={unit.unitNumber} className="border rounded-lg overflow-hidden">
+                          <button
+                            onClick={() => setExpandedUnit(expandedUnit === unit.unitNumber ? null : unit.unitNumber)}
+                            className="w-full flex justify-between items-center p-3 bg-gray-50 hover:bg-gray-100 transition-colors text-left"
+                          >
+                            <span className="font-semibold text-gray-700">Unit {unit.unitNumber}: {unit.unitName}</span>
+                            <span className="text-xs text-gray-500">{unit.notes.length} note{unit.notes.length !== 1 ? 's' : ''} {expandedUnit === unit.unitNumber ? '▲' : '▼'}</span>
+                          </button>
+                          {expandedUnit === unit.unitNumber && (
+                            <div className="p-3 space-y-3 max-h-80 overflow-y-auto">
+                              {unit.notes.map((note: any) => (
+                                <div key={note.id} className="p-3 bg-gray-50 rounded-md border border-gray-200">
+                                  <div className="text-sm font-semibold text-gray-800">{note.title}</div>
+                                  <div className="text-xs text-gray-500">By {note.teacherId || 'Teacher'} • {note.createdAt ? new Date(note.createdAt).toLocaleString() : ''}</div>
+                                  <div className="mt-2 text-sm text-gray-700 whitespace-pre-wrap">{note.content?.slice(0, 500) || 'View file'}</div>
+                                  {note.filePath && <a className="text-indigo-600 text-xs mt-1 inline-block" href={note.filePath} target="_blank" rel="noreferrer">Open file</a>}
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-gray-500">No centralized notes available yet.</p>
+                  )}
+                </>
               )}
             </div>
 
@@ -450,8 +516,16 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ student, classSessi
             </div>
           </div>
           <div className="space-y-6">
+            {classSession.code && !sessionEnded && (
             <div className="bg-white p-6 rounded-lg shadow-md">
-              <h2 className="text-xl font-semibold text-gray-700 mb-4">Quiz</h2>
+              <div className="flex items-center gap-2 mb-4">
+                <h2 className="text-xl font-semibold text-gray-700">Quiz</h2>
+                {classSession.quizType && (
+                  <span className="px-2 py-0.5 text-xs font-semibold rounded-full bg-purple-100 text-purple-700 uppercase">
+                    {classSession.quizType}
+                  </span>
+                )}
+              </div>
               {classSession.quiz && classSession.quizPublished && !quizTaken ? (
                 <QuizView quiz={classSession.quiz} subject={classSession.subject} onSubmit={handleQuizSubmit} theme={theme} />
               ) : quizTaken ? (
@@ -460,6 +534,7 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ student, classSessi
                 <p className="text-gray-500 text-center">The quiz is not yet available.</p>
               )}
             </div>
+            )}
             {/* Performance section with subject tabs */}
             <div className="bg-white p-6 rounded-lg shadow-md">
               <div className="flex items-center justify-between mb-4">
@@ -517,8 +592,9 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ student, classSessi
             )}
 
             {/* Announcements */}
-            <AnnouncementBoard announcements={announcements} canPost={false} theme={theme} />
-          </div>
+          <AnnouncementBoard announcements={announcements} canPost={false} theme={theme} />
+          <TicketPanel userId={student.id} role="student" colors={colors} />
+        </div>
         </main>
       </div>
       {showWebcam && <WebcamCapture onCapture={handleCapture} onClose={() => setShowWebcam(false)} theme={theme} title="Face Verification" buttonText="Verify Identity" />}

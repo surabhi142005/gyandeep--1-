@@ -50,11 +50,14 @@ export const COLLECTIONS = {
     USERS: 'users',
     CLASSES: 'classes',
     SUBJECTS: 'subjects',
+    CLASS_SUBJECTS: 'class_subjects',
+    USER_SUBJECTS: 'user_subjects',
     CLASS_SESSIONS: 'class_sessions',
     SESSION_NOTES: 'session_notes',
     QUIZZES: 'quizzes',
     QUIZ_QUESTIONS: 'quiz_questions',
     QUIZ_ATTEMPTS: 'quiz_attempts',
+    ATTEMPT_ANSWERS: 'attempt_answers',
     QUIZ_SUBMISSIONS: 'quiz_submissions',
     CENTRALIZED_NOTES: 'centralized_notes',
     USER_NOTES: 'user_notes',
@@ -63,6 +66,8 @@ export const COLLECTIONS = {
     TIMETABLE: 'timetable_entries',
     TICKETS: 'tickets',
     TICKET_REPLIES: 'ticket_replies',
+    NOTIFICATIONS: 'notifications',
+    ANNOUNCEMENTS: 'announcements',
     TEACHER_INSIGHTS: 'teacher_insights',
     AUDIT_LOGS: 'audit_logs',
     IDEMPOTENCY_KEYS: 'idempotency_keys',
@@ -88,10 +93,13 @@ const createIndexes = async () => {
     // Quizzes indexes
     await db.collection(COLLECTIONS.QUIZZES).createIndex({ session_id: 1 });
     await db.collection(COLLECTIONS.QUIZZES).createIndex({ teacher_id: 1 });
+    await db.collection(COLLECTIONS.QUIZZES).createIndex({ quiz_type: 1 });
     
     // Quiz attempts indexes
-    await db.collection(COLLECTIONS.QUIZ_ATTEMPTS).createIndex({ quiz_id: 1, student_id: 1 }, { unique: true });
+    await db.collection(COLLECTIONS.QUIZ_ATTEMPTS).createIndex({ quiz_id: 1, student_id: 1, attempt_number: 1 }, { unique: true });
     await db.collection(COLLECTIONS.QUIZ_ATTEMPTS).createIndex({ student_id: 1 });
+    await db.collection(COLLECTIONS.ATTEMPT_ANSWERS).createIndex({ attempt_id: 1, question_id: 1 }, { unique: true });
+    await db.collection(COLLECTIONS.ATTEMPT_ANSWERS).createIndex({ question_id: 1 });
     
     // Quiz submissions (legacy) indexes
     await db.collection(COLLECTIONS.QUIZ_SUBMISSIONS).createIndex({ session_id: 1, student_id: 1 }, { unique: true });
@@ -117,14 +125,23 @@ const createIndexes = async () => {
     await db.collection(COLLECTIONS.TIMETABLE).createIndex({ day: 1, startTime: 1 });
     await db.collection(COLLECTIONS.TIMETABLE).createIndex({ teacherId: 1 });
     await db.collection(COLLECTIONS.TIMETABLE).createIndex({ classId: 1 });
+    await db.collection(COLLECTIONS.CLASS_SUBJECTS).createIndex({ classId: 1, subjectId: 1 }, { unique: true });
+    await db.collection(COLLECTIONS.CLASS_SUBJECTS).createIndex({ primaryTeacherId: 1 });
+    await db.collection(COLLECTIONS.USER_SUBJECTS).createIndex({ userId: 1, subjectId: 1 }, { unique: true });
     
     // Tickets indexes
     await db.collection(COLLECTIONS.TICKETS).createIndex({ userId: 1 });
     await db.collection(COLLECTIONS.TICKETS).createIndex({ status: 1 });
+    await db.collection(COLLECTIONS.TICKETS).createIndex({ priority: 1 });
+    await db.collection(COLLECTIONS.TICKETS).createIndex({ assignedToId: 1 });
     
     // Ticket replies indexes
     await db.collection(COLLECTIONS.TICKET_REPLIES).createIndex({ ticketId: 1, createdAt: 1 });
     
+    // Notifications indexes
+    await db.collection(COLLECTIONS.NOTIFICATIONS).createIndex({ userId: 1, read: 1 });
+    await db.collection(COLLECTIONS.NOTIFICATIONS).createIndex({ createdAt: 1 });
+
     // Audit logs indexes
     await db.collection(COLLECTIONS.AUDIT_LOGS).createIndex({ userId: 1, ts: 1 });
     

@@ -302,12 +302,17 @@ export const fetchTickets = async () => {
   return Array.isArray(rows) ? rows : [];
 };
 
-export const createTicket = async (ticket: any) => {
-  const newTicket = { ...ticket, id: `t_${Date.now()}`, status: 'open', createdAt: new Date().toISOString(), replies: [], version: 1 };
+export const fetchUnassignedTickets = async () => {
+  const rows = await apiRequest('/api/tickets/unassigned', { method: 'GET' });
+  return Array.isArray(rows) ? rows : [];
+};
+
+export const createTicket = async (ticket: { subject: string; message: string; category?: string; priority?: 'low' | 'medium' | 'high' }) => {
+  const newTicket = { ...ticket, id: `t_${Date.now()}`, status: 'open', createdAt: new Date().toISOString(), replies: [], version: 1, priority: ticket.priority || 'medium' };
   const payload = await apiRequest('/api/tickets', {
     method: 'POST',
     headers: { 'Idempotency-Key': idempotencyKey('ticket-create') },
-    body: JSON.stringify(ticket),
+    body: JSON.stringify(newTicket),
   });
   websocketService.sendTicketsUpdate({ type: 'created', id: payload?.ticket?.id || newTicket.id });
   return payload?.ticket || newTicket;
@@ -333,6 +338,15 @@ export const closeTicket = async (ticketId: string, expectedVersion?: number) =>
   return payload;
 };
 
+export const assignTicket = async (ticketId: string, adminId?: string) => {
+  const payload = await apiRequest(`/api/tickets/${ticketId}/assign`, {
+    method: 'PATCH',
+    body: JSON.stringify({ adminId }),
+  });
+  websocketService.sendTicketsUpdate({ type: 'assigned', id: ticketId, assignedToId: payload?.assignedToId });
+  return payload;
+};
+
 // ─── Notifications ───────────────────────────────────────────────────────────
 
 export const fetchNotifications = async (userId: string) => {
@@ -353,7 +367,9 @@ export const createNotification = async (notif: any) => {
       userId: notif.userId || 'all',
       title: notif.title,
       message: notif.message,
-      type: notif.type || 'info',
+      type: notif.type || 'system',
+      relatedId: notif.relatedId || null,
+      relatedType: notif.relatedType || null,
     }),
   });
   return payload?.notification || newNotif;

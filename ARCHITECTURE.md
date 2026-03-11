@@ -1,150 +1,31 @@
-# Gyandeep Architecture Design
+# Gyandeep Architecture (Simplified)
 
-## Three-Tier Architecture
+## High-Level
+- **Frontend**: React + Vite + TypeScript + Tailwind; consumes REST APIs; SSR/SPA deployable on Vercel/Netlify.
+- **Backend**: Express handlers deployable as serverless functions; stateless; JWT/session middleware unchanged.
+- **Database**: MongoDB Atlas only (collections in DATABASE_DESIGN.md); no SQLite/JSON fallbacks.
+- **Storage**: S3/R2-compatible bucket for uploads (notes, session files). API stores URLs + extracted text only.
+- **Messaging/Notifications**: Mongo-backed notifications; optional SSE/Redis for live updates.
 
-```mermaid
-flowchart TB
-    subgraph Layer1["LAYER 1: PRESENTATION (Frontend)"]
-        direction TB
-        FE1[React 18]
-        FE2[TypeScript]
-        FE3[Vite]
-        FE4[Tailwind CSS]
-        FE5[Recharts]
-    end
+## Core Flows Mapped to Entities
+- User enrolls in Class → classId on `users`
+- Teacher creates Class Session (with `classId`, `subjectId`, `teacherId`) → generates join `code`
+- Session holds attendance, generates quizzes, holds centralized notes, and produces teacher insights
+- Quiz → questions → attempts → answers → grade
+- Tickets/Replies tie to users; may be assigned to admins/teachers
+- Announcements and notes scoped to class
 
-    subgraph Layer2["LAYER 2: BUSINESS LOGIC (Backend)"]
-        direction TB
-        BE1[Node.js]
-        BE2[Express.js]
-        BE3[JWT Auth]
-        BE4[RBAC]
-        BE5[WebSocket/SSE]
-    end
+## Deployment Shape
+- **Serverless**: Each route exported as a handler; cold-start safe (no global writes); DB connection cached per runtime.
+- **CDN**: Frontend assets served from edge; API behind HTTPS; storage bucket publicly readable with signed URLs if needed.
+- **Env**: `MONGODB_URI`, `BUCKET_URL/KEYS`, `JWT_SECRET`, `SESSION_SECRET`.
 
-    subgraph Layer3["LAYER 3: DATA"]
-        direction TB
-        DB1[SQLite]
-        DB2[File Storage]
-    end
+## Diagram (text)
+USER → CLASS → CLASS_SESSION → { ATTENDANCE | QUIZ → QUIZ_QUESTION → QUIZ_ATTEMPT → ATTEMPT_ANSWER → GRADE }  
+CLASS → { CENTRALIZED_NOTE, ANNOUNCEMENT, TIMETABLE_ENTRY }  
+USER → { TICKET → TICKET_REPLY, TEACHER_INSIGHT, NOTIFICATION }
 
-    Layer1 --> Layer2 --> Layer3
-```
-
----
-
-## Layer 1: Presentation Layer (Frontend)
-
-### Technology Stack
-- **React 18** - UI library
-- **TypeScript** - Type-safe JavaScript
-- **Vite** - Build tool
-- **Tailwind CSS** - Styling
-- **Recharts** - Charts
-- **face-api.js** - Face recognition
-
-### Key Components
-1. **Dashboards**: Student, Teacher, Admin
-2. **Features**: Quiz, Timetable, Grade Book, Notes, Attendance
-3. **AI**: Chatbot (Gemini AI), Voice Service
-
----
-
-## Layer 2: Business Logic Layer (Backend)
-
-### Technology Stack
-- **Node.js** - JavaScript runtime
-- **Express.js** - Web framework
-- **SQLite3** - Database
-- **JWT** - Authentication
-- **Socket.io** - Real-time updates
-
-### API Endpoints
-| Category | Endpoints |
-|----------|-----------|
-| Auth | `/api/auth/*` - Login, register, password reset, OAuth |
-| Users | `/api/users` - User CRUD |
-| Classes | `/api/classes` - Class management |
-| Grades | `/api/grades` - Grade operations |
-| Timetable | `/api/timetable` - Schedule |
-| Notes | `/api/notes` - Notes upload/retrieval |
-| Quiz | `/api/quiz` - AI quiz generation |
-| Chat | `/api/chat` - AI chatbot |
-| Attendance | `/api/attendance` - Attendance tracking |
-| Analytics | `/api/analytics/*` - AI insights |
-| Tickets | `/api/tickets` - Support tickets |
-| Notifications | `/api/notifications` - Push notifications |
-
-### Real-Time
-- **Server-Sent Events (SSE)** - Live updates for grades, timetable, tickets
-- **WebSocket** - Optional real-time features
-
----
-
-## Layer 3: Data Layer (Storage)
-
-### SQLite Database Tables
-- `users` - Students, teachers, admins
-- `classes` - Class configurations
-- `grades` - Student grades
-- `attendance` - Attendance records
-- `timetable_entries` - Schedule
-- `question_bank` - Quiz questions
-- `tickets` - Support tickets
-- `centralized_notes` - Study notes
-- `audit_logs` - System audit trail
-
-### File Storage
-- User profile images
-- Face recognition data
-- Uploaded notes/documents
-
----
-
-## Deployment
-
-### Docker Compose
-```yaml
-services:
-  api:
-    build: ./server
-    ports:
-      - "3001:3001"
-    volumes:
-      - gyandeep-data:/app/server/data
-  
-  frontend:
-    build: .
-    ports:
-      - "5173:5173"
-    depends_on:
-      - api
-```
-
-### Environment Variables
-```
-VITE_API_URL=http://localhost:3001
-JWT_SECRET=<strong-secret>
-SESSION_SECRET=<strong-secret>
-GEMINI_API_KEY=<gemini-key>
-```
-
----
-
-## Data Flow
-
-```
-User Action → React UI → Express API → JWT Auth → RBAC → SQLite → Response
-                                        ↓
-                              SSE/WebSocket → Real-time Updates
-```
-
----
-
-## User Roles
-
-| Role | Permissions |
-|------|-------------|
-| **Student** | View dashboard, take quizzes, view grades, mark attendance |
-| **Teacher** | Generate quizzes, upload notes, mark attendance, manage grades |
-| **Admin** | Manage users, system config, view analytics, face recognition |
+## Non-Functional
+- Idempotency keys for at-least-once client retries.
+- Index-first design to keep p95 latency low on serverless.
+- All file operations abstracted to storage adapter; local fs only for temp buffers.

@@ -63,7 +63,7 @@ export async function POST(
 
       if (allGraded) {
         // DELETE SESSION NOTES
-        await prisma.sessionNote.update({
+        await prisma.sessionNote.updateMany({
           where: { sessionId },
           data: {
             deletedAt: new Date(),

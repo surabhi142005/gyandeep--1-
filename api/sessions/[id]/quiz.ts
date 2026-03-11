@@ -35,8 +35,10 @@ export async function POST(
       return badRequest('No session notes uploaded for this session');
     }
 
-    // TODO: Integrate with Gemini AI for quiz generation
-    // For now, return a placeholder
+    const body = await request.json();
+    const quizType = ['pre', 'post', 'main'].includes(body?.quizType) ? body.quizType : 'main';
+
+    // Placeholder quiz generation; real path uses backend AI service
     const quizQuestions = [
       {
         id: `q_${Date.now()}_1`,
@@ -46,24 +48,16 @@ export async function POST(
       }
     ];
 
-    // Save quiz
-    const quiz = await prisma.quiz.upsert({
-      where: { sessionId },
-      create: {
+    // Save quiz (allow 1:N quizzes per session)
+    const quiz = await prisma.quiz.create({
+      data: {
         sessionId,
         teacherId: user.id,
         title: `Quiz - Session ${session.code}`,
         questionsJson: JSON.stringify(quizQuestions),
+        quizType,
+        published: false,
       },
-      update: {
-        questionsJson: JSON.stringify(quizQuestions),
-      },
-    });
-
-    // Update session
-    await prisma.classSession.update({
-      where: { id: sessionId },
-      data: { quizQuestions: JSON.stringify(quizQuestions) },
     });
 
     return json({

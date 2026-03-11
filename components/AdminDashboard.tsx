@@ -9,6 +9,7 @@ import AdminFaceViewer from './AdminFaceViewer';
 import { adminOverride, bulkImportUsers, fetchQuestionBank, updateQuestionInBank, deleteQuestionFromBank, addQuestionsToBank, fetchTagPresets, updateTagPresets, checkEmailServiceHealth, sendEmailNotification, sendAIEmail } from '../services/dataService';
 import { registerFace, verifyFace, hashPassword } from '../services/authService';
 import { t } from '../services/i18n';
+import TicketPanel from './TicketPanel';
 
 
 interface AdminDashboardProps {
@@ -1941,6 +1942,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ admin, users, onUpdateU
           </div>
         </div>
       )}
+
+      <TicketPanel userId={admin.id} role="admin" colors={colors} />
 
       {capturingForUser && (
         <WebcamCapture

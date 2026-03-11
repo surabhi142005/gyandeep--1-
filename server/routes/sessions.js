@@ -55,6 +55,23 @@ const upload = multer({
     },
 });
 
+async function notifyUsers(userIds = [], payload = {}) {
+    const ids = Array.from(new Set((userIds || []).filter(Boolean)))
+    if (ids.length === 0) return
+    const docs = ids.map(id => ({
+        _id: generateId(),
+        userId: id,
+        type: payload.type || 'system',
+        title: payload.title || 'Notification',
+        message: payload.message || '',
+        relatedId: payload.relatedId || null,
+        relatedType: payload.relatedType || null,
+        read: false,
+        createdAt: new Date(),
+    }))
+    await getDB().collection(COLLECTIONS.NOTIFICATIONS).insertMany(docs).catch(() => {})
+}
+
 async function extractTextFromFile(filePath, mimeType) {
     if (mimeType === 'text/plain' || mimeType === 'text/markdown') {
         return fs.readFileSync(filePath, 'utf8');
@@ -85,7 +102,7 @@ function generateSessionCode() {
 
 // ── Create new session ─────────────────────────────────────────────────────
 router.post('/', requireAuth, ensureRole('teacher'), asyncRoute(async (req, res) => {
-    const { classId, subjectId, durationMinutes = 60 } = req.body || {};
+    const { classId, subjectId, durationMinutes = 60, timetableEntryId } = req.body || {};
     if (!subjectId) return res.status(400).json({ error: 'subjectId is required' });
 
     const id = `sess_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
@@ -101,6 +118,8 @@ router.post('/', requireAuth, ensureRole('teacher'), asyncRoute(async (req, res)
         expiry,
         quiz_published: false,
         session_status: 'active',
+        ended_at: null,
+        timetable_entry_id: timetableEntryId || null,
         created_at: Date.now(),
     };
 
@@ -116,6 +135,8 @@ router.post('/', requireAuth, ensureRole('teacher'), asyncRoute(async (req, res)
             expiry,
             quizPublished: false,
             hasNotes: false,
+            endedAt: null,
+            timetableEntryId: timetableEntryId || null,
         },
     });
 }));
@@ -223,7 +244,7 @@ router.get('/:id/notes', requireAuth, asyncRoute(async (req, res) => {
 // ── Generate quiz from session notes ────────────────────────────────────────
 router.post('/:id/quiz', requireAuth, ensureRole('teacher'), asyncRoute(async (req, res) => {
     const sessionId = req.params.id;
-    const { enableThinkingMode } = req.body || {};
+    const { enableThinkingMode, quizType } = req.body || {};
 
     const session = await mongoOps.findOne(COLLECTIONS.CLASS_SESSIONS, { _id: sessionId, teacher_id: req.user.id });
     if (!session) return res.status(404).json({ error: 'Session not found' });
@@ -257,6 +278,7 @@ router.post('/:id/quiz', requireAuth, ensureRole('teacher'), asyncRoute(async (r
         title: `Quiz - Session ${session.code}`,
         questions_json: JSON.stringify(quizQuestions),
         published: false,
+        quiz_type: ['pre', 'post', 'main'].includes(quizType) ? quizType : 'main',
         created_at: Date.now(),
     };
 
@@ -301,6 +323,20 @@ router.post('/:id/publish', requireAuth, ensureRole('teacher'), asyncRoute(async
         { $set: { quiz_published: true, quiz_published_at: Date.now() } }
     );
 
+    if (session.class_id) {
+        const students = await getDB().collection(COLLECTIONS.USERS).find({ classId: session.class_id, role: 'student' }).project({ _id: 1, id: 1 }).toArray()
+        await notifyUsers(
+            students.map(s => s.id || s._id?.toString?.()),
+            {
+                type: 'quiz_published',
+                title: 'New quiz published',
+                message: `A new quiz for ${session.subject_id} is available.`,
+                relatedId: sessionId,
+                relatedType: 'session',
+            }
+        )
+    }
+
     return res.json({ ok: true, published: true, message: 'Quiz published. Students can now take the quiz.' });
 }));
 
@@ -326,6 +362,7 @@ router.get('/:id', requireAuth, asyncRoute(async (req, res) => {
             subjectId: session.subject_id,
             quizPublished: !!session.quiz_published,
             quizQuestions: session.quiz_questions ? JSON.parse(session.quiz_questions) : null,
+            endedAt: session.ended_at || null,
         });
     }
 
@@ -344,6 +381,9 @@ router.get('/:id', requireAuth, asyncRoute(async (req, res) => {
         notesPreview: sessionNote ? (sessionNote.extracted_text || sessionNote.content)?.slice(0, 500) : null,
         quizQuestions: session.quiz_questions ? JSON.parse(session.quiz_questions) : null,
         quizId: quiz?._id || null,
+        quizType: quiz?.quiz_type || 'main',
+        endedAt: session.ended_at || null,
+        timetableEntryId: session.timetable_entry_id || null,
     });
 }));
 
@@ -417,6 +457,17 @@ router.post('/:id/grade', requireAuth, ensureRole('teacher'), asyncRoute(async (
     // Check if ALL students graded
     const classStudents = await mongoOps.find(COLLECTIONS.USERS, { classId: session.class_id, role: 'student', active: true });
     const gradedCount = await mongoOps.count(COLLECTIONS.GRADES, { sessionId });
+
+    await notifyUsers(
+        [studentId],
+        {
+            type: 'grade_posted',
+            title: 'Grade posted',
+            message: `Your quiz for session ${session.code} scored ${score}/${maxScore}.`,
+            relatedId: gradeId,
+            relatedType: 'grade',
+        }
+    );
 
     const allGraded = classStudents.length > 0 && gradedCount >= classStudents.length;
     let notesDeleted = false;
@@ -501,8 +552,22 @@ router.post('/:id/end', requireAuth, ensureRole('teacher'), asyncRoute(async (re
     await mongoOps.updateOne(
         COLLECTIONS.CLASS_SESSIONS,
         { _id: sessionId },
-        { $set: { expiry: Date.now(), session_status: 'ended' } }
+        { $set: { expiry: Date.now(), session_status: 'ended', ended_at: Date.now() } }
     );
+
+    if (session.class_id) {
+        const students = await getDB().collection(COLLECTIONS.USERS).find({ classId: session.class_id, role: 'student' }).project({ _id: 1, id: 1 }).toArray()
+        await notifyUsers(
+            students.map(s => s.id || s._id?.toString?.()),
+            {
+                type: 'system',
+                title: 'Session ended',
+                message: `Session ${session.code} has ended.`,
+                relatedId: sessionId,
+                relatedType: 'session',
+            }
+        )
+    }
 
     return res.json({ ok: true, ended: true, message: 'Session ended. Session notes deleted.' });
 }));
@@ -524,6 +589,8 @@ router.get('/', requireAuth, ensureRole('teacher'), asyncRoute(async (req, res) 
         quizPublished: !!s.quiz_published,
         hasNotes: !!s.quiz_questions,
         sessionStatus: s.session_status,
+        endedAt: s.ended_at || null,
+        timetableEntryId: s.timetable_entry_id || null,
         createdAt: s.created_at,
     })));
 }));

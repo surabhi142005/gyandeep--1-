@@ -14,7 +14,8 @@ import { ensureRole } from '../middleware/rbac.js'
 import { asyncRoute } from '../middleware/validate.js'
 import { addJob } from '../jobQueue.js'
 import { getLLMService } from '../services/llmService.js'
-import { run as dbRun, all as dbAll, get as dbGet } from '../database.js'
+import { mongoOps, COLLECTIONS, generateId, getDB } from '../db/mongo.js'
+import { ALLOWED_MIMES } from '@/dist/assets/TeacherDashboard-BTL1tLM-.js'
 
 const router = Router()
 const storageDir = path.join(process.cwd(), 'server', 'storage')
@@ -26,21 +27,24 @@ function ensureDirs() {
   if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true })
 }
 
-// Multer config: 100MB limit, accept specific file types
-const ALLOWED_MIMES = [
-  'text/plain', 'text/markdown',
-  'application/pdf',
-  'image/jpeg', 'image/png',
-]
-
 const upload = multer({
   dest: uploadsDir,
   limits: { fileSize: 100 * 1024 * 1024 }, // 100MB
   fileFilter: (_req, file, cb) => {
     if (ALLOWED_MIMES.includes(file.mimetype)) {
-      cb(null, true)
+      // For octet-stream, only allow known extensions
+      if (file.mimetype === 'application/octet-stream') {
+        const ext = path.extname(file.originalname).toLowerCase()
+        if (['.pdf', '.doc', '.docx'].includes(ext)) {
+          cb(null, true)
+        } else {
+          cb(new Error(`Unsupported file type. Accepted: PDF, DOCX, DOC, JPEG, PNG, TXT, MD`))
+        }
+      } else {
+        cb(null, true)
+      }
     } else {
-      cb(new Error(`Unsupported file type: ${file.mimetype}. Accepted: PDF, JPEG, PNG, TXT, MD`))
+      cb(new Error(`Unsupported file type: ${file.mimetype}. Accepted: PDF, DOCX, DOC, JPEG, PNG, TXT, MD`))
     }
   },
 })
@@ -68,11 +72,34 @@ async function extractTextFromFile(filePath, mimeType) {
     return fs.readFileSync(filePath, 'utf8')
   }
 
-  if (mimeType === 'application/pdf') {
+  // Handle all PDF MIME variants + octet-stream with .pdf extension
+  const isPdf = ['application/pdf', 'application/x-pdf', 'application/vnd.pdf'].includes(mimeType) ||
+    (mimeType === 'application/octet-stream' && path.extname(filePath).toLowerCase() === '.pdf')
+  if (isPdf) {
     const pdfParse = (await import('pdf-parse')).default
     const buffer = fs.readFileSync(filePath)
     const data = await pdfParse(buffer)
     return data.text || ''
+  }
+
+  // Handle .docx files
+  const isDocx = mimeType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
+    (mimeType === 'application/octet-stream' && path.extname(filePath).toLowerCase() === '.docx')
+  if (isDocx) {
+    try {
+      const mammoth = (await import('mammoth')).default || await import('mammoth')
+      const result = await mammoth.extractRawText({ path: filePath })
+      return result.value || ''
+    } catch {
+      // Fallback: try reading as binary text
+      throw new Error('DOCX extraction requires the mammoth package. Install it with: npm i mammoth')
+    }
+  }
+
+  // Handle .doc files (legacy Word format)
+  if (mimeType === 'application/msword' ||
+    (mimeType === 'application/octet-stream' && path.extname(filePath).toLowerCase() === '.doc')) {
+    throw new Error('Legacy .doc format is not fully supported. Please convert to .docx or .pdf.')
   }
 
   if (mimeType === 'image/jpeg' || mimeType === 'image/png') {
@@ -86,7 +113,7 @@ async function extractTextFromFile(filePath, mimeType) {
 }
 
 // ── Upload notes (teacher/admin only) ─────────────────────────────────────────
-router.post('/upload', requireAuth, ensureRole('teacher'), upload.single('file'), asyncRoute(async (req, res) => {
+router.post('/upload', requireAuth, ensureRole('teacher', 'admin'), upload.single('file'), asyncRoute(async (req, res) => {
   const classId = req.body?.classId
   const subjectId = req.body?.subjectId
   const content = req.body?.content
@@ -119,12 +146,21 @@ router.post('/upload', requireAuth, ensureRole('teacher'), upload.single('file')
     // Determine extension from mime type
     const extMap = {
       'application/pdf': '.pdf',
+      'application/x-pdf': '.pdf',
+      'application/vnd.pdf': '.pdf',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document': '.docx',
+      'application/msword': '.doc',
       'image/jpeg': '.jpg',
       'image/png': '.png',
       'text/plain': '.txt',
       'text/markdown': '.md',
     }
-    ext = extMap[file.mimetype] || '.bin'
+    // For octet-stream, use original file extension
+    if (file.mimetype === 'application/octet-stream') {
+      ext = path.extname(file.originalname).toLowerCase() || '.bin'
+    } else {
+      ext = extMap[file.mimetype] || '.bin'
+    }
 
     try {
       extractedText = await extractTextFromFile(file.path, file.mimetype)
@@ -175,7 +211,7 @@ router.post('/upload', requireAuth, ensureRole('teacher'), upload.single('file')
 }))
 
 // ── List notes (teacher/admin only) ──────────────────────────────────────────
-router.get('/list', requireAuth, ensureRole('teacher'), asyncRoute(async (req, res) => {
+router.get('/list', requireAuth, ensureRole('teacher', 'admin'), asyncRoute(async (req, res) => {
   const safeClassId   = safeSeg(req.query.classId)
   const safeSubjectId = safeSeg(req.query.subjectId)
   if (!safeClassId || !safeSubjectId) {
@@ -186,7 +222,7 @@ router.get('/list', requireAuth, ensureRole('teacher'), asyncRoute(async (req, r
     return res.status(400).json({ error: 'Invalid path' })
   }
   if (!fs.existsSync(dir)) return res.json([])
-  const SUPPORTED_EXTS = ['.txt', '.md', '.pdf', '.jpg', '.jpeg', '.png']
+  const SUPPORTED_EXTS = ['.txt', '.md', '.pdf', '.jpg', '.jpeg', '.png', '.docx', '.doc']
   const files = fs.readdirSync(dir).filter(f => SUPPORTED_EXTS.some(ext => f.endsWith(ext)))
   return res.json(files.map(f => ({
     url:  `/storage/notes/${encodeURIComponent(safeClassId)}/${encodeURIComponent(safeSubjectId)}/${f}`,
@@ -204,13 +240,22 @@ router.post('/centralized', requireAuth, ensureRole('teacher', 'admin'), asyncRo
   }
   const validTypes = ['class_notes', 'quiz_notes']
   const type = validTypes.includes(noteType) ? noteType : 'class_notes'
-  const id = `cn_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
-  await dbRun(
-    `INSERT INTO centralized_notes (id, classId, subjectId, unitNumber, unitName, title, content, noteType, teacherId, createdAt)
-     VALUES (?,?,?,?,?,?,?,?,?,?)`,
-    [id, classId || null, subjectId, Number(unitNumber), unitName, title, content || '', type, req.user.id, Date.now()]
-  )
-  return res.json({ ok: true, id })
+  const doc = {
+    _id: generateId(),
+    classId: classId || null,
+    subjectId,
+    unitNumber: Number(unitNumber),
+    unitName,
+    title,
+    content: content || '',
+    noteType: type,
+    teacherId: req.user.id,
+    sessionId: req.body?.sessionId || null,
+    createdAt: Date.now(),
+    updatedAt: Date.now(),
+  }
+  await mongoOps.insertOne(COLLECTIONS.CENTRALIZED_NOTES, doc)
+  return res.json({ ok: true, id: doc._id })
 }))
 
 // GET /centralized — list notes by subject+unit (any authenticated user)
@@ -218,21 +263,21 @@ router.get('/centralized', requireAuth, asyncRoute(async (req, res) => {
   const { subjectId, unitNumber, classId } = req.query
   if (!subjectId) return res.status(400).json({ error: 'subjectId is required' })
 
-  let sql = `SELECT * FROM centralized_notes WHERE subjectId = ?`
-  const params = [subjectId]
-
+  const query = { subjectId }
   if (unitNumber != null && unitNumber !== '') {
-    sql += ` AND unitNumber = ?`
-    params.push(Number(unitNumber))
+    query.unitNumber = Number(unitNumber)
   }
   if (classId) {
-    sql += ` AND (classId = ? OR classId IS NULL)`
-    params.push(classId)
+    query.$or = [{ classId }, { classId: null }]
   }
-  sql += ` ORDER BY unitNumber ASC, createdAt DESC`
 
-  const rows = await dbAll(sql, params)
-  return res.json(rows)
+  const rows = await getDB()
+    .collection(COLLECTIONS.CENTRALIZED_NOTES)
+    .find(query)
+    .sort({ unitNumber: 1, createdAt: -1 })
+    .toArray()
+
+  return res.json(rows.map(r => ({ ...r, id: r._id?.toString?.() || r.id })))
 }))
 
 // GET /centralized/combined — all notes for a subject grouped by unit
@@ -240,15 +285,16 @@ router.get('/centralized/combined', requireAuth, asyncRoute(async (req, res) => 
   const { subjectId, classId } = req.query
   if (!subjectId) return res.status(400).json({ error: 'subjectId is required' })
 
-  let sql = `SELECT * FROM centralized_notes WHERE subjectId = ?`
-  const params = [subjectId]
+  const query = { subjectId }
   if (classId) {
-    sql += ` AND (classId = ? OR classId IS NULL)`
-    params.push(classId)
+    query.$or = [{ classId }, { classId: null }]
   }
-  sql += ` ORDER BY unitNumber ASC, createdAt DESC`
 
-  const rows = await dbAll(sql, params)
+  const rows = await getDB()
+    .collection(COLLECTIONS.CENTRALIZED_NOTES)
+    .find(query)
+    .sort({ unitNumber: 1, createdAt: -1 })
+    .toArray()
 
   // Group by unit
   const units = {}

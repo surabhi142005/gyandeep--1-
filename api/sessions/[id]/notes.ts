@@ -29,8 +29,8 @@ export async function POST(
     }
 
     // Check if notes already exist
-    const existingNote = await prisma.sessionNote.findUnique({
-      where: { sessionId },
+    const existingNote = await prisma.sessionNote.findFirst({
+      where: { sessionId, deletedAt: null },
     });
 
     if (existingNote && !existingNote.deletedAt) {
@@ -38,17 +38,11 @@ export async function POST(
     }
 
     // Create session note
-    const note = await prisma.sessionNote.upsert({
-      where: { sessionId },
-      create: {
+    const note = await prisma.sessionNote.create({
+      data: {
         sessionId,
         content: content || '',
         extractedText: content || '',
-      },
-      update: {
-        content: content || '',
-        extractedText: content || '',
-        deletedAt: null,
       },
     });
 
@@ -71,8 +65,9 @@ export async function GET(
   if (!user) return requireAuth(request) as any;
 
   try {
-    const note = await prisma.sessionNote.findUnique({
+    const note = await prisma.sessionNote.findFirst({
       where: { sessionId: params.id },
+      orderBy: { createdAt: 'desc' },
     });
 
     if (!note || note.deletedAt) {

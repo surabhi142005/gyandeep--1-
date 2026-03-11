@@ -13,6 +13,7 @@ import { TeacherDashboardProps } from './TeacherDashboardProps';
 import AnnouncementBoard from './AnnouncementBoard';
 import AnalyticsDashboard from './AnalyticsDashboard';
 import GradeBook from './GradeBook';
+import TicketPanel from './TicketPanel';
 import { useTeacherSession } from '../hooks/useTeacherSession';
 import { exportToCSV } from '../services/exportService';
 
@@ -59,10 +60,19 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ teacher, students, 
 
   const [tagPresets, setTagPresets] = useState<Record<string, string[]>>({});
   const [notesText, setNotesText] = useState(classSession.notes || '');
+  const [notesTab, setNotesTab] = useState<'session' | 'centralized'>('session');
+  const [centralizedNotes, setCentralizedNotes] = useState<any[]>([]);
   const [selectedQuizClass, setSelectedQuizClass] = useState<string>('');
   const [expiryWarning, setExpiryWarning] = useState<string | null>(null);
   useEffect(() => { fetchTagPresets().then(setTagPresets).catch((err) => { console.error('Failed to load tag presets:', err); }) }, []);
   useEffect(() => setNotesText(classSession.notes || ''), [classSession.notes]);
+  useEffect(() => {
+    if (notesTab === 'centralized' && classSession.classId && classSession.subject) {
+      fetchCentralizedNotesCombined({ subjectId: classSession.subject, classId: classSession.classId })
+        .then(setCentralizedNotes)
+        .catch(err => console.error('Failed to load centralized notes', err));
+    }
+  }, [notesTab, classSession.classId, classSession.subject]);
   const fallbackPresets: Record<string, string[]> = {
     Mathematics: ['algebra', 'geometry', 'trigonometry', 'calculus', 'practice'],
     Science: ['physics', 'chemistry', 'biology', 'lab', 'experiment'],
@@ -72,6 +82,8 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ teacher, students, 
   const tagOptions = useMemo(() => (tagPresets[selectedSubject] || fallbackPresets[selectedSubject] || ['revision', 'exam', 'homework', 'unit']), [selectedSubject, tagPresets]);
 
   const colors = useMemo(() => THEME_COLORS[theme] || THEME_COLORS.indigo, [theme]);
+
+  const sessionEnded = !!classSession.endedAt;
 
   const notify = (title: string, body: string) => {
     try {
@@ -424,6 +436,18 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ teacher, students, 
                 <div>
                   <p className="font-bold text-lg text-gray-800">{teacher.name}</p>
                   <p className="text-sm text-gray-500">{teacher.email}</p>
+                  {classSession.code && (
+                    <div className="flex gap-2 mt-2">
+                      <span className={`px-2 py-0.5 text-xs font-semibold rounded-full ${sessionEnded ? 'bg-gray-100 text-gray-600' : 'bg-green-100 text-green-700'}`}>
+                        {sessionEnded ? 'Ended' : 'Active'}
+                      </span>
+                      {classSession.timetableEntryId && (
+                        <span className="px-2 py-0.5 text-xs font-semibold rounded-full bg-blue-100 text-blue-700">
+                          Timetable-linked
+                        </span>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
               <div className="mt-4 border-t pt-4">
@@ -574,6 +598,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ teacher, students, 
               canPost={true}
               theme={theme}
             />
+            <TicketPanel userId={teacher.id} role="teacher" colors={colors} />
 
             {classSession.code && (
               <div className="bg-white p-6 rounded-lg shadow-md">
@@ -597,66 +622,145 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ teacher, students, 
                     </div>
                   </div>
                 </div>
-                <div className="mb-4">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Class Notes</label>
-                  <textarea
-                    value={notesText}
-                    onChange={(e) => setNotesText(e.target.value)}
-                    placeholder="Type class notes here..."
-                    rows={4}
-                    className="w-full p-2 border border-gray-300 rounded-md shadow-sm"
-                  />
-                  <div className="flex gap-2 mt-2">
-                    <button onClick={async () => {
-                      onUpdateSession({ notes: notesText });
-                      try {
-                        await uploadClassNotes({ classId: teacher.id, subjectId: classSession.subject, content: notesText });
-                        setSuccessMessage(`Notes saved.`);
-                      } catch (e) {
-                        setError(e instanceof Error ? e.message : 'Failed to upload notes');
-                      }
-                    }} className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">
-                      Save Notes
-                    </button>
-                    <button onClick={async () => {
-                      if (!notesText.trim()) {
-                        setError("Please enter notes first.");
-                        return;
-                      }
-                      setIsGeneratingQuiz(true);
-                      clearMessages();
-                      try {
-                        const { quiz } = await generateQuizWorker({
-                          notesText,
-                          subject: classSession.subject,
-                        });
-                        onUpdateSession({ quiz });
-                        setSuccessMessage("Quiz is ready for your review.");
-                      } catch (err: any) {
-                        setError(err instanceof Error ? err.message : String(err));
-                      } finally {
-                        setIsGeneratingQuiz(false);
-                      }
-                    }} disabled={isGeneratingQuiz} className="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 disabled:opacity-50">
-                      Generate Quiz
-                    </button>
+                <div className="flex gap-2 mb-3">
+                  <button
+                    type="button"
+                    className={`px-3 py-1 rounded text-sm ${notesTab === 'session' ? colors.primary + ' text-white' : colors.lightBg + ' ' + colors.text}`}
+                    onClick={() => setNotesTab('session')}
+                  >
+                    {t('Session Notes (temporary)')}
+                  </button>
+                  <button
+                    type="button"
+                    className={`px-3 py-1 rounded text-sm ${notesTab === 'centralized' ? colors.primary + ' text-white' : colors.lightBg + ' ' + colors.text}`}
+                    onClick={() => setNotesTab('centralized')}
+                  >
+                    {t('Centralized Notes (persistent)')}
+                  </button>
+                </div>
+
+                {notesTab === 'session' && (
+                  <>
+                    <div className="mb-4">
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Session Notes</label>
+                      <p className="text-xs text-gray-500 mb-2">Temporary; may be removed after grading or session end.</p>
+                      <textarea
+                        value={notesText}
+                        onChange={(e) => setNotesText(e.target.value)}
+                        placeholder="Type session notes here..."
+                        rows={4}
+                        className="w-full p-2 border border-gray-300 rounded-md shadow-sm"
+                      />
+                      <div className="flex gap-2 mt-2">
+                        <button onClick={async () => {
+                          onUpdateSession({ notes: notesText });
+                          try {
+                            await uploadClassNotes({ classId: teacher.id, subjectId: classSession.subject, content: notesText });
+                            setSuccessMessage(`Session notes saved.`);
+                          } catch (e) {
+                            setError(e instanceof Error ? e.message : 'Failed to upload notes');
+                          }
+                        }} disabled={sessionEnded} className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed">
+                          Save Session Notes
+                        </button>
+                        <button onClick={async () => {
+                          if (!notesText.trim()) {
+                            setError("Please enter notes first.");
+                            return;
+                          }
+                          setIsGeneratingQuiz(true);
+                          clearMessages();
+                          try {
+                            const { quiz } = await generateQuizWorker({
+                              notesText,
+                              subject: classSession.subject,
+                            });
+                            onUpdateSession({ quiz });
+                            setSuccessMessage("Quiz is ready for your review.");
+                          } catch (err: any) {
+                            setError(err instanceof Error ? err.message : String(err));
+                          } finally {
+                            setIsGeneratingQuiz(false);
+                          }
+                        }} disabled={isGeneratingQuiz || sessionEnded} className="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 disabled:opacity-50">
+                          Generate Quiz
+                        </button>
+                      </div>
+                    </div>
+                    <div className="mb-4">
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Or Upload Notes File</label>
+                      <input type="file" accept=".txt,.md,.pdf,.jpg,.jpeg,.png" onChange={handleNotesUpload} disabled={isUploading || isGeneratingQuiz || sessionEnded} className={`block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:${colors.lightBg} file:${colors.lightText} ${colors.lightHover}`} />
+                      <p className="text-xs text-gray-400 mt-1">TXT/MD up to 1MB, PDF/JPEG/PNG up to 100MB</p>
+                    </div>
+                    {(isUploading || isGeneratingQuiz) && (<div className="mt-4 flex items-center text-gray-600"><Spinner size="w-5 h-5" color={colors.text} /><span className="ml-2">{isUploading ? "Reading..." : workerProgress || 'Generating quiz...'}</span></div>)}
+                  </>
+                )}
+                {notesTab === 'centralized' && (
+                  <div className="mb-4">
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Centralized Notes</label>
+                    <p className="text-xs text-gray-500 mb-2">Persistent notes grouped by unit. Visible to students in the class.</p>
+                    <textarea
+                      value={notesText}
+                      onChange={(e) => setNotesText(e.target.value)}
+                      placeholder="Paste content for centralized note..."
+                      rows={4}
+                      className="w-full p-2 border border-gray-300 rounded-md shadow-sm"
+                    />
+                    <div className="flex gap-2 mt-2">
+                      <button onClick={async () => {
+                        try {
+                          await uploadCentralizedNotes({
+                            classId: classSession.classId,
+                            subjectId: classSession.subject,
+                            unitNumber: 1,
+                            unitName: 'Unit',
+                            title: `Note ${new Date().toLocaleString()}`,
+                            content: notesText,
+                          });
+                          setSuccessMessage('Centralized note saved.');
+                          if (classSession.classId && classSession.subject) {
+                            const data = await fetchCentralizedNotesCombined({ subjectId: classSession.subject, classId: classSession.classId });
+                            setCentralizedNotes(data);
+                          }
+                        } catch (e) {
+                          setError(e instanceof Error ? e.message : 'Failed to save centralized note');
+                        }
+                      }} className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">
+                        Save Centralized Note
+                      </button>
+                    </div>
+                    <div className="mt-3 space-y-2 max-h-48 overflow-auto">
+                      {centralizedNotes.map((unit: any) => (
+                        <div key={unit.unitNumber} className="border rounded p-2">
+                          <div className="text-sm font-semibold">Unit {unit.unitNumber}: {unit.unitName}</div>
+                          <ul className="text-xs text-gray-600 list-disc ml-4">
+                            {unit.notes?.map((n: any) => (
+                              <li key={n.id}>{n.title}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      ))}
+                      {centralizedNotes.length === 0 && <div className="text-xs text-gray-500">No centralized notes yet.</div>}
+                    </div>
                   </div>
-                </div>
-                <div className="mb-4">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Or Upload Notes File</label>
-                  <input type="file" accept=".txt,.md,.pdf,.jpg,.jpeg,.png" onChange={handleNotesUpload} disabled={isUploading || isGeneratingQuiz} className={`block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:${colors.lightBg} file:${colors.lightText} ${colors.lightHover}`} />
-                  <p className="text-xs text-gray-400 mt-1">TXT/MD up to 1MB, PDF/JPEG/PNG up to 100MB</p>
-                </div>
-                {(isUploading || isGeneratingQuiz) && (<div className="mt-4 flex items-center text-gray-600"><Spinner size="w-5 h-5" color={colors.text} /><span className="ml-2">{isUploading ? "Reading..." : workerProgress || 'Generating quiz...'}</span></div>)}
+                )}
               </div>
             )}
 
             {classSession.quiz && !classSession.quizPublished && (
               <div className="bg-white p-6 rounded-lg shadow-md">
-                <h2 className="text-xl font-semibold text-gray-700 mb-4">{t('Review Quiz')}</h2>
+                <div className="flex items-center gap-2 mb-4">
+                  <h2 className="text-xl font-semibold text-gray-700">{t('Review Quiz')}</h2>
+                  {classSession.quizType && (
+                    <span className="px-2 py-0.5 text-xs font-semibold rounded-full bg-purple-100 text-purple-700 uppercase">
+                      {classSession.quizType}
+                    </span>
+                  )}
+                </div>
                 <div className="space-y-4 max-h-80 overflow-y-auto pr-2 border-t pt-4">{classSession.quiz.map((q, index) => (
                   <div key={q.id} className="text-sm">
                     <p className="font-semibold text-gray-800">{index + 1}. {q.question}</p>
+                    {(q as any).quizType && <span className="inline-block text-xxs px-2 py-0.5 rounded bg-gray-100 text-gray-700 mr-2 uppercase">{(q as any).quizType}</span>}
                     <ul className="list-disc pl-5 mt-2 space-y-1">{q.options.map(opt => (
                       <li key={opt} className={`${opt === q.correctAnswer ? 'text-green-700 font-bold' : 'text-gray-600'}`}>{opt} {opt === q.correctAnswer && ' (Correct)'}</li>
                     ))}</ul>
@@ -696,7 +800,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ teacher, students, 
                     </div>
                   </div>
                 ))}</div>
-                <button onClick={handlePublishQuiz} disabled={isPublishingQuiz} className="w-full mt-4 bg-green-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-green-700 flex items-center justify-center disabled:bg-green-300">{isPublishingQuiz ? <Spinner size="w-5 h-5" /> : t('Publish Quiz')}</button>
+                <button onClick={handlePublishQuiz} disabled={isPublishingQuiz || sessionEnded} className="w-full mt-4 bg-green-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-green-700 flex items-center justify-center disabled:bg-green-300">{isPublishingQuiz ? <Spinner size="w-5 h-5" /> : t('Publish Quiz')}</button>
               </div>
             )}
           </div>
