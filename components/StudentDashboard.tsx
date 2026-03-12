@@ -12,6 +12,8 @@ import AnnouncementBoard from './AnnouncementBoard';
 import TicketPanel from './TicketPanel';
 import type { Announcement } from './AnnouncementBoard';
 import { fetchCentralizedNotesCombined } from '../services/dataService';
+import Dashboard3D from './Dashboard3D';
+import StudentLearningTwin from './StudentLearningTwin';
 
 interface StudentDashboardProps {
   student: Student;
@@ -28,11 +30,20 @@ interface StudentDashboardProps {
   onUpdateSession?: (sessionUpdate: Partial<ClassSession>) => void;
 }
 
-const THEME_COLORS: Record<string, Record<string, string>> = {
-  indigo: { primary: 'bg-indigo-600', hover: 'hover:bg-indigo-700', text: 'text-indigo-800', ring: 'focus:ring-indigo-500', border: 'focus:border-indigo-500' },
-  teal: { primary: 'bg-teal-600', hover: 'hover:bg-teal-700', text: 'text-teal-800', ring: 'focus:ring-teal-500', border: 'focus:border-teal-500' },
-  crimson: { primary: 'bg-red-600', hover: 'hover:bg-red-700', text: 'text-red-800', ring: 'focus:ring-red-500', border: 'focus:border-red-500' },
-  purple: { primary: 'bg-purple-600', hover: 'hover:bg-purple-700', text: 'text-purple-800', ring: 'focus:ring-purple-500', border: 'focus:border-purple-500' },
+interface ThemeColors {
+  primary: string;
+  hover: string;
+  text: string;
+  ring: string;
+  border: string;
+  lightBg?: string;
+}
+
+const THEME_COLORS: Record<string, ThemeColors> = {
+  indigo: { primary: 'bg-indigo-600', hover: 'hover:bg-indigo-700', text: 'text-indigo-800', ring: 'focus:ring-indigo-500', border: 'focus:border-indigo-500', lightBg: 'bg-indigo-50' },
+  teal: { primary: 'bg-teal-600', hover: 'hover:bg-teal-700', text: 'text-teal-800', ring: 'focus:ring-teal-500', border: 'focus:border-teal-500', lightBg: 'bg-teal-50' },
+  crimson: { primary: 'bg-red-600', hover: 'hover:bg-red-700', text: 'text-red-800', ring: 'focus:ring-red-500', border: 'focus:border-red-500', lightBg: 'bg-red-50' },
+  purple: { primary: 'bg-purple-600', hover: 'hover:bg-purple-700', text: 'text-purple-800', ring: 'focus:ring-purple-500', border: 'focus:border-purple-500', lightBg: 'bg-purple-50' },
 };
 
 
@@ -53,10 +64,16 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ student, classSessi
   const [expandedUnit, setExpandedUnit] = useState<number | null>(null);
   const [notesTab, setNotesTab] = useState<'session' | 'centralized'>('session');
 
-
   const colors = useMemo(() => THEME_COLORS[theme] || THEME_COLORS.indigo, [theme]);
 
   const sessionEnded = !!classSession.endedAt;
+
+  // Use gamification stats from student object
+  const stats = useMemo(() => ({
+    xp: student.xp || 0,
+    level: student.level || 1,
+    coins: student.coins || 0
+  }), [student.xp, student.level, student.coins]);
 
   // Fetch centralized exam notes when subject changes
   const loadExamNotes = useCallback(async (subject: string) => {
@@ -301,7 +318,21 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ student, classSessi
           </div>
         </div>
 
-        <main className="p-4 md:p-8 grid grid-cols-1 md:grid-cols-2 gap-8">
+        <main className="p-4 md:p-8 grid grid-cols-1 lg:grid-cols-2 gap-8">
+          <div className="lg:col-span-2 space-y-8">
+            <Dashboard3D theme={theme} stats={stats} />
+            <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
+              <StudentLearningTwin student={student as any} theme={theme} />
+              <div className="bg-white rounded-3xl p-8 shadow-xl border border-gray-100 flex flex-col justify-center">
+                 <h3 className="text-2xl font-black text-slate-800 mb-6 uppercase tracking-tight">Active Learning Goal</h3>
+                 <div className="bg-indigo-50 border-2 border-indigo-100 rounded-2xl p-6 text-center">
+                    <p className="text-indigo-600 font-black text-xl mb-2">Master {classSession.subject || 'your subjects'}</p>
+                    <p className="text-slate-500 text-sm font-medium">Complete today's quiz to earn a <span className="text-amber-500 font-bold">+50 XP</span> bonus and climb the leaderboard!</p>
+                 </div>
+              </div>
+            </div>
+          </div>
+
           <div className="space-y-6">
             <div className="bg-white p-6 rounded-lg shadow-md">
               <h2 className="text-xl font-semibold text-gray-700 mb-4">Mark Attendance</h2>

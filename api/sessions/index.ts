@@ -1,121 +1,62 @@
+import { NextRequest } from 'next/server';
+import { prisma } from '../../lib/db';
+import { json, badRequest, auth, ensureRole } from '../../lib/auth';
+
 /**
  * api/sessions/index.ts
  * GET /api/sessions - List teacher's sessions
  * POST /api/sessions - Create new session
  */
 
-import { NextRequest } from 'next/server';
-import { prisma } from '../../lib/db';
-import { requireTeacher, json, badRequest } from '../../lib/auth';
-
-function generateSessionCode() {
-  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-  let code = '';
-  for (let i = 0; i < 6; i++) {
-    code += chars.charAt(Math.floor(Math.random() * chars.length));
-  }
-  return code;
-}
-
-// GET - List sessions
 export async function GET(request: NextRequest) {
-  const user = requireTeacher(request);
-  if (!user) {
-    return new Response(JSON.stringify({ error: 'Unauthorized' }), {
-      status: 401,
-      headers: { 'Content-Type': 'application/json' }
-    });
-  }
-
   try {
+    const user = await auth();
+    if (!user) return json({ error: 'Unauthorized' }, 401);
+    if (!['teacher', 'admin'].includes(user.role)) return json({ error: 'Forbidden' }, 403);
+
     const sessions = await prisma.classSession.findMany({
-      where: { teacherId: user.id },
+      where: {
+        teacherId: user.id,
+        expiry: { gt: new Date() },
+      },
       orderBy: { createdAt: 'desc' },
     });
 
-    const subjectIds = [...new Set(sessions.map(s => s.subjectId).filter(Boolean))];
-    const classIds = [...new Set(sessions.map(s => s.classId).filter(Boolean))];
-
-    const [subjects, classes, quizzes] = await Promise.all([
-      prisma.subject.findMany({ where: { id: { $in: subjectIds } } }),
-      prisma.class.findMany({ where: { id: { $in: classIds } } }),
-      prisma.quiz.findMany({ where: { sessionId: { $in: sessions.map(s => s.id) } } }),
-    ]);
-
-    const subjectMap = new Map(subjects.map(s => [s.id, s]));
-    const classMap = new Map(classes.map(c => [c.id, c]));
-    const quizMap = new Map(quizzes.map(q => [q.sessionId, q]));
-
-    return json(sessions.map(s => {
-      const quiz = quizMap.get(s.id);
-      return {
-        id: s.id,
-        code: s.code,
-        classId: s.classId,
-        class: classMap.get(s.classId) || null,
-        subjectId: s.subjectId,
-        subject: subjectMap.get(s.subjectId) || null,
-        expiry: s.expiry instanceof Date ? s.expiry.getTime() : new Date(s.expiry).getTime(),
-        quizPublished: s.quizPublished,
-        hasNotes: !!quiz && quiz.questionsJson,
-        sessionStatus: s.sessionStatus,
-        endedAt: (s as any).endedAt || null,
-        timetableEntryId: (s as any).timetableEntryId || null,
-        createdAt: s.createdAt instanceof Date ? s.createdAt.getTime() : new Date(s.createdAt).getTime(),
-      };
-    }));
+    return json(sessions);
   } catch (error) {
-    console.error('List sessions error:', error);
-    return json({ error: 'Failed to list sessions' }, 500);
+    console.error('Fetch sessions error:', error);
+    return json({ error: 'Internal server error' }, 500);
   }
 }
 
-// POST - Create session
 export async function POST(request: NextRequest) {
-  const user = requireTeacher(request);
-  if (!user) {
-    return new Response(JSON.stringify({ error: 'Unauthorized' }), {
-      status: 401,
-      headers: { 'Content-Type': 'application/json' }
-    });
-  }
-
   try {
-    const { classId, subjectId, durationMinutes = 60 } = await request.json();
+    const user = await auth();
+    if (!user) return json({ error: 'Unauthorized' }, 401);
+    if (!['teacher', 'admin'].includes(user.role)) return json({ error: 'Forbidden' }, 403);
 
-    if (!subjectId) {
-      return badRequest('subjectId is required');
-    }
+    const { classId, subjectId, durationMinutes = 60, timetableEntryId } = await request.json();
 
-    const id = `sess_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-    const code = generateSessionCode();
+    if (!subjectId) return badRequest('subjectId is required');
+
+    const code = Math.random().toString(36).substring(2, 8).toUpperCase();
     const expiry = new Date(Date.now() + durationMinutes * 60 * 1000);
 
     const session = await prisma.classSession.create({
       data: {
-        id,
         code,
         teacherId: user.id,
         classId: classId || null,
         subjectId,
         expiry,
+        timetableEntryId: timetableEntryId || null,
+        odId: `sess_${Date.now()}`,
       },
     });
 
-    return json({
-      ok: true,
-      session: {
-        id: session.id,
-        code: session.code,
-        classId: session.classId,
-        subjectId: session.subjectId,
-        expiry: session.expiry instanceof Date ? session.expiry.getTime() : new Date(session.expiry).getTime(),
-        quizPublished: false,
-        hasNotes: false,
-      },
-    });
+    return json({ ok: true, session });
   } catch (error) {
     console.error('Create session error:', error);
-    return json({ error: 'Failed to create session' }, 500);
+    return json({ error: 'Internal server error' }, 500);
   }
 }

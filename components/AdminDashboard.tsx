@@ -35,7 +35,24 @@ const THEMES = [
   { name: 'sunset', color: 'bg-orange-600', gradient: 'from-orange-500 to-red-600' },
 ];
 
-const THEME_COLORS: Record<string, Record<string, string>> = {
+interface ThemeColors {
+  primary: string;
+  hover: string;
+  text: string;
+  gradient: string;
+  card: string;
+  border: string;
+  light: string;
+  accent: string;
+  shadow: string;
+  badge: string;
+  lightText: string;
+  lightHover: string;
+  focus: string;
+  lightBg?: string;
+}
+
+const THEME_COLORS: Record<string, ThemeColors> = {
   indigo: {
     primary: 'bg-indigo-600',
     hover: 'hover:bg-indigo-700',
@@ -49,7 +66,8 @@ const THEME_COLORS: Record<string, Record<string, string>> = {
     badge: 'bg-indigo-100 text-indigo-800',
     lightText: 'text-indigo-700',
     lightHover: 'hover:bg-indigo-100',
-    focus: 'focus:ring-indigo-500 focus:border-indigo-500'
+    focus: 'focus:ring-indigo-500 focus:border-indigo-500',
+    lightBg: 'bg-indigo-50'
   },
   teal: {
     primary: 'bg-teal-600',
@@ -64,7 +82,8 @@ const THEME_COLORS: Record<string, Record<string, string>> = {
     badge: 'bg-teal-100 text-teal-800',
     lightText: 'text-teal-700',
     lightHover: 'hover:bg-teal-100',
-    focus: 'focus:ring-teal-500 focus:border-teal-500'
+    focus: 'focus:ring-teal-500 focus:border-teal-500',
+    lightBg: 'bg-teal-50'
   },
   crimson: {
     primary: 'bg-red-600',
@@ -79,7 +98,8 @@ const THEME_COLORS: Record<string, Record<string, string>> = {
     badge: 'bg-red-100 text-red-800',
     lightText: 'text-red-700',
     lightHover: 'hover:bg-red-100',
-    focus: 'focus:ring-red-500 focus:border-red-500'
+    focus: 'focus:ring-red-500 focus:border-red-500',
+    lightBg: 'bg-red-50'
   },
   purple: {
     primary: 'bg-purple-600',
@@ -94,7 +114,8 @@ const THEME_COLORS: Record<string, Record<string, string>> = {
     badge: 'bg-purple-100 text-purple-800',
     lightText: 'text-purple-700',
     lightHover: 'hover:bg-purple-100',
-    focus: 'focus:ring-purple-500 focus:border-purple-500'
+    focus: 'focus:ring-purple-500 focus:border-purple-500',
+    lightBg: 'bg-purple-50'
   },
   ocean: {
     primary: 'bg-cyan-600',
@@ -109,7 +130,8 @@ const THEME_COLORS: Record<string, Record<string, string>> = {
     badge: 'bg-cyan-100 text-cyan-800',
     lightText: 'text-cyan-700',
     lightHover: 'hover:bg-cyan-100',
-    focus: 'focus:ring-cyan-500 focus:border-cyan-500'
+    focus: 'focus:ring-cyan-500 focus:border-cyan-500',
+    lightBg: 'bg-cyan-50'
   },
   sunset: {
     primary: 'bg-orange-600',
@@ -124,7 +146,8 @@ const THEME_COLORS: Record<string, Record<string, string>> = {
     badge: 'bg-orange-100 text-orange-800',
     lightText: 'text-orange-700',
     lightHover: 'hover:bg-orange-100',
-    focus: 'focus:ring-orange-500 focus:border-orange-500'
+    focus: 'focus:ring-orange-500 focus:border-orange-500',
+    lightBg: 'bg-orange-50'
   },
 };
 

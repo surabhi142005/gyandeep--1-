@@ -1,4 +1,3 @@
-
 import type { Coordinates } from '../types';
 
 export const getCurrentPosition = (): Promise<Coordinates> => {

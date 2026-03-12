@@ -383,14 +383,20 @@ export const deleteNotification = async (id: string) => {
   return apiRequest(`/api/notifications/${id}`, { method: 'DELETE' });
 };
 
-// ─── Integrations (stubs) ───────────────────────────────────────────────────
+// ─── Integrations ───────────────────────────────────────────────────
 
 export const syncCalendar = async (title: string, start: string, end: string) => {
-  return { ok: true, message: 'Calendar sync is not yet available.' };
+  return apiRequest('/api/integrations/calendar/sync', {
+    method: 'POST',
+    body: JSON.stringify({ title, start, end }),
+  });
 };
 
 export const uploadToDrive = async (name: string, url: string) => {
-  return { ok: true, message: 'Drive upload is not yet available.' };
+  return apiRequest('/api/integrations/drive/upload', {
+    method: 'POST',
+    body: JSON.stringify({ name, url }),
+  });
 };
 
 // ─── Analytics ───────────────────────────────────────────────────────────────

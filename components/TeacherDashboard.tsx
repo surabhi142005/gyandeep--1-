@@ -16,10 +16,24 @@ import GradeBook from './GradeBook';
 import TicketPanel from './TicketPanel';
 import { useTeacherSession } from '../hooks/useTeacherSession';
 import { exportToCSV } from '../services/exportService';
+import { websocketService } from '../services/websocketService';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
 
 const CODE_DURATION = 10 * 60; // 10 minutes in seconds
 
-const THEME_COLORS: Record<string, Record<string, string>> = {
+interface ThemeColors {
+  primary: string;
+  hover: string;
+  text: string;
+  ring: string;
+  border: string;
+  lightBg?: string;
+  lightText?: string;
+  lightHover?: string;
+  accent?: string;
+}
+
+const THEME_COLORS: Record<string, ThemeColors> = {
   indigo: { primary: 'bg-indigo-600', hover: 'hover:bg-indigo-700', text: 'text-indigo-800', ring: 'focus:ring-indigo-500', border: 'focus:border-indigo-500', lightBg: 'bg-indigo-50', lightText: 'text-indigo-700', lightHover: 'hover:bg-indigo-100', accent: 'accent-indigo-600' },
   teal: { primary: 'bg-teal-600', hover: 'hover:bg-teal-700', text: 'text-teal-800', ring: 'focus:ring-teal-500', border: 'focus:border-teal-500', lightBg: 'bg-teal-50', lightText: 'text-teal-700', lightHover: 'hover:bg-teal-100', accent: 'accent-teal-600' },
   crimson: { primary: 'bg-red-600', hover: 'hover:bg-red-700', text: 'text-red-800', ring: 'focus:ring-red-500', border: 'focus:border-red-500', lightBg: 'bg-red-50', lightText: 'text-red-700', lightHover: 'hover:bg-red-100', accent: 'accent-red-600' },
@@ -80,6 +94,42 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ teacher, students, 
     English: ['grammar', 'vocabulary', 'reading', 'writing', 'comprehension']
   };
   const tagOptions = useMemo(() => (tagPresets[selectedSubject] || fallbackPresets[selectedSubject] || ['revision', 'exam', 'homework', 'unit']), [selectedSubject, tagPresets]);
+
+  const [showInsights, setShowInsights] = useState(false);
+  const [sessionInsights, setSessionInsights] = useState<any>(null);
+  const [loadingInsights, setLoadingInsights] = useState(false);
+  const [newSubmissionsCount, setNewSubmissionsCount] = useState(0);
+
+  // REAL-TIME CONNECTION for Insights
+  useEffect(() => {
+    const unsub = websocketService.on('quiz-submission', (data) => {
+      if (data.sessionId === classSession.id) {
+        setNewSubmissionsCount(prev => prev + 1);
+        // If insights modal is already open, refresh it automatically
+        if (showInsights) {
+          handleFetchInsights(classSession.id);
+          setNewSubmissionsCount(0);
+        }
+      }
+    });
+    return () => unsub();
+  }, [classSession.id, showInsights]);
+
+  const handleFetchInsights = async (sessionId: string) => {
+    setLoadingInsights(true);
+    try {
+      const resp = await fetch(`/api/sessions/${sessionId}/insights`, {
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+      });
+      const data = await resp.json();
+      setSessionInsights(data);
+      setShowInsights(true);
+    } catch (err) {
+      setError('Failed to fetch session insights');
+    } finally {
+      setLoadingInsights(false);
+    }
+  };
 
   const colors = useMemo(() => THEME_COLORS[theme] || THEME_COLORS.indigo, [theme]);
 
@@ -525,6 +575,15 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ teacher, students, 
               >
                 {isGeneratingCode ? <Spinner /> : classSession.code ? 'End & Start New Session' : 'Generate Session Code'}
               </button>
+              {classSession.code && (
+                <button
+                  onClick={() => handleFetchInsights(classSession.id)}
+                  disabled={loadingInsights}
+                  className={`w-full mt-2 text-sm font-semibold py-2 px-4 rounded-lg transition-colors flex items-center justify-center ${colors.lightBg} ${colors.lightText} ${colors.lightHover}`}
+                >
+                  {loadingInsights ? <Spinner size="w-4 h-4" /> : '✨ View AI Session Insights'}
+                </button>
+              )}
               {!canGenerateSession && (
                 <p className="text-red-600 text-center text-xs mt-2">Select subject and set location to generate code.</p>
               )}
@@ -874,6 +933,81 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ teacher, students, 
           title={teacher.faceImage ? "Update Face ID" : "Register Face ID"}
           buttonText="Capture & Save"
         />
+      )}
+
+      {showInsights && sessionInsights && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col animate-scale-up">
+            <div className={`p-6 border-b flex justify-between items-center ${colors.primary} text-white`}>
+              <div>
+                <h2 className="text-xl font-bold">Session Insights</h2>
+                <p className="text-white/80 text-xs uppercase tracking-wider font-semibold">{classSession.subject}</p>
+              </div>
+              <button onClick={() => setShowInsights(false)} className="text-white/80 hover:text-white text-2xl transition-colors">&times;</button>
+            </div>
+            <div className="p-6 overflow-y-auto space-y-6">
+              {sessionInsights.stats ? (
+                <div className="grid grid-cols-3 gap-4">
+                  <div className="bg-blue-50 p-4 rounded-xl text-center border border-blue-100 shadow-sm">
+                    <p className="text-[10px] text-blue-600 font-bold uppercase tracking-tight">Avg Score</p>
+                    <p className="text-2xl font-black text-blue-800">{sessionInsights.stats.avgScore}%</p>
+                  </div>
+                  <div className="bg-purple-50 p-4 rounded-xl text-center border border-purple-100 shadow-sm">
+                    <p className="text-[10px] text-purple-600 font-bold uppercase tracking-tight">Submissions</p>
+                    <p className="text-2xl font-black text-purple-800">{sessionInsights.stats.totalStudents}</p>
+                  </div>
+                  <div className={`p-4 rounded-xl text-center border shadow-sm ${sessionInsights.stats.lowPerformers > 0 ? 'bg-red-50 border-red-100' : 'bg-green-50 border-green-100'}`}>
+                    <p className={`text-[10px] font-bold uppercase tracking-tight ${sessionInsights.stats.lowPerformers > 0 ? 'text-red-600' : 'text-green-600'}`}>Under 50%</p>
+                    <p className={`text-2xl font-black ${sessionInsights.stats.lowPerformers > 0 ? 'text-red-800' : 'text-green-800'}`}>{sessionInsights.stats.lowPerformers}</p>
+                  </div>
+                </div>
+              ) : (
+                <div className="bg-amber-50 text-amber-800 p-4 rounded-lg text-sm text-center">
+                  No submissions yet. Insights will appear once students complete the quiz.
+                </div>
+              )}
+
+              {sessionInsights.aiInsights && (
+                <div className="bg-gray-50 p-6 rounded-2xl border border-gray-200 shadow-inner relative overflow-hidden">
+                  <div className={`absolute top-0 left-0 w-1 h-full ${colors.primary}`}></div>
+                  <h3 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
+                    <span className="text-2xl">🤖</span> AI Analysis & Recommendations
+                  </h3>
+                  <div className="text-gray-700 leading-relaxed whitespace-pre-wrap text-sm">
+                    {sessionInsights.aiInsights}
+                  </div>
+                </div>
+              )}
+
+              {sessionInsights.stats?.questionStats && (
+                <div className="space-y-4">
+                  <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest border-b pb-2">Question Difficulty Map</h3>
+                  <div className="space-y-3">
+                    {sessionInsights.stats.questionStats.map((q: any, i: number) => (
+                      <div key={i} className="group">
+                        <div className="flex justify-between items-center mb-1">
+                          <span className="text-xs font-bold text-gray-500">Q{i+1}: {q.question.slice(0, 40)}...</span>
+                          <span className="text-xs font-black text-gray-700">{q.correctRate}% Correct</span>
+                        </div>
+                        <div className="w-full bg-gray-100 h-2 rounded-full overflow-hidden shadow-inner">
+                          <div 
+                            className={`h-full transition-all duration-1000 ease-out ${q.correctRate > 70 ? 'bg-green-500' : q.correctRate > 40 ? 'bg-yellow-500' : 'bg-red-500'}`} 
+                            style={{ width: `${q.correctRate}%` }}
+                          />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+            <div className="p-4 border-t bg-gray-50 flex justify-end">
+              <button onClick={() => setShowInsights(false)} className={`px-8 py-2.5 rounded-xl font-bold text-white transition-all shadow-lg active:scale-95 ${colors.primary} ${colors.hover}`}>
+                Close Insights
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </>
   );

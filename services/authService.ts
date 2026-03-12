@@ -126,38 +126,23 @@ export async function registerFace(userId: string, imageDataUrl: string): Promis
  */
 export async function verifyFace(
   capturedImageDataUrl: string,
-  storedImageDataUrl?: string | null,
+  _storedImageDataUrl?: string | null,
 ): Promise<{ authenticated: boolean; confidence?: number; method?: string }> {
-  // Try the Python face-recognition service first
-  try {
-    const token = getStoredToken();
-    const res = await fetch(`${API_BASE}/api/auth/face`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      },
-      body: JSON.stringify({ image: capturedImageDataUrl }),
-    });
-    if (res.ok) {
-      const data = await res.json();
-      return { authenticated: data.authenticated ?? data.ok ?? false, confidence: data.confidence, method: 'python' };
-    }
-  } catch {
-    // Python service unavailable — use local fallback
+  const token = getStoredToken();
+  const res = await fetch(`${API_BASE}/api/auth/face`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: JSON.stringify({ image: capturedImageDataUrl }),
+  });
+  if (!res.ok) {
+    throw new Error('Face service unavailable. Please try again or use password login.');
   }
-
-  // Local pixel-diff fallback: compare raw canvas pixel data
-  if (!storedImageDataUrl) {
-    return { authenticated: false, method: 'no-reference' };
-  }
-
-  try {
-    const similarity = await compareImages(capturedImageDataUrl, storedImageDataUrl);
-    return { authenticated: similarity >= 0.72, confidence: similarity, method: 'pixel-diff' };
-  } catch {
-    return { authenticated: false, method: 'error' };
-  }
+  const data = await res.json();
+  const authenticated = data.authenticated ?? data.ok ?? false;
+  return { authenticated, confidence: data.confidence, method: 'python' };
 }
 
 /**

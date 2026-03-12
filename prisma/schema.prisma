@@ -60,6 +60,14 @@ model User {
   faceImage        String?  @map("face_image")
   active           Boolean  @default(true)
   emailVerified    Boolean  @default(false) @map("email_verified")
+  
+  // Gamification
+  xp               Int      @default(0)
+  coins            Int      @default(0)
+  level            Int      @default(1)
+  streak           Int      @default(0)
+  lastActive       DateTime? @map("last_active")
+
   preferences      Json?
   history          Json?
   assignedSubjects Json?    @map("assigned_subjects")
@@ -96,8 +104,25 @@ model User {
   userSubjects     UserSubject[]      @relation("UserExpertise")
   notifications    Notification[]     @relation("UserNotifications")
   announcements    Announcement[]     @relation("AnnouncementAuthor")
+  activities       ActivityLog[]      @relation("UserActivities")
 
   @@map("users")
+}
+
+// ==================== GAMIFICATION & ACTIVITY ====================
+
+model ActivityLog {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId    String   @map("user_id") @db.ObjectId
+  type      String   // "QUIZ_COMPLETED", "ATTENDANCE_MARKED", "STREAK_BONUS", etc.
+  xpEarned  Int      @map("xp_earned")
+  details   String?
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User @relation("UserActivities", fields: [userId], references: [id])
+
+  @@index([userId])
+  @@map("activity_logs")
 }
 
 // ==================== JUNCTION TABLES ====================

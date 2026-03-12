@@ -1,10 +1,54 @@
 /**
  * lib/db.ts
  * MongoDB Atlas database client for Vercel serverless functions
+ * Using a singleton pattern to reuse connections across function invocations.
  */
 
-import { connectToDatabase, COLLECTIONS } from '../server/db/mongoAtlas';
-import { ObjectId } from 'mongodb';
+import { MongoClient, ObjectId, Db } from 'mongodb';
+
+const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/gyandeep';
+const MONGODB_DB = process.env.MONGODB_DB || 'gyandeep';
+
+let cachedClient: MongoClient | null = null;
+let cachedDb: Db | null = null;
+
+export const COLLECTIONS = {
+  USERS: 'users',
+  CLASSES: 'classes',
+  SUBJECTS: 'subjects',
+  CLASS_SESSIONS: 'class_sessions',
+  SESSION_NOTES: 'session_notes',
+  CENTRALIZED_NOTES: 'centralized_notes',
+  QUIZZES: 'quizzes',
+  QUIZ_QUESTIONS: 'quiz_questions',
+  QUIZ_ATTEMPTS: 'quiz_attempts',
+  ATTEMPT_ANSWERS: 'attempt_answers',
+  ATTENDANCE: 'attendance',
+  GRADES: 'grades',
+  TICKETS: 'tickets',
+  TICKET_REPLIES: 'ticket_replies',
+  NOTIFICATIONS: 'notifications',
+  ANNOUNCEMENTS: 'announcements',
+  TIMETABLE: 'timetable',
+  CLASS_SUBJECTS: 'class_subjects',
+  USER_SUBJECTS: 'user_subjects',
+  ACTIVITY_LOGS: 'activity_logs',
+};
+
+export async function connectToDatabase(): Promise<Db> {
+  if (cachedDb) {
+    return cachedDb;
+  }
+
+  if (!cachedClient) {
+    cachedClient = new MongoClient(MONGODB_URI);
+    await cachedClient.connect();
+  }
+
+  const db = cachedClient.db(MONGODB_DB);
+  cachedDb = db;
+  return db;
+}
 
 function toMongoId(id: string | undefined) {
   if (!id) return undefined;
@@ -40,7 +84,7 @@ export const prisma = {
       const users = await query.toArray();
       return users.map((u: any) => ({ ...u, id: u._id?.toString() || u.id }));
     },
-    findUnique: async ({ where }: { where: any }) => {
+    findUnique: async ({ where, select }: { where: any; select?: any }) => {
       const db = await connectToDatabase();
       const query: any = { ...where };
       if (query.id) {
@@ -49,7 +93,16 @@ export const prisma = {
       }
       const user = await db.collection(COLLECTIONS.USERS).findOne(query);
       if (!user) return null;
-      return { ...user, id: user._id?.toString() || user.id };
+      
+      const result = { ...user, id: user._id?.toString() || user.id };
+      if (select) {
+        const selected: any = {};
+        for (const key of Object.keys(select)) {
+          selected[key] = result[key];
+        }
+        return selected;
+      }
+      return result;
     },
     create: async ({ data }: { data: any }) => {
       const db = await connectToDatabase();
@@ -283,6 +336,11 @@ export const prisma = {
       await db.collection(COLLECTIONS.SESSION_NOTES).insertOne(doc);
       return { id: doc._id.toString(), ...data };
     },
+    updateMany: async ({ where, data }: { where: any; data: any }) => {
+      const db = await connectToDatabase();
+      const result = await db.collection(COLLECTIONS.SESSION_NOTES).updateMany(where, { $set: data });
+      return { count: result.modifiedCount };
+    },
     deleteMany: async ({ where }: { where: any }) => {
       const db = await connectToDatabase();
       const result = await db.collection(COLLECTIONS.SESSION_NOTES).deleteMany(where);
@@ -466,6 +524,16 @@ export const prisma = {
       await db.collection(COLLECTIONS.ATTENDANCE).updateOne(query, { $set: data });
       return data;
     },
+    upsert: async ({ where, update, create }: { where: any; update: any; create: any }) => {
+      const db = await connectToDatabase();
+      // Special handling for the unique compound index sessionId_studentId
+      const result = await db.collection(COLLECTIONS.ATTENDANCE).findOneAndUpdate(
+        where,
+        { $set: update, $setOnInsert: { ...create, _id: new ObjectId() } },
+        { upsert: true, returnDocument: 'after' }
+      );
+      return result;
+    }
   },
 
   ticket: {
@@ -598,80 +666,16 @@ export const prisma = {
     },
   },
 
-  attemptAnswer: {
-    findMany: async ({ where = {} }: { where?: any } = {}) => {
-      const db = await connectToDatabase();
-      const answers = await db.collection(COLLECTIONS.ATTEMPT_ANSWERS).find(where).toArray();
-      return answers.map((a: any) => ({ ...a, id: a._id?.toString() || a.id }));
-    },
+  activityLog: {
     create: async ({ data }: { data: any }) => {
       const db = await connectToDatabase();
       const doc = {
         ...data,
         _id: new ObjectId(),
+        createdAt: new Date(),
       };
-      await db.collection(COLLECTIONS.ATTEMPT_ANSWERS).insertOne(doc);
+      await db.collection(COLLECTIONS.ACTIVITY_LOGS).insertOne(doc);
       return { id: doc._id.toString(), ...data };
-    },
-    createMany: async ({ data }: { data: any[] }) => {
-      const db = await connectToDatabase();
-      const docs = data.map(d => ({
-        ...d,
-        _id: new ObjectId(),
-      }));
-      await db.collection(COLLECTIONS.ATTEMPT_ANSWERS).insertMany(docs);
-      return { count: docs.length };
-    },
-  },
-
-  classSubject: {
-    findMany: async ({ where = {} }: { where?: any } = {}) => {
-      const db = await connectToDatabase();
-      const records = await db.collection(COLLECTIONS.CLASS_SUBJECTS).find(where).toArray();
-      return records.map((r: any) => ({ ...r, id: r._id?.toString() || r.id }));
-    },
-    create: async ({ data }: { data: any }) => {
-      const db = await connectToDatabase();
-      const doc = {
-        ...data,
-        _id: new ObjectId(),
-      };
-      await db.collection(COLLECTIONS.CLASS_SUBJECTS).insertOne(doc);
-      return { id: doc._id.toString(), ...data };
-    },
-    delete: async ({ where }: { where: any }) => {
-      const db = await connectToDatabase();
-      await db.collection(COLLECTIONS.CLASS_SUBJECTS).deleteOne(where);
-      return { success: true };
-    },
-  },
-
-  userSubject: {
-    findMany: async ({ where = {} }: { where?: any } = {}) => {
-      const db = await connectToDatabase();
-      const records = await db.collection(COLLECTIONS.USER_SUBJECTS).find(where).toArray();
-      return records.map((r: any) => ({ ...r, id: r._id?.toString() || r.id }));
-    },
-    create: async ({ data }: { data: any }) => {
-      const db = await connectToDatabase();
-      const doc = {
-        ...data,
-        certified: data.certified ?? false,
-        assignedDate: new Date(),
-        _id: new ObjectId(),
-      };
-      await db.collection(COLLECTIONS.USER_SUBJECTS).insertOne(doc);
-      return { id: doc._id.toString(), ...data };
-    },
-    update: async ({ where, data }: { where: any; data: any }) => {
-      const db = await connectToDatabase();
-      await db.collection(COLLECTIONS.USER_SUBJECTS).updateOne(where, { $set: data });
-      return data;
-    },
-    delete: async ({ where }: { where: any }) => {
-      const db = await connectToDatabase();
-      await db.collection(COLLECTIONS.USER_SUBJECTS).deleteOne(where);
-      return { success: true };
     },
   },
 
@@ -782,7 +786,6 @@ export async function getSessionById(id: string) {
 }
 
 export async function getQuizBySession(sessionId: string) {
-  // Changed from findUnique to findMany since 1 session can have multiple quizzes (1:N)
   const quizzes = await prisma.quiz.findMany({ where: { sessionId } });
   if (!quizzes.length) return [];
 

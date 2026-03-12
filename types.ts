@@ -27,6 +27,14 @@ export interface User {
   active?: boolean; // false = deactivated by admin
   preferences?: UserPreferences;
   history?: UserHistory[];
+  
+  // Gamification (Base fields for all roles)
+  xp?: number;
+  coins?: number;
+  level?: number;
+  streak?: number;
+  lastActive?: string;
+  activities?: ActivityLog[];
 }
 
 export interface UserPreferences {
@@ -48,12 +56,18 @@ export interface Student extends User {
   role: UserRole.STUDENT;
   performance: PerformanceData[];
   classId?: string;
-  xp?: number;
   badges?: string[];
-  coins?: number;
-  level?: number;
   totalQuizzes?: number;
   longestStreak?: number;
+}
+
+export interface ActivityLog {
+  id: string;
+  userId: string;
+  type: string;
+  xpEarned: number;
+  details?: string;
+  createdAt: string;
 }
 
 export interface Teacher extends User {
@@ -94,7 +108,9 @@ export interface Coordinates {
 }
 
 export interface ClassSession {
+  id: string;
   code: string | null;
+  classId?: string | null;
   expiry: number | null; // Using timestamp for easier comparison
   endedAt?: number | null;
   timetableEntryId?: string | null;

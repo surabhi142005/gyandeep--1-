@@ -33,6 +33,7 @@ function saveHistoricalRecords(userId: string, records: HistoricalSessionRecord[
 export function useClassSession({ allUsers, allSubjects, currentUserId }: UseClassSessionOptions) {
   const [attendance, setAttendance] = useState<AttendanceRecord[]>([]);
   const [classSession, setClassSession] = useState<ClassSession>({
+    id: '',
     code: null,
     expiry: null,
     notes: null,
@@ -72,6 +73,7 @@ export function useClassSession({ allUsers, allSubjects, currentUserId }: UseCla
       allSubjects.find(s => teacher.assignedSubjects?.includes(s.id))?.name ||
       allSubjects[0]?.name || 'Math';
     setClassSession({
+      id: '',
       code: null, expiry: null, notes: null, quiz: null,
       quizPublished: false, subject: defaultSubject,
       teacherLocation: null, attendanceRadius: 100,
@@ -88,6 +90,7 @@ export function useClassSession({ allUsers, allSubjects, currentUserId }: UseCla
 
   const resetSession = () => {
     setClassSession({
+      id: '',
       code: null, expiry: null, notes: null, quiz: null,
       quizPublished: false,
       subject: allSubjects[0]?.name || 'Math',

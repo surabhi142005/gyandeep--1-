@@ -1,80 +1,71 @@
+import { NextRequest } from 'next/server';
+import { prisma } from '../../../lib/db';
+import { json, badRequest, auth } from '../../../lib/auth';
+
 /**
  * api/sessions/[id]/index.ts
  * GET /api/sessions/:id - Get session details
  */
 
-import { NextRequest } from 'next/server';
-import { prisma } from '../../lib/db';
-import { requireAuth, requireTeacher, json, notFound, unauthorized } from '../../lib/auth';
-
-export async function GET(
-  request: NextRequest,
-  { params }: { params: { id: string } }
-) {
-  const user = requireAuth(request);
-  if (!user) return unauthorized();
-
+export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
   try {
+    const user = await auth();
+    if (!user) return json({ error: 'Unauthorized' }, 401);
+
+    const sessionId = params.id;
+
     const session = await prisma.classSession.findUnique({
-      where: { id: params.id },
+      where: { id: sessionId },
+      include: {
+        subject: { select: { name: true } },
+        class: { select: { name: true } },
+        teacher: { select: { name: true } },
+        notes: { where: { deletedAt: null } },
+        quizzes: true,
+      },
     });
 
-    if (!session) {
-      return notFound('Session not found');
-    }
+    if (!session) return json({ error: 'Session not found' }, 404);
 
-    // Get related data
-    const [subject, classData, sessionNotes, quiz] = await Promise.all([
-      session.subjectId ? prisma.subject.findMany({ where: { id: session.subjectId } }).then(r => r[0] || null) : null,
-      session.classId ? prisma.class.findMany({ where: { id: session.classId } }).then(r => r[0] || null) : null,
-      prisma.sessionNote.findMany({ where: { sessionId: params.id } }),
-      prisma.quiz.findMany({ where: { sessionId: params.id }, orderBy: { createdAt: 'desc' } }).then(r => r[0] || null),
-    ]);
-
-    // Check expiry
-    if (new Date() > session.expiry) {
-      return json({ error: 'Session has expired' }, 410);
-    }
-
-    // For students - only return published quiz
-    if (user.role === 'student') {
-      if (!session.quizPublished) {
-        return json({ error: 'Quiz not yet published' }, 403);
-      }
-
-      const questions = quiz ? await prisma.quizQuestion.findMany({ where: { quizId: quiz.id }, orderBy: { orderIndex: 'asc' } }) : [];
-
-      return json({
-        id: session.id,
-        code: session.code,
-        classId: session.classId,
-        subjectId: session.subjectId,
-        quizPublished: session.quizPublished,
-        quizQuestions: questions,
-      });
-    }
-
-    // For teachers - return full info
-    const activeNote = sessionNotes.find(n => !n.deletedAt);
-
-    return json({
-      id: session.id,
-      code: session.code,
-      classId: session.classId,
-      subjectId: session.subjectId,
-      subject,
-      class: classData,
-      expiry: session.expiry instanceof Date ? session.expiry.getTime() : new Date(session.expiry).getTime(),
-      quizPublished: session.quizPublished,
-      hasNotes: !!activeNote,
-      notesPreview: activeNote?.extractedText?.slice(0, 500) || null,
-      quizQuestions: quiz?.questionsJson ? JSON.parse(quiz.questionsJson) : null,
-      quizId: quiz?.id || null,
-      endedAt: (session as any).endedAt || null,
-      timetableEntryId: (session as any).timetableEntryId || null,
-    });
+    return json(session);
   } catch (error) {
-    console.error('Get session error:', error);
-    return json({ error: 'Failed to get session' }, 500);
+    console.error('Fetch session error:', error);
+    return json({ error: 'Internal server error' }, 500);
+  }
+}
+
+/**
+ * POST /api/sessions/:id/end
+ */
+export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
+  try {
+    const user = await auth();
+    if (!user) return json({ error: 'Unauthorized' }, 401);
+    if (!['teacher', 'admin'].includes(user.role)) return json({ error: 'Forbidden' }, 403);
+
+    const sessionId = params.id;
+
+    const session = await prisma.classSession.update({
+      where: { id: sessionId },
+      data: {
+        endedAt: new Date(),
+        expiry: new Date(), // Expire the code too
+      },
+    });
+
+    // Delete session notes upon ending (as per architecture)
+    await prisma.sessionNote.updateMany({
+      where: { sessionId },
+      data: {
+        deletedAt: new Date(),
+        content: "[DELETED]",
+        status: "deleted"
+      },
+    });
+
+    return json({ ok: true, session });
+  } catch (error) {
+    console.error('End session error:', error);
+    return json({ error: 'Internal server error' }, 500);
   }
 }
