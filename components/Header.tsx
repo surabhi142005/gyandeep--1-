@@ -16,10 +16,11 @@ interface HeaderProps {
 }
 
 const THEMES = [
-  { id: 'indigo', label: 'Indigo', color: 'bg-indigo-500' },
-  { id: 'teal', label: 'Teal', color: 'bg-teal-500' },
-  { id: 'crimson', label: 'Crimson', color: 'bg-red-500' },
-  { id: 'purple', label: 'Purple', color: 'bg-purple-500' },
+  { id: 'cosmic-purple', label: 'Cosmic', color: 'bg-[#6C63FF]' },
+  { id: 'ocean-breeze', label: 'Ocean', color: 'bg-[#0EA5E9]' },
+  { id: 'forest-gold', label: 'Forest', color: 'bg-[#059669]' },
+  { id: 'midnight-ember', label: 'Midnight', color: 'bg-[#F97316]' },
+  { id: 'rose-quartz', label: 'Rose', color: 'bg-[#EC4899]' },
 ] as const
 
 const LOCALES = [

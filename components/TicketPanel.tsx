@@ -22,10 +22,13 @@ type Ticket = {
 interface TicketPanelProps {
   userId: string;
   role: 'student' | 'teacher' | 'admin';
-  colors: { primary: string; hover: string; lightBg?: string; text?: string };
+  colors?: { primary: string; hover: string; lightBg?: string; text?: string };
 }
 
+const DEFAULT_COLORS = { primary: 'bg-indigo-600', hover: 'hover:bg-indigo-700', lightBg: 'bg-indigo-50', text: 'text-indigo-600' };
+
 const TicketPanel: React.FC<TicketPanelProps> = ({ userId, role, colors }) => {
+  const activeColors = colors || DEFAULT_COLORS;
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [unassigned, setUnassigned] = useState<Ticket[]>([]);
   const [subject, setSubject] = useState('');
@@ -140,7 +143,7 @@ const TicketPanel: React.FC<TicketPanelProps> = ({ userId, role, colors }) => {
           </select>
           <button
             onClick={handleCreate}
-            className={`ml-auto text-white px-4 py-2 rounded ${colors.primary} ${colors.hover}`}
+            className={`ml-auto text-white px-4 py-2 rounded ${activeColors.primary} ${activeColors.hover}`}
             disabled={loading}
           >
             Submit Ticket

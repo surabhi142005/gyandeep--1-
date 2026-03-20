@@ -4,8 +4,8 @@ interface WebcamCaptureProps {
   onCapture: (imageDataUrl: string) => void;
   onClose: () => void;
   theme: string;
-  title: string;
-  buttonText: string;
+  title?: string;
+  buttonText?: string;
   liveness?: boolean;
 }
 
@@ -16,7 +16,7 @@ const THEME_COLORS: Record<string, Record<string, string>> = {
   purple: { primary: 'bg-purple-600', hover: 'hover:bg-purple-700' },
 };
 
-const WebcamCapture: React.FC<WebcamCaptureProps> = ({ onCapture, onClose, theme, title, buttonText, liveness = false }) => {
+const WebcamCapture: React.FC<WebcamCaptureProps> = ({ onCapture, onClose, theme, title = 'Capture', buttonText = 'Capture', liveness = false }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [error, setError] = useState<string | null>(null);

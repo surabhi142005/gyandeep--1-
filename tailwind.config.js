@@ -13,6 +13,11 @@ export default {
         sans: ['Inter', 'system-ui', 'sans-serif'],
       },
       colors: {
+        primary: 'var(--color-primary)',
+        secondary: 'var(--color-secondary)',
+        'app-bg': 'var(--color-bg)',
+        'app-surface': 'var(--color-surface)',
+        'app-text': 'var(--color-text)',
         brand: {
           50: 'var(--color-primary-50)',
           100: 'var(--color-primary-100)',
@@ -30,6 +35,9 @@ export default {
           100: 'var(--color-neutral-100)',
           200: 'var(--color-neutral-200)',
         },
+      },
+      backgroundImage: {
+        'theme-gradient': 'var(--gradient)',
       },
       spacing: {
         '18': '4.5rem',

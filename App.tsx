@@ -14,6 +14,8 @@ import { SkeletonDashboard } from './components/SkeletonLoader';
 import { useThemeEngine } from './hooks/useThemeEngine';
 import Header from './components/Header';
 import type { Announcement } from './components/AnnouncementBoard';
+import { ThemeSwitcher, ToastQueue } from './components/ui';
+import ErrorBoundary from './components/ErrorBoundary';
 
 
 // Extracted hooks
@@ -49,7 +51,7 @@ function useLocalStorage<T>(key: string, initialValue: T): [T, React.Dispatch<Re
 // ── App ───────────────────────────────────────────────────────────────────────
 const App: React.FC = () => {
     // ── Preferences & UI state (localStorage - user preferences) ─────────────
-    const [theme, setTheme] = useLocalStorage('gyandeep-theme', 'indigo');
+    const [theme, setTheme] = useLocalStorage('gyandeep-theme', 'cosmic-purple');
     const [highContrast, setHighContrast] = useLocalStorage('gyandeep-high-contrast', false);
     const [fontScale, setFontScale] = useLocalStorage('gyandeep-font-scale', 1);
     const [reducedMotion, setReducedMotion] = useLocalStorage('gyandeep-reduced-motion', false);
@@ -207,22 +209,34 @@ const App: React.FC = () => {
                         onPostAnnouncement={handlePostAnnouncement}
                     />
                 )}
-                {currentUser.role === UserRoleEnum.STUDENT && (
-                    <StudentDashboard
-                        student={allUsers.find(u => u.id === currentUser.id) as Student}
-                        classSession={classSession}
-                        onMarkAttendance={handleMarkAttendance}
-                        onUpdatePerformance={handleUpdatePerformance}
-                        onLogout={handleLogoutWithReset}
-                        theme={theme}
-                        onShowNotification={showNotification}
-                        onUpdateFaceImage={handleUpdateFaceImage}
-                        historicalSessions={historicalRecords.filter(rec => rec.notes)}
-                        allStudents={students}
-                        announcements={announcements}
-                        onUpdateSession={handleUpdateSession}
-                    />
-                )}
+                {currentUser.role === UserRoleEnum.STUDENT && (() => {
+                    const foundStudent = allUsers.find(u => u.id === currentUser.id) as Student | undefined;
+                    const safeStudent: Student = foundStudent ?? {
+                        ...currentUser,
+                        role: UserRoleEnum.STUDENT,
+                        performance: (currentUser as any).performance || [],
+                        badges: (currentUser as any).badges || [],
+                        classId: (currentUser as any).classId || undefined,
+                        totalQuizzes: (currentUser as any).totalQuizzes || 0,
+                        longestStreak: (currentUser as any).longestStreak || 0,
+                    };
+                    return (
+                        <StudentDashboard
+                            student={safeStudent}
+                            classSession={classSession}
+                            onMarkAttendance={handleMarkAttendance}
+                            onUpdatePerformance={handleUpdatePerformance}
+                            onLogout={handleLogoutWithReset}
+                            theme={theme}
+                            onShowNotification={showNotification}
+                            onUpdateFaceImage={handleUpdateFaceImage}
+                            historicalSessions={historicalRecords.filter(rec => rec.notes)}
+                            allStudents={students}
+                            announcements={announcements}
+                            onUpdateSession={handleUpdateSession}
+                        />
+                    );
+                })()}
                 {currentUser.role === UserRoleEnum.ADMIN && (
                     <AdminDashboard
                         admin={currentUser as Admin}
@@ -245,8 +259,7 @@ const App: React.FC = () => {
     const showLandingPage = showLanding && !currentUser && isSetupComplete;
 
     return (
-        <>
-
+        <ErrorBoundary>
             <LiquidChrome
                 color={currentUser ? [0.62, 0.62, 0.62] : [0.56, 0.56, 0.56]}
                 mouseReact amplitude={currentUser ? 0.15 : 0.1} speed={currentUser ? 1.2 : 1}
@@ -312,8 +325,10 @@ const App: React.FC = () => {
                         <Chatbot theme={theme} userLocation={userLocation} />
                     </Suspense>
                 )}
+                <ThemeSwitcher currentTheme={theme} onThemeChange={setTheme} />
+                <ToastQueue />
             </div>
-        </>
+        </ErrorBoundary>
     );
 };
 

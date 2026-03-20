@@ -4,7 +4,7 @@
  */
 
 import { NextRequest } from 'next/server';
-import { connectToDatabase } from '../server/db/mongoAtlas';
+import { connectToDatabase } from '../lib/db';
 
 export async function GET(request: NextRequest) {
   try {

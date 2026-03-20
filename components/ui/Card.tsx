@@ -7,7 +7,7 @@ interface CardProps {
   hover?: boolean;
   glow?: boolean;
   glass?: boolean;
-  padding?: 'none' | 'sm' | 'md' | 'lg';
+  padding?: 'none' | 'sm' | 'md' | 'lg' | 'xl';
   onClick?: () => void;
 }
 
@@ -16,6 +16,7 @@ const paddingClasses = {
   sm: 'p-3',
   md: 'p-5',
   lg: 'p-7',
+  xl: 'p-10',
 };
 
 const Card: React.FC<CardProps> = ({
@@ -28,12 +29,12 @@ const Card: React.FC<CardProps> = ({
   onClick,
 }) => {
   const baseClasses = `
-    rounded-2xl border transition-all duration-300
+    rounded-2xl border transition-all duration-300 relative overflow-hidden
     ${glass
       ? 'bg-white/60 dark:bg-gray-800/60 backdrop-blur-xl border-white/20'
-      : 'bg-white border-gray-100 shadow-sm'
+      : 'bg-app-surface border-gray-100 dark:border-gray-800 shadow-sm'
     }
-    ${hover ? 'hover:shadow-lg hover:-translate-y-1 hover:border-indigo-200 cursor-pointer' : ''}
+    ${hover ? 'hover:shadow-lg hover:-translate-y-1 hover:border-primary/30 cursor-pointer hover:shadow-primary/10' : ''}
     ${glow ? 'shadow-glow hover:shadow-glow-lg' : ''}
     ${paddingClasses[padding]}
     ${className}
@@ -47,6 +48,7 @@ const Card: React.FC<CardProps> = ({
       className={baseClasses}
       onClick={onClick}
     >
+      <div className="absolute top-0 left-0 right-0 h-[3px] bg-theme-gradient" />
       {children}
     </motion.div>
   );

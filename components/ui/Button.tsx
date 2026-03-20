@@ -14,11 +14,11 @@ interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
 }
 
 const variantClasses: Record<ButtonVariant, string> = {
-  primary: 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white shadow-lg shadow-indigo-500/25 hover:shadow-indigo-500/40 hover:from-indigo-700 hover:to-purple-700 focus:ring-indigo-500',
-  secondary: 'bg-white/80 backdrop-blur border border-gray-200 text-gray-700 hover:bg-gray-50 hover:border-gray-300 focus:ring-gray-400 shadow-sm',
-  ghost: 'bg-transparent text-gray-600 hover:bg-gray-100 hover:text-gray-800 focus:ring-gray-400',
-  danger: 'bg-gradient-to-r from-red-500 to-rose-600 text-white shadow-lg shadow-red-500/25 hover:shadow-red-500/40 focus:ring-red-500',
-  success: 'bg-gradient-to-r from-emerald-500 to-green-600 text-white shadow-lg shadow-emerald-500/25 hover:shadow-emerald-500/40 focus:ring-emerald-500',
+  primary: 'bg-theme-gradient text-white shadow-lg shadow-primary/20 hover:brightness-110 hover:shadow-primary/30 active:scale-95 transition-all',
+  secondary: 'bg-transparent border-2 border-primary text-primary hover:bg-primary/5 active:scale-95 transition-all',
+  ghost: 'bg-transparent text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 transition-all',
+  danger: 'bg-red-500 text-white shadow-lg shadow-red-500/20 hover:bg-red-600 transition-all',
+  success: 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/20 hover:bg-emerald-600 transition-all',
 };
 
 const sizeClasses: Record<ButtonSize, string> = {

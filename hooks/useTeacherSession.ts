@@ -1,18 +1,20 @@
 import { useState, useCallback, useEffect } from 'react';
-import type { Coordinates, ClassSession } from '../types';
+import type { Coordinates, ClassSession, HistoricalSessionRecord } from '../types';
 import { getCurrentPosition } from '../services/locationService';
 
 interface UseTeacherSessionProps {
     classSession: ClassSession;
     onUpdateSession: (update: Partial<ClassSession>) => void;
-    duration: number;
+    historicalRecords?: HistoricalSessionRecord[];
+    onUpdateHistoricalRecords?: (records: HistoricalSessionRecord[]) => void;
+    duration?: number;
 }
 
 /**
  * Humanizes teacher session management logic.
  * Handles timers, location fetching, and session code generation.
  */
-export function useTeacherSession({ classSession, onUpdateSession, duration }: UseTeacherSessionProps) {
+export function useTeacherSession({ classSession, onUpdateSession, historicalRecords = [], onUpdateHistoricalRecords, duration = 600 }: UseTeacherSessionProps) {
     const [timeLeft, setTimeLeft] = useState(0);
     const [isFetchingLocation, setIsFetchingLocation] = useState(false);
     const [teacherLocation, setTeacherLocation] = useState<Coordinates | null>(classSession.teacherLocation || null);
@@ -43,7 +45,48 @@ export function useTeacherSession({ classSession, onUpdateSession, duration }: U
         }
     };
 
-    const generateCode = (subject: string, radius: number) => {
+    const startSession = async (subject: string, lat?: number, lng?: number) => {
+        let location = teacherLocation;
+        if (lat !== undefined && lng !== undefined) {
+            location = { lat, lng };
+            setTeacherLocation(location);
+        } else if (!location) {
+            location = await fetchCurrentLocation();
+        }
+        
+        const code = Math.floor(100000 + Math.random() * 900000).toString();
+        const expiry = Date.now() + duration * 1000;
+
+        onUpdateSession({
+            code,
+            expiry,
+            teacherLocation: location,
+            subject,
+            quiz: null,
+            notes: null,
+            quizPublished: false,
+            startedAt: Date.now(),
+            isActive: true
+        });
+    };
+
+    const endSession = async () => {
+        onUpdateSession({
+            endedAt: Date.now(),
+            isActive: false
+        });
+    };
+
+    const exportSession = async () => {
+        const sessionData = {
+            session: classSession,
+            records: historicalRecords,
+            exportedAt: new Date().toISOString()
+        };
+        return sessionData;
+    };
+
+    const generateCode = (subject: string = classSession.subject || '', radius: number = 10) => {
         if (!teacherLocation) throw new Error("Location not set");
 
         const code = Math.floor(100000 + Math.random() * 900000).toString();
@@ -69,6 +112,9 @@ export function useTeacherSession({ classSession, onUpdateSession, duration }: U
         teacherLocation,
         setTeacherLocation,
         fetchCurrentLocation,
-        generateCode
+        generateCode,
+        startSession,
+        endSession,
+        exportSession
     };
 }

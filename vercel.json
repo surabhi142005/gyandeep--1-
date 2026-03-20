@@ -6,7 +6,8 @@
   "functions": {
     "api/**/*.ts": {
       "runtime": "nodejs18.x",
-      "maxDuration": 60
+      "memory": 1024,
+      "maxDuration": 30
     }
   },
   "rewrites": [
@@ -17,19 +18,21 @@
     {
       "source": "/assets/(.*)",
       "headers": [
-        {
-          "key": "Cache-Control",
-          "value": "public, max-age=31536000, immutable"
-        }
+        { "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }
       ]
     },
     {
       "source": "/icons/(.*)",
       "headers": [
-        {
-          "key": "Cache-Control",
-          "value": "public, max-age=86400"
-        }
+        { "key": "Cache-Control", "value": "public, max-age=86400" }
+      ]
+    },
+    {
+      "source": "/api/(.*)",
+      "headers": [
+        { "key": "X-Content-Type-Options", "value": "nosniff" },
+        { "key": "X-Frame-Options", "value": "DENY" },
+        { "key": "X-XSS-Protection", "value": "1; mode=block" }
       ]
     }
   ],
@@ -39,7 +42,18 @@
       "schedule": "0 0 * * 0"
     }
   ],
-  "experimental": {
-    "webSocket": true
+  "env": {
+    "MONGODB_URI": "@gyandeep-mongodb-uri",
+    "MONGODB_DB": "@gyandeep-mongodb-db",
+    "JWT_SECRET": "@gyandeep-jwt-secret",
+    "JWT_REFRESH_SECRET": "@gyandeep-jwt-refresh-secret",
+    "GEMINI_API_KEY": "@gyandeep-gemini-api-key",
+    "RESEND_API_KEY": "@gyandeep-resend-api-key",
+    "R2_ACCOUNT_ID": "@gyandeep-r2-account-id",
+    "R2_ACCESS_KEY_ID": "@gyandeep-r2-access-key-id",
+    "R2_SECRET_ACCESS_KEY": "@gyandeep-r2-secret-access-key",
+    "R2_BUCKET_NAME": "@gyandeep-r2-bucket-name",
+    "R2_PUBLIC_URL": "@gyandeep-r2-public-url",
+    "ALLOWED_ORIGINS": "@gyandeep-allowed-origins"
   }
 }

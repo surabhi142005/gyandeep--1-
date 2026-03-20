@@ -79,134 +79,99 @@
   --z-toast: 50;
   --z-tooltip: 60;
 
-  /* ── Default (Indigo) Theme Colors ──────────────────────────────────── */
-  --color-primary-50: #eef2ff;
-  --color-primary-100: #e0e7ff;
-  --color-primary-200: #c7d2fe;
-  --color-primary-300: #a5b4fc;
-  --color-primary-400: #818cf8;
-  --color-primary-500: #6366f1;
-  --color-primary-600: #4f46e5;
-  --color-primary-700: #4338ca;
-  --color-primary-800: #3730a3;
-  --color-primary-900: #312e81;
+  /* ─── Dual-Color Theme System Variables ────────────────────────────────── */
+  --color-primary: #6C63FF;
+  --color-secondary: #FF6584;
+  --color-bg: #F8F7FF;
+  --color-surface: #FFFFFF;
+  --color-text: #1A1A2E;
+  --gradient: linear-gradient(135deg, #6C63FF, #FF6584);
+  --color-focus-ring: rgba(108, 99, 255, 0.5);
 
-  /* ── Neutrals (WCAG AA compliant) ───────────────────────────────────── */
-  --color-neutral-50: #f9fafb;
-  --color-neutral-100: #f3f4f6;
-  --color-neutral-200: #e5e7eb;
-  --color-neutral-300: #d1d5db;
-  --color-neutral-400: #9ca3af;  /* min contrast vs white bg: 3.03:1 – decorative use only */
-  --color-neutral-500: #6b7280;  /* 4.62:1 vs white – AA for large text */
-  --color-neutral-600: #4b5563;  /* 7.02:1 vs white – passes AA */
-  --color-neutral-700: #374151;  /* 9.87:1 vs white – passes AAA */
-  --color-neutral-800: #1f2937;  /* 14.68:1 vs white – passes AAA */
-  --color-neutral-900: #111827;  /* 17.98:1 vs white – maximum contrast */
+  /* ─── Typography ───────────────────────────────────────────────────────── */
+  --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
+  
+  /* ─── Spacing (8px Grid) ───────────────────────────────────────────────── */
+  --space-1: 8px;
+  --space-2: 16px;
+  --space-3: 24px;
+  --space-4: 32px;
+  --space-6: 48px;
+  --space-8: 64px;
 
-  /* ── Semantic Colors ────────────────────────────────────────────────── */
-  --color-success-light: #dcfce7;
-  --color-success: #16a34a;      /* 4.52:1 vs white – passes AA large text */
-  --color-success-dark: #15803d;
+  transition: background-color 300ms ease, color 300ms ease, border-color 300ms ease, box-shadow 300ms ease;
+}
 
-  --color-warning-light: #fef9c3;
-  --color-warning: #ca8a04;      /* 3.64:1 vs white – large text only */
-  --color-warning-dark: #a16207;
+body {
+  font-family: var(--font-sans);
+  background-color: var(--color-bg);
+  color: var(--color-text);
+}
 
-  --color-error-light: #fee2e2;
-  --color-error: #dc2626;        /* 4.63:1 vs white – passes AA */
-  --color-error-dark: #b91c1c;
+h1, h2, h3, h4, h5, h6 {
+  font-weight: 700;
+  color: var(--color-primary);
+}
 
-  --color-info-light: #dbeafe;
-  --color-info: #2563eb;         /* 4.56:1 vs white – passes AA */
-  --color-info-dark: #1d4ed8;
-
-  /* ── Focus Ring ─────────────────────────────────────────────────────── */
-  --color-focus-ring: rgba(99, 102, 241, 0.5);
-
-  /* ── Surfaces ──────────────────────────────────────────────────────── */
-  --color-surface: #ffffff;
-  --color-surface-raised: rgba(255,255,255,0.8);
-  --color-surface-overlay: rgba(255,255,255,0.95);
-  --color-backdrop: rgba(0,0,0,0.5);
-
-  /* ── Text ──────────────────────────────────────────────────────────── */
-  --color-text-primary: var(--color-neutral-900);
-  --color-text-secondary: var(--color-neutral-600);
-  --color-text-tertiary: var(--color-neutral-500);
-  --color-text-on-primary: #ffffff;
-  --color-text-link: var(--color-primary-600);
+label {
+  font-weight: 500;
 }
 
 /* ─── Theme Variants ─────────────────────────────────────────────────────── */
 
-[data-theme="teal"] {
-  --color-primary-50: #f0fdfa;
-  --color-primary-100: #ccfbf1;
-  --color-primary-200: #99f6e4;
-  --color-primary-300: #5eead4;
-  --color-primary-400: #2dd4bf;
-  --color-primary-500: #14b8a6;
-  --color-primary-600: #0d9488;
-  --color-primary-700: #0f766e;
-  --color-primary-800: #115e59;
-  --color-primary-900: #134e4a;
-  --color-focus-ring: rgba(13, 148, 136, 0.5);
+/* THEME 1 — "Cosmic Purple" (Default) */
+[data-theme="cosmic-purple"] {
+  --color-primary: #6C63FF;
+  --color-secondary: #FF6584;
+  --color-bg: #F8F7FF;
+  --color-surface: #FFFFFF;
+  --color-text: #1A1A2E;
+  --gradient: linear-gradient(135deg, #6C63FF, #FF6584);
+  --color-focus-ring: rgba(108, 99, 255, 0.5);
 }
 
-[data-theme="crimson"] {
-  --color-primary-50: #fff1f2;
-  --color-primary-100: #ffe4e6;
-  --color-primary-200: #fecdd3;
-  --color-primary-300: #fda4af;
-  --color-primary-400: #fb7185;
-  --color-primary-500: #f43f5e;
-  --color-primary-600: #e11d48;
-  --color-primary-700: #be123c;
-  --color-primary-800: #9f1239;
-  --color-primary-900: #881337;
-  --color-focus-ring: rgba(225, 29, 72, 0.5);
+/* THEME 2 — "Ocean Breeze" */
+[data-theme="ocean-breeze"] {
+  --color-primary: #0EA5E9;
+  --color-secondary: #06B6D4;
+  --color-bg: #F0F9FF;
+  --color-surface: #FFFFFF;
+  --color-text: #0C1A2E;
+  --gradient: linear-gradient(135deg, #0EA5E9, #06B6D4);
+  --color-focus-ring: rgba(14, 165, 233, 0.5);
 }
 
-[data-theme="purple"] {
-  --color-primary-50: #faf5ff;
-  --color-primary-100: #f3e8ff;
-  --color-primary-200: #e9d5ff;
-  --color-primary-300: #d8b4fe;
-  --color-primary-400: #c084fc;
-  --color-primary-500: #a855f7;
-  --color-primary-600: #9333ea;
-  --color-primary-700: #7e22ce;
-  --color-primary-800: #6b21a8;
-  --color-primary-900: #581c87;
-  --color-focus-ring: rgba(147, 51, 234, 0.5);
+/* THEME 3 — "Forest & Gold" */
+[data-theme="forest-gold"] {
+  --color-primary: #059669;
+  --color-secondary: #F59E0B;
+  --color-bg: #F0FDF4;
+  --color-surface: #FFFFFF;
+  --color-text: #1A2E1A;
+  --gradient: linear-gradient(135deg, #059669, #F59E0B);
+  --color-focus-ring: rgba(5, 150, 105, 0.5);
 }
 
-[data-theme="ocean"] {
-  --color-primary-50: #ecfeff;
-  --color-primary-100: #cffafe;
-  --color-primary-200: #a5f3fc;
-  --color-primary-300: #67e8f9;
-  --color-primary-400: #22d3ee;
-  --color-primary-500: #06b6d4;
-  --color-primary-600: #0891b2;
-  --color-primary-700: #0e7490;
-  --color-primary-800: #155e75;
-  --color-primary-900: #164e63;
-  --color-focus-ring: rgba(8, 145, 178, 0.5);
+/* THEME 4 — "Midnight Ember" (Dark Mode) */
+[data-theme="midnight-ember"] {
+  --color-primary: #F97316;
+  --color-secondary: #FACC15;
+  --color-bg: #0F0F1A;
+  --color-surface: #1A1A2E;
+  --color-text: #F1F5F9;
+  --gradient: linear-gradient(135deg, #F97316, #FACC15);
+  --color-focus-ring: rgba(249, 115, 22, 0.5);
 }
 
-[data-theme="sunset"] {
-  --color-primary-50: #fff7ed;
-  --color-primary-100: #ffedd5;
-  --color-primary-200: #fed7aa;
-  --color-primary-300: #fdba74;
-  --color-primary-400: #fb923c;
-  --color-primary-500: #f97316;
-  --color-primary-600: #ea580c;
-  --color-primary-700: #c2410c;
-  --color-primary-800: #9a3412;
-  --color-primary-900: #7c2d12;
-  --color-focus-ring: rgba(234, 88, 12, 0.5);
+/* THEME 5 — "Rose Quartz" */
+[data-theme="rose-quartz"] {
+  --color-primary: #EC4899;
+  --color-secondary: #8B5CF6;
+  --color-bg: #FFF1F8;
+  --color-surface: #FFFFFF;
+  --color-text: #2D1A2E;
+  --gradient: linear-gradient(135deg, #EC4899, #8B5CF6);
+  --color-focus-ring: rgba(236, 72, 153, 0.5);
 }
 
 /* ─── High Contrast Mode ─────────────────────────────────────────────────── */

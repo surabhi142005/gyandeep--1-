@@ -1,7 +1,7 @@
 /**
  * services/authService.ts
  *
- * JWT-only auth via Express backend.
+ * JWT-only auth via Express backend with token refresh support.
  * Face recognition proxies to /api/auth/face (Python service on :5001)
  * with local pixel-diff fallback when the Python service is unavailable.
  */
@@ -11,19 +11,96 @@ import type { Coordinates } from '../types';
 
 const API_BASE = import.meta.env.VITE_API_URL || '';
 
+const TOKEN_REFRESH_THRESHOLD = 5 * 60 * 1000; // 5 minutes before expiry
+
 // ── Token helpers ─────────────────────────────────────────────────────────────
 
-function saveToken(token: string) {
+function saveTokens(accessToken: string, refreshToken: string) {
+  try { localStorage.setItem('gyandeep_token', accessToken); } catch {}
+  try { localStorage.setItem('gyandeep_refresh_token', refreshToken); } catch {}
+}
+
+function saveAccessToken(token: string) {
   try { localStorage.setItem('gyandeep_token', token); } catch {}
+}
+
+function saveRefreshToken(token: string) {
+  try { localStorage.setItem('gyandeep_refresh_token', token); } catch {}
 }
 
 export function getStoredToken(): string | null {
   try { return localStorage.getItem('gyandeep_token'); } catch { return null; }
 }
 
+export function getStoredRefreshToken(): string | null {
+  try { return localStorage.getItem('gyandeep_refresh_token'); } catch { return null; }
+}
+
 function authHeader(): Record<string, string> {
   const token = getStoredToken();
   return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
+// ── Token refresh logic ──────────────────────────────────────────────────────
+
+let refreshPromise: Promise<boolean> | null = null;
+
+export async function refreshAccessToken(): Promise<boolean> {
+  if (refreshPromise) return refreshPromise;
+  
+  refreshPromise = (async () => {
+    const refreshToken = getStoredRefreshToken();
+    if (!refreshToken) return false;
+
+    try {
+      const res = await fetch(`${API_BASE}/api/auth/refresh`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ refreshToken }),
+      });
+
+      if (!res.ok) {
+        // Refresh failed, clear tokens
+        logout();
+        return false;
+      }
+
+      const data = await res.json();
+      if (data.accessToken && data.refreshToken) {
+        saveTokens(data.accessToken, data.refreshToken);
+        return true;
+      }
+      return false;
+    } catch {
+      return false;
+    } finally {
+      refreshPromise = null;
+    }
+  })();
+
+  return refreshPromise;
+}
+
+export async function ensureValidToken(): Promise<string | null> {
+  const token = getStoredToken();
+  if (!token) return null;
+  
+  // Try to refresh if token is missing (no expiry check in frontend, server handles it)
+  try {
+    const res = await fetch(`${API_BASE}/api/auth/me`, {
+      headers: authHeader(),
+    });
+    
+    if (res.status === 401) {
+      // Token expired, try refresh
+      const refreshed = await refreshAccessToken();
+      return refreshed ? getStoredToken() : null;
+    }
+    
+    return token;
+  } catch {
+    return token;
+  }
 }
 
 // ── Public API ────────────────────────────────────────────────────────────────
@@ -39,7 +116,9 @@ export async function register(email: string, password: string, name: string, ro
     throw new Error(err.error || 'Registration failed');
   }
   const data = await res.json();
-  if (data.token) saveToken(data.token);
+  if (data.accessToken && data.refreshToken) {
+    saveTokens(data.accessToken, data.refreshToken);
+  }
   return data.user;
 }
 
@@ -54,7 +133,9 @@ export async function login(email: string, password: string) {
     throw new Error(err.error || 'Invalid credentials');
   }
   const data = await res.json();
-  if (data.token) saveToken(data.token);
+  if (data.accessToken && data.refreshToken) {
+    saveTokens(data.accessToken, data.refreshToken);
+  }
   return data.user;
 }
 
@@ -65,16 +146,18 @@ export async function loginWithGoogle() {
 
 export async function logout() {
   try { localStorage.removeItem('gyandeep_token'); } catch {}
+  try { localStorage.removeItem('gyandeep_refresh_token'); } catch {}
   try { localStorage.removeItem('gyandeep_current_user'); } catch {}
 }
 
 export async function getCurrentUser() {
-  const token = getStoredToken();
+  const token = await ensureValidToken();
   if (!token) return null;
   try {
     const res = await fetch(`${API_BASE}/api/auth/me`, {
       headers: { Authorization: `Bearer ${token}` },
     });
+    if (res.status === 401) return null;
     if (!res.ok) return null;
     return await res.json();
   } catch {

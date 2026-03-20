@@ -3,8 +3,12 @@ import React, { useState, useMemo } from 'react';
 export interface Announcement {
   id: string;
   text: string;
+  title?: string;
+  content?: string;
+  priority?: 'low' | 'medium' | 'high';
   author: string;
   timestamp: string;
+  createdAt?: string;
 }
 
 interface AnnouncementBoardProps {

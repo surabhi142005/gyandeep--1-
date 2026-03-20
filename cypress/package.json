@@ -1,0 +1,14 @@
+{
+  "name": "Gyandeep E2E Tests",
+  "version": "1.0.0",
+  "description": "End-to-end tests for Gyandeep application",
+  "scripts": {
+    "test": "cypress run",
+    "test:headed": "cypress run --headed",
+    "test:open": "cypress open",
+    "test:ci": "cypress run --record --parallel --group E2E"
+  },
+  "devDependencies": {
+    "cypress": "^13.6.0"
+  }
+}

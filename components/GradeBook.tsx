@@ -8,6 +8,8 @@ interface GradeBookProps {
     currentUserRole: 'teacher' | 'admin';
     subjects: Array<{ id: string; name: string }>;
     theme: string;
+    attendance?: Array<{ studentId: string; status: string }>;
+    onUpdatePerformance?: (studentId: string, performance: any) => void;
 }
 
 interface GradeEntry {

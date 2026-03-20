@@ -8,25 +8,27 @@ interface BadgeProps {
   variant?: BadgeVariant;
   icon?: string;
   animated?: boolean;
-  size?: 'sm' | 'md' | 'lg';
+  size?: 'xs' | 'sm' | 'md' | 'lg' | 'xl';
   className?: string;
 }
 
 const variantClasses: Record<BadgeVariant, string> = {
-  default: 'bg-gray-100 text-gray-700 border-gray-200',
-  success: 'bg-emerald-50 text-emerald-700 border-emerald-200',
-  warning: 'bg-amber-50 text-amber-700 border-amber-200',
-  danger: 'bg-red-50 text-red-700 border-red-200',
-  info: 'bg-blue-50 text-blue-700 border-blue-200',
-  xp: 'bg-gradient-to-r from-purple-100 to-indigo-100 text-indigo-700 border-indigo-200',
-  coin: 'bg-gradient-to-r from-yellow-100 to-amber-100 text-amber-700 border-amber-200',
-  streak: 'bg-gradient-to-r from-orange-100 to-red-100 text-orange-700 border-orange-200',
+  default: 'bg-primary/10 text-primary border-primary/20',
+  success: 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-500/20',
+  warning: 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-500/10 dark:text-amber-400 dark:border-amber-500/20',
+  danger: 'bg-red-50 text-red-700 border-red-200 dark:bg-red-500/10 dark:text-red-400 dark:border-red-500/20',
+  info: 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-500/10 dark:text-blue-400 dark:border-blue-500/20',
+  xp: 'bg-theme-gradient text-white border-none shadow-sm',
+  coin: 'bg-theme-gradient text-white border-none shadow-sm',
+  streak: 'bg-theme-gradient text-white border-none shadow-sm',
 };
 
 const sizeClasses = {
+  xs: 'px-1.5 py-0.5 text-[9px]',
   sm: 'px-2 py-0.5 text-[10px]',
   md: 'px-2.5 py-1 text-xs',
   lg: 'px-3 py-1.5 text-sm',
+  xl: 'px-4 py-2 text-base',
 };
 
 const Badge: React.FC<BadgeProps> = ({

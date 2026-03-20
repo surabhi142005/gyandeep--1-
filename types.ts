@@ -59,6 +59,7 @@ export interface Student extends User {
   badges?: string[];
   totalQuizzes?: number;
   longestStreak?: number;
+  attendanceMarked?: boolean;
 }
 
 export interface ActivityLog {
@@ -82,7 +83,7 @@ export interface Admin extends User {
 export type AnyUser = Student | Teacher | Admin;
 
 export interface PerformanceData {
-  subject: string;
+  subject?: string;
   date: string; // YYYY-MM-DD
   score: number; // Percentage
 }
@@ -111,8 +112,10 @@ export interface ClassSession {
   id: string;
   code: string | null;
   classId?: string | null;
-  expiry: number | null; // Using timestamp for easier comparison
+  expiry: number | null;
   endedAt?: number | null;
+  startedAt?: number | null;
+  isActive?: boolean;
   timetableEntryId?: string | null;
   notes: string | null;
   quiz: QuizQuestion[] | null;
@@ -120,7 +123,10 @@ export interface ClassSession {
   quizPublished: boolean;
   subject: string;
   teacherLocation: Coordinates | null;
-  attendanceRadius: number; // in meters
+  attendanceRadius: number;
+  lat?: number;
+  lng?: number;
+  radius?: number;
 }
 
 export interface HistoricalSessionRecord {

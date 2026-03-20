@@ -1,4 +1,27 @@
-import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback, Suspense } from 'react';
+import { 
+  BookOpen, 
+  HelpCircle, 
+  LineChart, 
+  Zap, 
+  Bell, 
+  User, 
+  LogOut, 
+  Settings,
+  CheckCircle2,
+  XCircle,
+  Clock,
+  MapPin,
+  Calendar,
+  Award,
+  Star,
+  Coins,
+  Activity,
+  ChevronRight,
+  PlayCircle,
+  FileText,
+  Camera
+} from 'lucide-react';
 import type { Student, ClassSession, HistoricalSessionRecord } from '../types';
 import WebcamCapture from './WebcamCapture';
 import StudentFaceRegistration from './StudentFaceRegistration';
@@ -12,42 +35,26 @@ import AnnouncementBoard from './AnnouncementBoard';
 import TicketPanel from './TicketPanel';
 import type { Announcement } from './AnnouncementBoard';
 import { fetchCentralizedNotesCombined } from '../services/dataService';
-import Dashboard3D from './Dashboard3D';
+const Dashboard3D = React.lazy(() => import('./Dashboard3D'));
 import StudentLearningTwin from './StudentLearningTwin';
+import { DashboardLayout, Card, Button, Badge, Input } from './ui';
 
-interface StudentDashboardProps {
-  student: Student;
-  classSession: ClassSession;
-  onMarkAttendance: (studentId: string) => void;
-  onUpdatePerformance: (studentId: string, subject: string, score: number) => void;
-  onLogout: () => void;
-  onShowNotification: (message: string, type?: 'info' | 'success') => void;
-  theme: string;
-  onUpdateFaceImage: (studentId: string, faceImage: string) => void;
-  historicalSessions: HistoricalSessionRecord[];
-  allStudents?: Student[];
-  announcements?: Announcement[];
-  onUpdateSession?: (sessionUpdate: Partial<ClassSession>) => void;
-}
+const SIDEBAR_ITEMS = [
+  { id: 'learning', label: 'Learning Hub', icon: BookOpen },
+  { id: 'quiz', label: 'Quizzes', icon: HelpCircle },
+  { id: 'performance', label: 'My Progress', icon: LineChart },
+  { id: 'twin', label: 'Learning Twin', icon: Zap },
+  { id: 'announcements', label: 'Notice Board', icon: Bell },
+  { id: 'profile', label: 'Profile', icon: User },
+];
 
-interface ThemeColors {
-  primary: string;
-  hover: string;
-  text: string;
-  ring: string;
-  border: string;
-  lightBg?: string;
-}
-
-const THEME_COLORS: Record<string, ThemeColors> = {
-  indigo: { primary: 'bg-indigo-600', hover: 'hover:bg-indigo-700', text: 'text-indigo-800', ring: 'focus:ring-indigo-500', border: 'focus:border-indigo-500', lightBg: 'bg-indigo-50' },
-  teal: { primary: 'bg-teal-600', hover: 'hover:bg-teal-700', text: 'text-teal-800', ring: 'focus:ring-teal-500', border: 'focus:border-teal-500', lightBg: 'bg-teal-50' },
-  crimson: { primary: 'bg-red-600', hover: 'hover:bg-red-700', text: 'text-red-800', ring: 'focus:ring-red-500', border: 'focus:border-red-500', lightBg: 'bg-red-50' },
-  purple: { primary: 'bg-purple-600', hover: 'hover:bg-purple-700', text: 'text-purple-800', ring: 'focus:ring-purple-500', border: 'focus:border-purple-500', lightBg: 'bg-purple-50' },
-};
-
-
-const StudentDashboard: React.FC<StudentDashboardProps> = ({ student, classSession, onMarkAttendance, onUpdatePerformance, onLogout, onShowNotification, theme, onUpdateFaceImage, historicalSessions, allStudents = [], announcements = [], onUpdateSession }) => {
+const StudentDashboard: React.FC<StudentDashboardProps> = ({ 
+  student, classSession, onMarkAttendance, onUpdatePerformance, 
+  onLogout, onShowNotification, theme, onUpdateFaceImage, 
+  historicalSessions, allStudents = [], announcements = [], 
+  onUpdateSession 
+}) => {
+  const [activeTab, setActiveTab] = useState('learning');
   const [code, setCode] = useState('');
   const [showWebcam, setShowWebcam] = useState(false);
   const [isVerifying, setIsVerifying] = useState(false);
@@ -63,8 +70,6 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ student, classSessi
   const [examNotesLoading, setExamNotesLoading] = useState(false);
   const [expandedUnit, setExpandedUnit] = useState<number | null>(null);
   const [notesTab, setNotesTab] = useState<'session' | 'centralized'>('session');
-
-  const colors = useMemo(() => THEME_COLORS[theme] || THEME_COLORS.indigo, [theme]);
 
   const sessionEnded = !!classSession.endedAt;
 
@@ -97,551 +102,407 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ student, classSessi
     setQuizTaken(false);
   }, [classSession.code]);
 
-  // Effect for showing notifications on updates
-  useEffect(() => {
-    if (prevSessionRef.current) {
-      // Check for new notes
-      if (!prevSessionRef.current.notes && classSession.notes) {
-        // FIX: Explicitly pass the 'info' type to resolve a potential tooling issue with optional arguments.
-        onShowNotification("New class notes are available!", 'info');
-      }
-      // Check for newly published quiz
-      if (!prevSessionRef.current.quizPublished && classSession.quizPublished) {
-        // FIX: Explicitly pass the 'info' type to resolve a potential tooling issue with optional arguments.
-        onShowNotification("A new quiz has been published!", 'info');
-      }
-    }
-    // Update the ref to the current session for the next render
-    prevSessionRef.current = classSession;
-  }, [classSession, onShowNotification]);
-
-  const handleAttendanceAttempt = async () => {
+  const handleAttendance = async (imageDataUrl: string) => {
+    setIsVerifying(true);
     setMessage(null);
-    if (!classSession.code || !classSession.expiry || !classSession.teacherLocation) {
-      setMessage({ type: 'error', text: 'No active class session. Please wait for your teacher to start a session.' });
-      return;
-    }
-    if (Date.now() > classSession.expiry) {
-      setMessage({ type: 'error', text: 'The class code has expired. Ask your teacher for a new one.' });
-      return;
-    }
-    if (code !== classSession.code) {
-      setMessage({ type: 'error', text: 'Invalid class code. Please double-check and try again.' });
-      return;
-    }
-
-    setIsVerifying(true);
-    setMessage({ type: 'info', text: 'Checking your location...' });
     try {
-      const studentLocation = await getCurrentPosition();
-      const result = await verifyLocation(studentLocation, classSession.teacherLocation!, classSession.attendanceRadius);
-      if (!result.authenticated) {
-        throw new Error(`Location check failed. You are ${Math.round(result.distance_m)}m away, outside the ${result.radius_m}m radius.`);
-      }
-      setMessage({ type: 'info', text: 'Location confirmed. Please verify your face.' });
-      setShowWebcam(true);
-    } catch (err: any) {
-      setMessage({ type: 'error', text: err.message });
-    } finally {
-      setIsVerifying(false);
-    }
-  };
+      const faceRes = await verifyFace(imageDataUrl, student.id);
+      if (!faceRes.authenticated) throw new Error('Face verification failed');
 
-  const handleCapture = async (imageDataUrl: string) => {
-    setShowWebcam(false);
-    setIsVerifying(true);
-    setMessage({ type: 'info', text: 'Verifying...' });
+      const pos = await getCurrentPosition();
+      const teacherPos = { lat: classSession.lat || 0, lng: classSession.lng || 0 };
+      const locRes = await verifyLocation(pos, teacherPos, classSession.radius || 10);
+      if (!locRes.authenticated) throw new Error('You are not in the classroom range');
 
-    try {
-      const face = await verifyFace(imageDataUrl, student.id);
-      if (!face.authenticated) {
-        throw new Error('Face verification failed. Please try again.');
-      }
+      if (code !== classSession.code) throw new Error('Invalid attendance code');
+
       onMarkAttendance(student.id);
-
-      // --- Streak tracking ---
-      const streakKey = `streak_${student.id}`;
-      const todayStr = new Date().toISOString().split('T')[0];
-      const streakData = JSON.parse(localStorage.getItem(streakKey) || '{"lastDate":"","current":0}');
-      const yesterday = new Date();
-      yesterday.setDate(yesterday.getDate() - 1);
-      const yesterdayStr = yesterday.toISOString().split('T')[0];
-      let newCurrent = 1;
-      if (streakData.lastDate === yesterdayStr) {
-        newCurrent = (streakData.current || 0) + 1;
-      } else if (streakData.lastDate === todayStr) {
-        newCurrent = streakData.current; // Already marked today
-      }
-      localStorage.setItem(streakKey, JSON.stringify({ lastDate: todayStr, current: newCurrent }));
-      // --- End streak tracking ---
-
-      const studentLocation = await getCurrentPosition();
-      const distance = calculateDistance(studentLocation, classSession.teacherLocation!);
-      setMessage({ type: 'success', text: `✅ Attendance marked! You are ${Math.round(distance)}m from the classroom. 🔥 Streak: ${newCurrent} day${newCurrent !== 1 ? 's' : ''}` });
+      setMessage({ type: 'success', text: 'Attendance marked successfully!' });
+      setShowWebcam(false);
     } catch (err: any) {
       setMessage({ type: 'error', text: err.message });
     } finally {
       setIsVerifying(false);
     }
   };
-
-  const handleQuizSubmit = (score: number) => {
-    onUpdatePerformance(student.id, classSession.subject, score);
-    setQuizTaken(true);
-    if (onUpdateSession && classSession.notes) {
-      onUpdateSession({ notes: null });
-    }
-  };
-
-  const handleFaceRegister = (imageDataUrl: string) => {
-    onUpdateFaceImage(student.id, imageDataUrl);
-    setShowFaceRegistration(false);
-  };
-
-  const studentPerformanceForSubject = student.performance.filter(p => p.subject === classSession.subject);
-
-  // Filter historical sessions with notes for the current subject or general relevant ones
-  const availablePreviousNotes = useMemo(() => {
-    // Filter by current subject first, then general if none for subject.
-    const notesForSubject = historicalSessions
-      .filter(session => session.subject === classSession.subject && session.notes)
-      .filter(session => {
-        // Show notes from sessions where the student's class matches the session's class
-        if (student.classId && session.classId) {
-          return session.classId === student.classId;
-        }
-        // If no class info in session, show all notes for the subject
-        return true;
-      })
-      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()); // Newest first
-
-    if (notesForSubject.length > 0) {
-      return notesForSubject;
-    }
-
-    // If no notes for current subject, show general recent notes (e.g., last 5)
-    return historicalSessions
-      .filter(session => session.notes)
-      .filter(session => {
-        // Filter by student's class if available
-        if (student.classId && session.classId) {
-          return session.classId === student.classId;
-        }
-        return true;
-      })
-      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
-      .slice(0, 5); // Show up to 5 most recent notes regardless of subject
-  }, [historicalSessions, classSession.subject, student.classId]);
-
-  // Handle selection from dropdown
-  const handleSelectPreviousNote = (event: React.ChangeEvent<HTMLSelectElement>) => {
-    const sessionId = parseInt(event.target.value, 10);
-    if (isNaN(sessionId)) {
-      setSelectedPreviousNoteInfo(null);
-      setSelectedPreviousNoteText(null);
-      return;
-    }
-    const session = historicalSessions.find(s => s.id === sessionId);
-    if (session && session.notes) {
-      setSelectedPreviousNoteInfo({ id: session.id, subject: session.subject, date: session.date });
-      setSelectedPreviousNoteText(session.notes);
-    } else {
-      setSelectedPreviousNoteInfo(null);
-      setSelectedPreviousNoteText(null);
-    }
-  };
-
 
   return (
-    <>
-      <div className="min-h-screen">
-        <header className="bg-white shadow-md p-4 flex justify-between items-center">
-          <div>
-            <h1 className={`text-2xl font-bold ${colors.text}`}>Student Dashboard</h1>
-            <p className="text-gray-600">Hello, {student.name}</p>
-            {classSession.code && (
-              <div className="flex gap-2 mt-2">
-                <span className={`px-2 py-0.5 text-xs font-semibold rounded-full ${sessionEnded ? 'bg-gray-100 text-gray-600' : 'bg-green-100 text-green-700'}`}>
-                  {sessionEnded ? 'Ended' : 'Active'}
-                </span>
-              </div>
-            )}
-          </div>
-          <button onClick={onLogout} className="bg-red-600 text-white font-semibold py-2 px-4 rounded-lg hover:bg-red-700 transition-colors">
-            Logout
-          </button>
-        </header>
-
-        {/* Gamification Stats Bar */}
-        <div className="px-4 md:px-8 pt-4">
-          <div className="bg-white rounded-lg shadow-md p-4 flex flex-wrap items-center gap-4 md:gap-6">
-            <div className="flex items-center gap-2">
-              <span className="text-lg">⭐</span>
-              <div>
-                <p className="text-xs text-gray-500">Level</p>
-                <p className={`text-lg font-bold ${colors.text}`}>{student.level || Math.floor((student.xp || 0) / 100) + 1}</p>
-              </div>
-            </div>
-            <div className="flex-1 min-w-[120px]">
-              <div className="flex items-center justify-between text-xs text-gray-500 mb-1">
-                <span>XP</span>
-                <span>{student.xp || 0} / {(Math.floor((student.xp || 0) / 100) + 1) * 100}</span>
-              </div>
-              <div className="w-full bg-gray-200 rounded-full h-2.5">
-                <div className={`h-2.5 rounded-full ${colors.primary} transition-all`} style={{ width: `${((student.xp || 0) % 100)}%` }} />
-              </div>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="text-lg">🪙</span>
-              <div>
-                <p className="text-xs text-gray-500">Coins</p>
-                <p className="text-lg font-bold text-yellow-600">{student.coins || 0}</p>
-              </div>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="text-lg">🔥</span>
-              <div>
-                <p className="text-xs text-gray-500">Best Streak</p>
-                <p className="text-lg font-bold text-orange-600">{student.longestStreak || 0}</p>
-              </div>
-            </div>
-            {Array.isArray(student.badges) && student.badges.length > 0 && (
-              <div className="flex items-center gap-1 flex-wrap">
-                {student.badges.slice(0, 5).map(badge => (
-                  <span key={badge} className={`px-2 py-0.5 rounded-full text-xs font-medium ${colors.text} bg-gray-100`}>
-                    {badge === 'Perfect 5' ? '⭐' : badge === 'High Score' ? '🏆' : '🎖️'} {badge}
-                  </span>
-                ))}
-                {student.badges.length > 5 && <span className="text-xs text-gray-400">+{student.badges.length - 5}</span>}
-              </div>
-            )}
-          </div>
-        </div>
-
-        <main className="p-4 md:p-8 grid grid-cols-1 lg:grid-cols-2 gap-8">
-          <div className="lg:col-span-2 space-y-8">
-            <Dashboard3D theme={theme} stats={stats} />
-            <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
-              <StudentLearningTwin student={student as any} theme={theme} />
-              <div className="bg-white rounded-3xl p-8 shadow-xl border border-gray-100 flex flex-col justify-center">
-                 <h3 className="text-2xl font-black text-slate-800 mb-6 uppercase tracking-tight">Active Learning Goal</h3>
-                 <div className="bg-indigo-50 border-2 border-indigo-100 rounded-2xl p-6 text-center">
-                    <p className="text-indigo-600 font-black text-xl mb-2">Master {classSession.subject || 'your subjects'}</p>
-                    <p className="text-slate-500 text-sm font-medium">Complete today's quiz to earn a <span className="text-amber-500 font-bold">+50 XP</span> bonus and climb the leaderboard!</p>
-                 </div>
-              </div>
-            </div>
-          </div>
-
-          <div className="space-y-6">
-            <div className="bg-white p-6 rounded-lg shadow-md">
-              <h2 className="text-xl font-semibold text-gray-700 mb-4">Mark Attendance</h2>
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  value={code}
-                  onChange={(e) => setCode(e.target.value)}
-                  placeholder="Enter 6-digit session code"
-                  maxLength={6}
-                  className={`flex-grow p-3 border border-gray-300 rounded-md shadow-sm ${colors.ring} ${colors.border}`}
-                />
-                <button
-                  onClick={handleAttendanceAttempt}
-                  disabled={isVerifying || code.length !== 6}
-                  className={`text-white font-bold py-3 px-6 rounded-lg transition-colors duration-300 flex items-center justify-center ${colors.primary} ${colors.hover} disabled:opacity-50`}
-                >
-                  {isVerifying ? <Spinner /> : 'Submit'}
-                </button>
-              </div>
-              {message && (
-                <p className={`mt-4 p-3 rounded-md text-sm ${message.type === 'success' ? 'bg-green-100 text-green-800' :
-                  message.type === 'error' ? 'bg-red-100 text-red-800' : `bg-blue-100 text-blue-800`
-                  }`}>
-                  {message.text}
-                </p>
-              )}
-            </div>
-
-            <div className="bg-white p-6 rounded-lg shadow-md">
-              <h2 className="text-xl font-semibold text-gray-700 mb-4">Face Registration</h2>
-              <p className="text-gray-600 mb-4">Register your face to enable face-based authentication for attendance.</p>
-              <button
-                onClick={() => setShowFaceRegistration(true)}
-                className={`w-full text-white font-bold py-3 px-6 rounded-lg transition-colors duration-300 ${colors.primary} ${colors.hover}`}
-              >
-                📷 Register Face
-              </button>
-            </div>
-
-            <div className="bg-white p-6 rounded-lg shadow-md">
-              <div className="flex gap-2 mb-3">
-                <button
-                  type="button"
-                  className={`px-3 py-1 rounded text-sm ${notesTab === 'session' ? colors.primary + ' text-white' : colors.lightBg + ' ' + colors.text}`}
-                  onClick={() => setNotesTab('session')}
-                >
-                  Session Notes (temporary)
-                </button>
-                <button
-                  type="button"
-                  className={`px-3 py-1 rounded text-sm ${notesTab === 'centralized' ? colors.primary + ' text-white' : colors.lightBg + ' ' + colors.text}`}
-                  onClick={() => setNotesTab('centralized')}
-                >
-                  Centralized Notes (persistent)
-                </button>
-              </div>
-              {notesTab === 'session' ? (
-                <>
-                  <h2 className="text-xl font-semibold text-gray-700 mb-4">Class Notes (Current Session)</h2>
-                  {classSession.notes ? (
-                    <div className="prose max-w-none max-h-80 overflow-y-auto bg-gray-50 p-4 rounded-md">
-                      <pre className="whitespace-pre-wrap font-sans">{classSession.notes}</pre>
-                    </div>
-                  ) : (
-                    <p className="text-gray-500">The teacher has not uploaded notes yet for this session.</p>
-                  )}
-                </>
-              ) : (
-                <>
-                  <h2 className="text-xl font-semibold text-gray-700 mb-4">Centralized Notes</h2>
-                  {examNotesLoading ? (
-                    <div className="flex justify-center py-4"><Spinner /></div>
-                  ) : examUnits.length > 0 ? (
-                    <div className="space-y-2">
-                      {examUnits.map(unit => (
-                        <div key={unit.unitNumber} className="border rounded-lg overflow-hidden">
-                          <button
-                            onClick={() => setExpandedUnit(expandedUnit === unit.unitNumber ? null : unit.unitNumber)}
-                            className="w-full flex justify-between items-center p-3 bg-gray-50 hover:bg-gray-100 transition-colors text-left"
-                          >
-                            <span className="font-semibold text-gray-700">Unit {unit.unitNumber}: {unit.unitName}</span>
-                            <span className="text-xs text-gray-500">{unit.notes.length} note{unit.notes.length !== 1 ? 's' : ''} {expandedUnit === unit.unitNumber ? '▲' : '▼'}</span>
-                          </button>
-                          {expandedUnit === unit.unitNumber && (
-                            <div className="p-3 space-y-3 max-h-80 overflow-y-auto">
-                              {unit.notes.map((note: any) => (
-                                <div key={note.id} className="p-3 bg-gray-50 rounded-md border border-gray-200">
-                                  <div className="text-sm font-semibold text-gray-800">{note.title}</div>
-                                  <div className="text-xs text-gray-500">By {note.teacherId || 'Teacher'} • {note.createdAt ? new Date(note.createdAt).toLocaleString() : ''}</div>
-                                  <div className="mt-2 text-sm text-gray-700 whitespace-pre-wrap">{note.content?.slice(0, 500) || 'View file'}</div>
-                                  {note.filePath && <a className="text-indigo-600 text-xs mt-1 inline-block" href={note.filePath} target="_blank" rel="noreferrer">Open file</a>}
-                                </div>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="text-gray-500">No centralized notes available yet.</p>
-                  )}
-                </>
-              )}
-            </div>
-
-            {/* Exam Notes - Centralized Unit-Wise Notes */}
-            <div className="bg-white p-6 rounded-lg shadow-md">
-              <h2 className="text-xl font-semibold text-gray-700 mb-4">Exam Notes</h2>
-              <div className="mb-4">
-                <label htmlFor="exam-notes-subject" className="block text-sm font-medium text-gray-700 mb-1">Select Subject:</label>
-                <select
-                  id="exam-notes-subject"
-                  value={examNotesSubject}
-                  onChange={(e) => setExamNotesSubject(e.target.value)}
-                  className={`w-full p-2 border border-gray-300 rounded-md shadow-sm ${colors.ring} ${colors.border}`}
-                >
-                  <option value="">-- Choose Subject --</option>
-                  {Array.from(new Set([
-                    classSession.subject,
-                    ...student.performance.map(p => p.subject)
-                  ].filter(Boolean))).map(subj => (
-                    <option key={subj} value={subj}>{subj}</option>
-                  ))}
-                </select>
-              </div>
-              {examNotesLoading ? (
-                <div className="flex justify-center py-4"><Spinner /></div>
-              ) : examUnits.length > 0 ? (
-                <div className="space-y-2">
-                  {examUnits.map(unit => (
-                    <div key={unit.unitNumber} className="border rounded-lg overflow-hidden">
-                      <button
-                        onClick={() => setExpandedUnit(expandedUnit === unit.unitNumber ? null : unit.unitNumber)}
-                        className="w-full flex justify-between items-center p-3 bg-gray-50 hover:bg-gray-100 transition-colors text-left"
-                      >
-                        <span className="font-semibold text-gray-700">Unit {unit.unitNumber}: {unit.unitName}</span>
-                        <span className="text-xs text-gray-500">{unit.notes.length} note{unit.notes.length !== 1 ? 's' : ''} {expandedUnit === unit.unitNumber ? '▲' : '▼'}</span>
-                      </button>
-                      {expandedUnit === unit.unitNumber && (
-                        <div className="p-3 space-y-3 max-h-80 overflow-y-auto">
-                          {unit.notes.map((note: any) => (
-                            <div key={note.id} className="p-3 bg-gray-50 rounded-md border border-gray-200">
-                              <div className="flex justify-between items-center mb-1">
-                                <span className="text-sm font-semibold text-gray-800">{note.title}</span>
-                                <span className={`text-xs px-2 py-0.5 rounded-full ${note.noteType === 'quiz_notes' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'}`}>
-                                  {note.noteType === 'quiz_notes' ? 'Quiz' : 'Class'}
-                                </span>
-                              </div>
-                              {note.content && (
-                                <pre className="whitespace-pre-wrap font-sans text-sm text-gray-600 mt-1">{note.content}</pre>
-                              )}
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  ))}
+    <DashboardLayout
+      sidebarItems={SIDEBAR_ITEMS}
+      activeTab={activeTab}
+      onTabChange={setActiveTab}
+      userName={student.name}
+      userRole={`Level ${stats.level} Student`}
+      userAvatar={student.faceImage}
+      onLogout={onLogout}
+      onShowProfile={() => setActiveTab('profile')}
+    >
+      <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+        {/* Gamification Bar */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+           <Card padding="md" hover className="bg-theme-gradient text-white border-none shadow-primary/20">
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 rounded-xl bg-white/20 flex items-center justify-center">
+                  <Star size={24} className="fill-white" />
                 </div>
-              ) : examNotesSubject ? (
-                <p className="text-gray-500 text-center">No exam notes available for this subject yet.</p>
-              ) : (
-                <p className="text-gray-500 text-center">Select a subject to view unit-wise notes.</p>
-              )}
-            </div>
-
-            {/* Previous Class Notes (from sessions) */}
-            {availablePreviousNotes.length > 0 && (
-              <div className="bg-white p-6 rounded-lg shadow-md">
-                <h2 className="text-xl font-semibold text-gray-700 mb-4">Previous Session Notes</h2>
-                <select
-                  onChange={handleSelectPreviousNote}
-                  value={selectedPreviousNoteInfo?.id || ''}
-                  className={`w-full p-2 border border-gray-300 rounded-md shadow-sm mb-4 ${colors.ring} ${colors.border}`}
-                >
-                  <option value="">-- Select Notes --</option>
-                  {availablePreviousNotes.map(session => (
-                    <option key={session.id} value={session.id}>
-                      {new Date(session.date).toLocaleDateString()} - {session.subject}
-                    </option>
-                  ))}
-                </select>
-                {selectedPreviousNoteText && selectedPreviousNoteInfo && (
-                  <div className="p-4 bg-gray-50 rounded-md border border-gray-200">
-                    <p className="text-sm font-semibold text-gray-800 mb-2">Notes from {selectedPreviousNoteInfo.subject} on {new Date(selectedPreviousNoteInfo.date).toLocaleDateString()}</p>
-                    <div className="prose max-w-none max-h-60 overflow-y-auto">
-                      <pre className="whitespace-pre-wrap font-sans text-sm">{selectedPreviousNoteText}</pre>
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
-
-            <div className="bg-white p-6 rounded-lg shadow-md">
-              <h2 className="text-xl font-semibold text-gray-700 mb-4">Account Settings</h2>
-              <div className="flex items-center justify-between">
                 <div>
-                  <h3 className="text-md font-semibold text-gray-600">Face ID</h3>
-                  <p className={`text-sm ${student.faceImage ? 'text-green-700' : 'text-gray-500'}`}>
-                    {student.faceImage ? 'Registered' : 'Not registered'}
-                  </p>
+                  <p className="text-xs font-bold uppercase tracking-wider opacity-80">Experience Points</p>
+                  <p className="text-2xl font-black">{stats.xp} XP</p>
                 </div>
-                <button onClick={() => setShowFaceRegistration(true)} className={`text-sm font-semibold ${colors.primary} text-white px-4 py-2 rounded-lg ${colors.hover}`}>
-                  {student.faceImage ? 'Update Face ID' : 'Register Now'}
-                </button>
               </div>
-              {student.faceImage && (
-                <div className="mt-4 border-t pt-4 flex justify-center">
-                  <img src={student.faceImage} alt="Student's face" className="w-24 h-24 rounded-full object-cover" />
+           </Card>
+           <Card padding="md" hover>
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 rounded-xl bg-secondary/10 flex items-center justify-center text-secondary">
+                  <Award size={24} />
                 </div>
-              )}
+                <div>
+                  <p className="text-xs font-bold text-gray-500 uppercase tracking-wider">Current Level</p>
+                  <p className="text-2xl font-black text-secondary">Level {stats.level}</p>
+                </div>
+              </div>
+           </Card>
+           <Card padding="md" hover>
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 rounded-xl bg-amber-100 flex items-center justify-center text-amber-600">
+                  <Coins size={24} />
+                </div>
+                <div>
+                  <p className="text-xs font-bold text-gray-500 uppercase tracking-wider">Gyandeep Coins</p>
+                  <p className="text-2xl font-black text-amber-600">{stats.coins} GDC</p>
+                </div>
+              </div>
+           </Card>
+        </div>
+
+        {activeTab === 'learning' && (
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            <div className="lg:col-span-2 space-y-8">
+               <Card padding="xl">
+                  <div className="flex justify-between items-start mb-8">
+                    <div>
+                      <h2 className="text-2xl font-bold mb-1">Active Session</h2>
+                      <p className="text-gray-500">Join your live classroom session</p>
+                    </div>
+                    {classSession.isActive ? (
+                      <Badge variant="streak" size="lg" className="animate-bounce">LIVE SESSION</Badge>
+                    ) : (
+                      <Badge variant="default" size="lg">NO ACTIVE SESSION</Badge>
+                    )}
+                  </div>
+
+                  {!classSession.isActive ? (
+                    <div className="py-12 text-center bg-gray-50 dark:bg-gray-800/50 rounded-2xl border-2 border-dashed border-gray-200 dark:border-gray-700">
+                       <Activity size={48} className="mx-auto text-gray-300 mb-4" />
+                       <h3 className="text-lg font-bold text-gray-400">Wait for your teacher to start</h3>
+                    </div>
+                  ) : (
+                    <div className="space-y-6">
+                       <div className="p-6 bg-primary/5 rounded-2xl border border-primary/10 flex items-center justify-between">
+                          <div className="flex items-center gap-4">
+                             <div className="w-14 h-14 rounded-2xl bg-white dark:bg-gray-900 flex items-center justify-center shadow-sm text-primary">
+                                <BookOpen size={28} />
+                             </div>
+                             <div>
+                                <p className="text-sm font-bold text-primary uppercase tracking-tighter">Current Subject</p>
+                                <p className="text-xl font-black">{classSession.subject}</p>
+                             </div>
+                          </div>
+                          <div className="text-right">
+                             <p className="text-xs font-bold text-gray-500 uppercase">Started At</p>
+                             <p className="text-sm font-medium">{new Date(classSession.startedAt!).toLocaleTimeString()}</p>
+                          </div>
+                       </div>
+
+                       {!student.attendanceMarked ? (
+                         <div className="space-y-4">
+                            <label className="block text-sm font-bold text-gray-700">Enter Attendance Code</label>
+                            <div className="flex gap-3">
+                               <Input 
+                                 value={code} 
+                                 onChange={e => setCode(e.target.value)} 
+                                 placeholder="e.g. 4829" 
+                                 className="text-center text-2xl font-black tracking-widest h-14"
+                               />
+                               <Button variant="primary" className="h-14 px-8" onClick={() => setShowWebcam(true)}>
+                                 Verify & Mark
+                               </Button>
+                            </div>
+                         </div>
+                       ) : (
+                         <div className="p-4 bg-green-50 text-green-700 rounded-xl border border-green-100 flex items-center gap-3">
+                            <CheckCircle2 size={24} />
+                            <p className="font-bold">Attendance marked for this session!</p>
+                         </div>
+                       )}
+                    </div>
+                  )}
+               </Card>
+
+               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <Card padding="lg" hover onClick={() => setActiveTab('quiz')}>
+                     <div className="flex items-center gap-4">
+                        <div className="w-12 h-12 rounded-xl bg-orange-100 text-orange-600 flex items-center justify-center">
+                           <HelpCircle size={24} />
+                        </div>
+                        <div>
+                           <h3 className="font-bold">Live Quiz</h3>
+                           <p className="text-sm text-gray-500">Take the session quiz</p>
+                        </div>
+                        <ChevronRight className="ml-auto text-gray-300" size={20} />
+                     </div>
+                  </Card>
+                  <Card padding="lg" hover onClick={() => setActiveTab('twin')}>
+                     <div className="flex items-center gap-4">
+                        <div className="w-12 h-12 rounded-xl bg-purple-100 text-purple-600 flex items-center justify-center">
+                           <Zap size={24} />
+                        </div>
+                        <div>
+                           <h3 className="font-bold">Digital Twin</h3>
+                           <p className="text-sm text-gray-500">AI Learning Assistant</p>
+                        </div>
+                        <ChevronRight className="ml-auto text-gray-300" size={20} />
+                     </div>
+                  </Card>
+               </div>
+            </div>
+
+            <div className="space-y-8">
+               <AnnouncementBoard announcements={announcements} canPost={false} theme={theme} />
+               <Card padding="lg">
+                  <h3 className="text-lg font-bold mb-4 flex items-center gap-2">
+                    <Activity size={20} className="text-secondary" />
+                    Session Notes
+                  </h3>
+                  <div className="space-y-3">
+                     {classSession.notes ? (
+                       <p className="text-sm text-gray-600 leading-relaxed bg-gray-50 dark:bg-gray-800/50 p-4 rounded-xl italic">
+                         "{classSession.notes}"
+                       </p>
+                     ) : (
+                       <p className="text-sm text-gray-400 italic">No notes from teacher yet.</p>
+                     )}
+                  </div>
+               </Card>
             </div>
           </div>
-          <div className="space-y-6">
-            {classSession.code && !sessionEnded && (
-            <div className="bg-white p-6 rounded-lg shadow-md">
-              <div className="flex items-center gap-2 mb-4">
-                <h2 className="text-xl font-semibold text-gray-700">Quiz</h2>
-                {classSession.quizType && (
-                  <span className="px-2 py-0.5 text-xs font-semibold rounded-full bg-purple-100 text-purple-700 uppercase">
-                    {classSession.quizType}
-                  </span>
-                )}
-              </div>
-              {classSession.quiz && classSession.quizPublished && !quizTaken ? (
-                <QuizView quiz={classSession.quiz} subject={classSession.subject} onSubmit={handleQuizSubmit} theme={theme} />
-              ) : quizTaken ? (
-                <p className="text-green-600 text-center">✅ You have completed the quiz for this session.</p>
-              ) : (
-                <p className="text-gray-500 text-center">The quiz is not yet available.</p>
-              )}
-            </div>
-            )}
-            {/* Performance section with subject tabs */}
-            <div className="bg-white p-6 rounded-lg shadow-md">
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-xl font-semibold text-gray-700">Performance</h2>
-                <div className="flex bg-gray-100 rounded-lg p-0.5 gap-0.5">
-                  <button
-                    onClick={() => setPerformanceTab('current')}
-                    className={`px-3 py-1 text-xs font-semibold rounded-md transition-all ${performanceTab === 'current' ? `${colors.primary} text-white shadow` : 'text-gray-600 hover:bg-gray-200'
-                      }`}
-                  >
-                    {classSession.subject}
-                  </button>
-                  <button
-                    onClick={() => setPerformanceTab('all')}
-                    className={`px-3 py-1 text-xs font-semibold rounded-md transition-all ${performanceTab === 'all' ? `${colors.primary} text-white shadow` : 'text-gray-600 hover:bg-gray-200'
-                      }`}
-                  >
-                    All Subjects
-                  </button>
+        )}
+
+        {activeTab === 'quiz' && (
+          <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+             <Card padding="xl">
+                <div className="flex justify-between items-center mb-8">
+                   <div>
+                      <h2 className="text-2xl font-bold">Quiz Center</h2>
+                      <p className="text-gray-500">Challenge yourself and earn XP</p>
+                   </div>
+                   <Badge variant="xp" size="lg">Ready to play</Badge>
                 </div>
-              </div>
-              {performanceTab === 'current' ? (
-                studentPerformanceForSubject.length > 0 ? (
-                  <PerformanceChart data={studentPerformanceForSubject} title="" theme={theme} />
-                ) : (
-                  <p className="text-gray-500 text-center">No performance data for {classSession.subject} yet.</p>
-                )
-              ) : (
-                student.performance.length > 0 ? (
-                  <div className="space-y-4">
-                    {Array.from(new Set(student.performance.map(p => p.subject))).map(subject => {
-                      const subjectData = student.performance.filter(p => p.subject === subject);
-                      const avg = Math.round(subjectData.reduce((s, p) => s + p.score, 0) / subjectData.length);
-                      return (
-                        <div key={subject} className="border rounded-lg p-3">
-                          <div className="flex justify-between items-center mb-2">
-                            <span className="font-semibold text-gray-700 text-sm">{subject}</span>
-                            <span className={`text-sm font-bold px-2 py-0.5 rounded-full ${avg >= 80 ? 'bg-green-100 text-green-700' : avg >= 60 ? 'bg-yellow-100 text-yellow-700' : 'bg-red-100 text-red-700'
-                              }`}>{avg}% avg</span>
-                          </div>
-                          <PerformanceChart data={subjectData} title="" theme={theme} />
-                        </div>
-                      );
-                    })}
+                
+                {quizTaken ? (
+                  <div className="py-16 text-center">
+                     <div className="w-20 h-20 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto mb-6">
+                        <CheckCircle2 size={40} />
+                     </div>
+                     <h3 className="text-xl font-bold mb-2">Quiz Completed!</h3>
+                     <p className="text-gray-500">You've earned 50 XP for completing today's quiz.</p>
+                     <Button variant="secondary" className="mt-8" onClick={() => setQuizTaken(false)}>Review Answers</Button>
                   </div>
                 ) : (
-                  <p className="text-gray-500 text-center">No performance data available yet.</p>
-                )
-              )}
-            </div>
+                  <QuizView 
+                    quiz={classSession.quiz || []}
+                    subject={classSession.subject || 'General'}
+                    onSubmit={(score) => {
+                      onUpdatePerformance(student.id, classSession.subject || 'General', score);
+                      setQuizTaken(true);
+                    }}
+                    theme={theme}
+                  />
+                )}
+             </Card>
+          </div>
+        )}
 
-            {/* Leaderboard */}
-            {allStudents.length > 0 && (
-              <Leaderboard students={allStudents} currentStudentId={student.id} theme={theme} />
-            )}
+        {activeTab === 'performance' && (
+          <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                <div className="lg:col-span-2 space-y-8">
+                   <Card padding="xl">
+                      <h3 className="text-xl font-bold mb-6">Your Progress</h3>
+                      <PerformanceChart data={student.performance || []} />
+                   </Card>
+                   <Card padding="xl">
+                      <h3 className="text-xl font-bold mb-6">Subject Breakdown</h3>
+                      <div className="space-y-4">
+                         {['Mathematics', 'Science', 'English'].map(sub => (
+                           <div key={sub}>
+                              <div className="flex justify-between text-sm mb-2">
+                                 <span className="font-bold">{sub}</span>
+                                 <span className="text-primary font-bold">85%</span>
+                              </div>
+                              <div className="w-full h-2 bg-gray-100 rounded-full overflow-hidden">
+                                 <div className="h-full bg-theme-gradient w-[85%]" />
+                              </div>
+                           </div>
+                         ))}
+                      </div>
+                   </Card>
+                </div>
+                <div className="space-y-8">
+                   <Leaderboard students={allStudents} currentStudentId={student.id} theme={theme} />
+                </div>
+             </div>
+          </div>
+        )}
 
-            {/* Announcements */}
-          <AnnouncementBoard announcements={announcements} canPost={false} theme={theme} />
-          <TicketPanel userId={student.id} role="student" colors={colors} />
-        </div>
-        </main>
+        {activeTab === 'twin' && (
+          <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+             <Card padding="none" className="overflow-hidden h-[600px] flex flex-col">
+                <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-white">
+                   <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-full bg-purple-100 text-purple-600 flex items-center justify-center">
+                         <Zap size={20} />
+                      </div>
+                      <div>
+                         <h3 className="font-bold">AI Learning Twin</h3>
+                         <p className="text-xs text-gray-500">Personalized study partner</p>
+                      </div>
+                   </div>
+                   <Badge variant="success" size="sm">Online</Badge>
+                </div>
+                <div className="flex-1 overflow-hidden relative">
+                   <StudentLearningTwin student={student} theme={theme} />
+                </div>
+             </Card>
+          </div>
+        )}
+
+        {activeTab === 'announcements' && (
+          <div className="max-w-4xl mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+             <h2 className="text-2xl font-bold mb-6">Important Notices</h2>
+             {announcements.map((ann, idx) => (
+               <Card key={idx} padding="lg" hover>
+                  <div className="flex gap-4">
+                     <div className={`w-12 h-12 rounded-xl shrink-0 flex items-center justify-center ${ann.priority === 'high' ? 'bg-red-100 text-red-600' : 'bg-blue-100 text-blue-600'}`}>
+                        <Bell size={24} />
+                     </div>
+                     <div>
+                        <div className="flex items-center gap-3 mb-1">
+                           <h3 className="font-bold">{ann.title}</h3>
+                           {ann.priority === 'high' && <Badge variant="danger" size="xs">Priority</Badge>}
+                        </div>
+                        <p className="text-gray-600 mb-3 leading-relaxed">{ann.content}</p>
+                        <p className="text-xs text-gray-400">{new Date(ann.createdAt).toLocaleDateString()} • By {ann.author}</p>
+                     </div>
+                  </div>
+               </Card>
+             ))}
+          </div>
+        )}
+
+        {activeTab === 'profile' && (
+          <div className="max-w-4xl mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+             <Card padding="xl">
+                <div className="flex flex-col md:flex-row items-center gap-8">
+                   <div className="relative group">
+                      <div className="w-32 h-32 rounded-3xl overflow-hidden border-4 border-primary ring-4 ring-primary/10 shadow-2xl">
+                         {student.faceImage ? (
+                           <img src={student.faceImage} alt="Profile" className="w-full h-full object-cover" />
+                         ) : (
+                           <div className="w-full h-full bg-theme-gradient flex items-center justify-center text-white text-4xl font-black">
+                              {student.name[0]}
+                           </div>
+                         )}
+                      </div>
+                      <button 
+                        onClick={() => setShowFaceRegistration(true)}
+                        className="absolute -bottom-2 -right-2 w-10 h-10 bg-white shadow-lg rounded-xl flex items-center justify-center text-primary hover:scale-110 transition-transform"
+                      >
+                         <Camera size={20} />
+                      </button>
+                   </div>
+                   <div className="text-center md:text-left flex-1">
+                      <div className="flex flex-wrap items-center justify-center md:justify-start gap-3 mb-2">
+                         <h2 className="text-3xl font-black">{student.name}</h2>
+                         <Badge variant="streak" size="sm">Top 5%</Badge>
+                      </div>
+                      <p className="text-gray-500 font-medium mb-4">{student.email} • ID: {student.id}</p>
+                      <div className="flex flex-wrap justify-center md:justify-start gap-4">
+                         <div className="px-4 py-2 bg-gray-50 rounded-xl border border-gray-100">
+                            <p className="text-[10px] font-bold text-gray-400 uppercase">Class</p>
+                            <p className="font-bold">{student.classId || 'Not Assigned'}</p>
+                         </div>
+                         <div className="px-4 py-2 bg-gray-50 rounded-xl border border-gray-100">
+                            <p className="text-[10px] font-bold text-gray-400 uppercase">Member Since</p>
+                            <p className="font-bold">Aug 2025</p>
+                         </div>
+                      </div>
+                   </div>
+                </div>
+             </Card>
+             
+             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                <Card padding="lg">
+                   <h3 className="font-bold mb-4">Account Settings</h3>
+                   <div className="space-y-3">
+                      <Button variant="ghost" className="w-full justify-start" icon={<Settings size={18} />}>Security & Password</Button>
+                      <Button variant="ghost" className="w-full justify-start" icon={<Bell size={18} />}>Notification Preferences</Button>
+                      <Button variant="ghost" className="w-full justify-start text-red-500" onClick={onLogout} icon={<LogOut size={18} />}>Sign Out</Button>
+                   </div>
+                </Card>
+                <Card padding="lg">
+                   <h3 className="font-bold mb-4">Learning Preferences</h3>
+                   <div className="space-y-3">
+                      <Button variant="ghost" className="w-full justify-start" icon={<Activity size={18} />}>Accessibility Options</Button>
+                      <Button variant="ghost" className="w-full justify-start" icon={<PlayCircle size={18} />}>Auto-play Quizzes</Button>
+                   </div>
+                </Card>
+             </div>
+          </div>
+        )}
       </div>
-      {showWebcam && <WebcamCapture onCapture={handleCapture} onClose={() => setShowWebcam(false)} theme={theme} title="Face Verification" buttonText="Verify Identity" />}
+
+      <TicketPanel userId={student.id} role="student" />
+
+      {showWebcam && (
+        <WebcamCapture
+          onCapture={handleAttendance}
+          onClose={() => setShowWebcam(false)}
+          theme={theme}
+          title="Face Verification"
+          buttonText={isVerifying ? "Verifying..." : "Capture & Verify"}
+          liveness
+        />
+      )}
+
       {showFaceRegistration && (
         <StudentFaceRegistration
           userId={student.id}
-          onCapture={handleFaceRegister}
-          onSuccess={() => {
+          onCapture={(img) => {
+            onUpdateFaceImage(student.id, img);
             setShowFaceRegistration(false);
-            onShowNotification('Face ID registered successfully! You can now use Face ID for attendance.', 'success');
           }}
+          onSuccess={() => setShowFaceRegistration(false)}
           onClose={() => setShowFaceRegistration(false)}
         />
       )}
-    </>
+    </DashboardLayout>
   );
 };
+
+interface StudentDashboardProps {
+  student: Student;
+  classSession: ClassSession;
+  onMarkAttendance: (studentId: string) => void;
+  onUpdatePerformance: (studentId: string, subject: string, score: number) => void;
+  onLogout: () => void;
+  onShowNotification: (message: string, type?: 'info' | 'success') => void;
+  theme: string;
+  onUpdateFaceImage: (studentId: string, faceImage: string) => void;
+  historicalSessions: HistoricalSessionRecord[];
+  allStudents?: Student[];
+  announcements?: Announcement[];
+  onUpdateSession?: (sessionUpdate: Partial<ClassSession>) => void;
+}
 
 export default StudentDashboard;
