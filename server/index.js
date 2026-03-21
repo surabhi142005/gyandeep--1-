@@ -4,15 +4,21 @@
  */
 
 import express from 'express';
+import { createServer } from 'http';
 import cors from 'cors';
+import cookieParser from 'cookie-parser';
 import { connectToDatabase } from './db/mongoAtlas.js';
 import { standardRateLimiter, authRateLimiter, strictRateLimiter } from './middleware/rateLimiter.js';
 import { securityHeaders, sanitizeInput, requestSizeLimit } from './middleware/security.js';
+import { setupWebSocket } from './websocket.js';
+import { initRedis, isRedisConnected, healthCheck as redisHealthCheck } from './services/cache.js';
+import { initSentry, setupSentryErrorHandlers, captureException, addBreadcrumb } from './services/sentry.js';
 
 import authRouter from './routes/auth.js';
 import usersRouter from './routes/users.js';
 import classesRouter from './routes/classes.js';
 import gradesRouter from './routes/grades.js';
+import attendanceRouter from './routes/attendance.js';
 import notesRouter from './routes/notes.js';
 import questionBankRouter from './routes/questionBank.js';
 import timetableRouter from './routes/timetable.js';
@@ -34,6 +40,9 @@ const PORT = process.env.PORT || 3001;
 
 // Security headers for all routes
 app.use(securityHeaders);
+
+// Cookie parser for httpOnly cookies
+app.use(cookieParser());
 
 // CORS configuration
 app.use(cors({
@@ -61,7 +70,15 @@ app.get('/api/health', async (req, res) => {
   try {
     const db = await connectToDatabase();
     await db.collection('users').findOne({});
-    res.json({ status: 'ok', db: 'connected', timestamp: new Date().toISOString() });
+    
+    const redisStatus = redisHealthCheck();
+    
+    res.json({ 
+      status: 'ok', 
+      db: 'connected', 
+      redis: redisStatus.status === 'healthy' ? 'connected' : 'disconnected',
+      timestamp: new Date().toISOString() 
+    });
   } catch (error) {
     console.error('Health check error:', error);
     res.status(503).json({ status: 'error', db: 'disconnected', error: error.message });
@@ -79,6 +96,9 @@ app.use('/api/classes', classesRouter);
 
 // Grades routes
 app.use('/api/grades', gradesRouter);
+
+// Attendance routes
+app.use('/api/attendance', attendanceRouter);
 
 // Notes routes
 app.use('/api/notes', notesRouter);
@@ -125,10 +145,23 @@ app.use('/api/google', googleRouter);
 // AI routes
 app.use('/api', aiRouter);
 
+// Create HTTP server and attach WebSocket
+const server = createServer(app);
+setupWebSocket(server);
+
+// Initialize Redis (optional - will gracefully degrade if not available)
+initRedis();
+
+// Initialize Sentry error tracking (optional)
+initSentry();
+setupSentryErrorHandlers(app);
+
 // Start server
-app.listen(PORT, () => {
+server.listen(PORT, () => {
   console.log(`🚀 Server running on http://localhost:${PORT}`);
   console.log(`📊 Health check: http://localhost:${PORT}/api/health`);
+  console.log(`🔌 WebSocket: ws://localhost:${PORT}/ws`);
 });
 
 export default app;
+export { server };

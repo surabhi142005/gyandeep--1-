@@ -225,9 +225,55 @@ export const updateTagPresets = async (subject: string, tags: string[]) => {
 
 // ─── Grades ──────────────────────────────────────────────────────────────────
 
-export const fetchGrades = async () => {
-  const rows = await apiRequest('/api/grades', { method: 'GET' });
-  return Array.isArray(rows) ? rows : [];
+export interface PaginatedGrades {
+  items: any[];
+  pagination: {
+    page: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+    hasNext: boolean;
+    hasPrev: boolean;
+  };
+}
+
+export interface FetchGradesOptions {
+  studentId?: string;
+  subjectId?: string;
+  page?: number;
+  limit?: number;
+  sortBy?: string;
+  sortOrder?: 'asc' | 'desc';
+}
+
+export const fetchGrades = async (options?: FetchGradesOptions): Promise<any[]> => {
+  const params = new URLSearchParams();
+  if (options?.studentId) params.set('studentId', options.studentId);
+  if (options?.subjectId) params.set('subjectId', options.subjectId);
+  if (options?.page) params.set('page', String(options.page));
+  if (options?.limit) params.set('limit', String(options.limit));
+  if (options?.sortBy) params.set('sortBy', options.sortBy);
+  if (options?.sortOrder) params.set('sortOrder', options.sortOrder);
+
+  const queryString = params.toString();
+  const rows = await apiRequest(`/api/grades${queryString ? `?${queryString}` : ''}`, { method: 'GET' });
+  if (Array.isArray(rows)) return rows;
+  return Array.isArray(rows?.items) ? rows.items : [];
+};
+
+export const fetchGradesPaginated = async (options?: FetchGradesOptions): Promise<PaginatedGrades> => {
+  const params = new URLSearchParams();
+  if (options?.studentId) params.set('studentId', options.studentId);
+  if (options?.subjectId) params.set('subjectId', options.subjectId);
+  if (options?.page) params.set('page', String(options.page));
+  if (options?.limit) params.set('limit', String(options.limit));
+  if (options?.sortBy) params.set('sortBy', options.sortBy);
+  if (options?.sortOrder) params.set('sortOrder', options.sortOrder);
+
+  const queryString = params.toString();
+  const result = await apiRequest(`/api/grades${queryString ? `?${queryString}` : ''}`, { method: 'GET' });
+  if (result?.items && result?.pagination) return result;
+  return { items: Array.isArray(result) ? result : [], pagination: { page: 1, limit: 20, total: 0, totalPages: 0, hasNext: false, hasPrev: false } };
 };
 
 export const addGrade = async (grade: { studentId: string; subject: string; category: string; title: string; score: number; maxScore: number; weight?: number; date?: string; teacherId?: string }) => {
@@ -475,4 +521,104 @@ export const sendAIEmail = async (payload: { prompt: string; recipients: string 
 
 export const checkEmailServiceHealth = async () => {
   return apiRequest('/api/admin/email/health', { method: 'GET' });
+};
+
+// ─── Attendance ───────────────────────────────────────────────────────────────
+
+export interface PaginatedAttendance {
+  items: any[];
+  pagination: {
+    page: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+    hasNext: boolean;
+    hasPrev: boolean;
+  };
+}
+
+export interface FetchAttendanceOptions {
+  studentId?: string;
+  classId?: string;
+  status?: string;
+  startDate?: string;
+  endDate?: string;
+  page?: number;
+  limit?: number;
+  sortBy?: string;
+  sortOrder?: 'asc' | 'desc';
+}
+
+export const fetchAttendance = async (options?: FetchAttendanceOptions): Promise<any[]> => {
+  const params = new URLSearchParams();
+  if (options?.studentId) params.set('studentId', options.studentId);
+  if (options?.classId) params.set('classId', options.classId);
+  if (options?.status) params.set('status', options.status);
+  if (options?.startDate) params.set('startDate', options.startDate);
+  if (options?.endDate) params.set('endDate', options.endDate);
+  if (options?.page) params.set('page', String(options.page));
+  if (options?.limit) params.set('limit', String(options.limit));
+  if (options?.sortBy) params.set('sortBy', options.sortBy);
+  if (options?.sortOrder) params.set('sortOrder', options.sortOrder);
+
+  const queryString = params.toString();
+  const rows = await apiRequest(`/api/attendance${queryString ? `?${queryString}` : ''}`, { method: 'GET' });
+  if (Array.isArray(rows)) return rows;
+  return Array.isArray(rows?.items) ? rows.items : [];
+};
+
+export const fetchAttendancePaginated = async (options?: FetchAttendanceOptions): Promise<PaginatedAttendance> => {
+  const params = new URLSearchParams();
+  if (options?.studentId) params.set('studentId', options.studentId);
+  if (options?.classId) params.set('classId', options.classId);
+  if (options?.status) params.set('status', options.status);
+  if (options?.startDate) params.set('startDate', options.startDate);
+  if (options?.endDate) params.set('endDate', options.endDate);
+  if (options?.page) params.set('page', String(options.page));
+  if (options?.limit) params.set('limit', String(options.limit));
+  if (options?.sortBy) params.set('sortBy', options.sortBy);
+  if (options?.sortOrder) params.set('sortOrder', options.sortOrder);
+
+  const queryString = params.toString();
+  const result = await apiRequest(`/api/attendance${queryString ? `?${queryString}` : ''}`, { method: 'GET' });
+  if (result?.items && result?.pagination) return result;
+  return { items: Array.isArray(result) ? result : [], pagination: { page: 1, limit: 20, total: 0, totalPages: 0, hasNext: false, hasPrev: false } };
+};
+
+export const createAttendanceRecord = async (record: { studentId: string; classId?: string; sessionId?: string; status: string; notes?: string }) => {
+  const payload = await apiRequest('/api/attendance', {
+    method: 'POST',
+    body: JSON.stringify(record),
+  });
+  websocketService.sendAttendanceUpdate({ type: 'created', id: payload?.record?.id });
+  return payload?.record;
+};
+
+export const createAttendanceBulk = async (records: Array<{ studentId: string; classId?: string; sessionId?: string; status: string; notes?: string }>) => {
+  const payload = await apiRequest('/api/attendance/bulk', {
+    method: 'POST',
+    body: JSON.stringify({ records }),
+  });
+  websocketService.sendAttendanceUpdate({ type: 'bulk-created', count: payload?.count || records.length });
+  return payload;
+};
+
+export const updateAttendanceRecord = async (id: string, updates: { status?: string; notes?: string }) => {
+  const payload = await apiRequest(`/api/attendance/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify(updates),
+  });
+  websocketService.sendAttendanceUpdate({ type: 'updated', id });
+  return payload?.record;
+};
+
+export const fetchAttendanceStats = async (options?: { studentId?: string; classId?: string; startDate?: string; endDate?: string }) => {
+  const params = new URLSearchParams();
+  if (options?.studentId) params.set('studentId', options.studentId);
+  if (options?.classId) params.set('classId', options.classId);
+  if (options?.startDate) params.set('startDate', options.startDate);
+  if (options?.endDate) params.set('endDate', options.endDate);
+
+  const queryString = params.toString();
+  return apiRequest(`/api/attendance/stats${queryString ? `?${queryString}` : ''}`, { method: 'GET' });
 };

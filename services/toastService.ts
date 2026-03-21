@@ -3,7 +3,7 @@
  * Global toast notification queue management
  */
 
-type ToastType = 'success' | 'error' | 'warning' | 'info';
+type ToastType = 'success' | 'error' | 'warning' | 'info' | 'loading';
 
 interface Toast {
   id: string;
@@ -11,6 +11,7 @@ interface Toast {
   message: string;
   duration: number;
   createdAt: number;
+  progress?: number;
 }
 
 type ToastCallback = (toasts: Toast[]) => void;
@@ -81,6 +82,26 @@ class ToastQueue {
     return this.add('info', message, duration);
   }
 
+  loading(message: string, duration?: number): string {
+    return this.add('loading', message, duration ?? 0);
+  }
+
+  updateProgress(id: string, progress: number): void {
+    const toast = this.toasts.find(t => t.id === id);
+    if (toast) {
+      toast.progress = progress;
+      this.notify();
+    }
+  }
+
+  updateMessage(id: string, message: string): void {
+    const toast = this.toasts.find(t => t.id === id);
+    if (toast) {
+      toast.message = message;
+      this.notify();
+    }
+  }
+
   getToasts(): Toast[] {
     return [...this.toasts];
   }
@@ -103,8 +124,11 @@ export const toast = {
   error: (message: string, duration?: number) => toastQueue.error(message, duration),
   warning: (message: string, duration?: number) => toastQueue.warning(message, duration),
   info: (message: string, duration?: number) => toastQueue.info(message, duration),
+  loading: (message: string, duration?: number) => toastQueue.loading(message, duration),
   remove: (id: string) => toastQueue.remove(id),
   clear: () => toastQueue.clear(),
+  updateProgress: (id: string, progress: number) => toastQueue.updateProgress(id, progress),
+  updateMessage: (id: string, message: string) => toastQueue.updateMessage(id, message),
 };
 
 export type { Toast, ToastType };

@@ -1,9 +1,9 @@
 /**
  * services/authService.ts
  *
- * JWT-only auth via Express backend with token refresh support.
- * Face recognition proxies to /api/auth/face (Python service on :5001)
- * with local pixel-diff fallback when the Python service is unavailable.
+ * Auth with httpOnly cookies. Tokens are stored server-side in secure cookies.
+ * Client manages session state without storing tokens directly.
+ * Face recognition proxies to /api/auth/face (Python service on :5001).
  */
 
 import { calculateDistance } from './locationService';
@@ -11,63 +11,89 @@ import type { Coordinates } from '../types';
 
 const API_BASE = import.meta.env.VITE_API_URL || '';
 
-const TOKEN_REFRESH_THRESHOLD = 5 * 60 * 1000; // 5 minutes before expiry
-
-// ── Token helpers ─────────────────────────────────────────────────────────────
-
-function saveTokens(accessToken: string, refreshToken: string) {
-  try { localStorage.setItem('gyandeep_token', accessToken); } catch {}
-  try { localStorage.setItem('gyandeep_refresh_token', refreshToken); } catch {}
+interface AuthState {
+  isAuthenticated: boolean;
+  user: any | null;
+  isLoading: boolean;
 }
 
-function saveAccessToken(token: string) {
-  try { localStorage.setItem('gyandeep_token', token); } catch {}
+let authState: AuthState = {
+  isAuthenticated: false,
+  user: null,
+  isLoading: true,
+};
+
+const authListeners: Set<(state: AuthState) => void> = new Set();
+
+function notifyListeners() {
+  authListeners.forEach(listener => listener({ ...authState }));
 }
 
-function saveRefreshToken(token: string) {
-  try { localStorage.setItem('gyandeep_refresh_token', token); } catch {}
+export function subscribeAuth(callback: (state: AuthState) => void): () => void {
+  authListeners.add(callback);
+  callback({ ...authState });
+  return () => authListeners.delete(callback);
+}
+
+function updateAuthState(updates: Partial<AuthState>) {
+  authState = { ...authState, ...updates };
+  notifyListeners();
+}
+
+export function getAuthState(): AuthState {
+  return { ...authState };
+}
+
+// ── Token management (for SSE/WebSocket) ──────────────────────────────────────
+// Tokens still needed for EventSource/Socket authentication, but stored differently
+
+export async function getAccessToken(): Promise<string | null> {
+  try {
+    const res = await fetch(`${API_BASE}/api/auth/me`, {
+      credentials: 'include',
+    });
+    if (res.ok) {
+      return 'cookie-auth';
+    }
+    return null;
+  } catch {
+    return null;
+  }
 }
 
 export function getStoredToken(): string | null {
-  try { return localStorage.getItem('gyandeep_token'); } catch { return null; }
+  // For backward compatibility with existing code that expects a token
+  // In practice, tokens are in httpOnly cookies
+  return 'cookie-auth';
 }
 
 export function getStoredRefreshToken(): string | null {
-  try { return localStorage.getItem('gyandeep_refresh_token'); } catch { return null; }
+  return 'cookie-auth';
 }
 
-function authHeader(): Record<string, string> {
-  const token = getStoredToken();
-  return token ? { Authorization: `Bearer ${token}` } : {};
-}
-
-// ── Token refresh logic ──────────────────────────────────────────────────────
+// ── Token refresh (automatic with cookies) ────────────────────────────────────
 
 let refreshPromise: Promise<boolean> | null = null;
 
 export async function refreshAccessToken(): Promise<boolean> {
   if (refreshPromise) return refreshPromise;
-  
-  refreshPromise = (async () => {
-    const refreshToken = getStoredRefreshToken();
-    if (!refreshToken) return false;
 
+  refreshPromise = (async () => {
     try {
       const res = await fetch(`${API_BASE}/api/auth/refresh`, {
         method: 'POST',
+        credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ refreshToken }),
       });
 
       if (!res.ok) {
-        // Refresh failed, clear tokens
         logout();
         return false;
       }
 
       const data = await res.json();
-      if (data.accessToken && data.refreshToken) {
-        saveTokens(data.accessToken, data.refreshToken);
+      if (data.user) {
+        updateAuthState({ user: data.user, isAuthenticated: true });
         return true;
       }
       return false;
@@ -81,61 +107,72 @@ export async function refreshAccessToken(): Promise<boolean> {
   return refreshPromise;
 }
 
-export async function ensureValidToken(): Promise<string | null> {
-  const token = getStoredToken();
-  if (!token) return null;
-  
-  // Try to refresh if token is missing (no expiry check in frontend, server handles it)
+export async function ensureValidToken(): Promise<boolean> {
   try {
     const res = await fetch(`${API_BASE}/api/auth/me`, {
-      headers: authHeader(),
+      credentials: 'include',
     });
-    
+
     if (res.status === 401) {
-      // Token expired, try refresh
       const refreshed = await refreshAccessToken();
-      return refreshed ? getStoredToken() : null;
+      return refreshed;
     }
-    
-    return token;
+
+    return res.ok;
   } catch {
-    return token;
+    return false;
   }
 }
 
 // ── Public API ────────────────────────────────────────────────────────────────
 
 export async function register(email: string, password: string, name: string, role = 'student') {
+  updateAuthState({ isLoading: true });
+
   const res = await fetch(`${API_BASE}/api/auth/register`, {
     method: 'POST',
+    credentials: 'include',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ email, password, name, role }),
   });
+
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
+    updateAuthState({ isLoading: false });
     throw new Error(err.error || 'Registration failed');
   }
+
   const data = await res.json();
-  if (data.accessToken && data.refreshToken) {
-    saveTokens(data.accessToken, data.refreshToken);
-  }
+  updateAuthState({
+    user: data.user,
+    isAuthenticated: true,
+    isLoading: false,
+  });
   return data.user;
 }
 
 export async function login(email: string, password: string) {
+  updateAuthState({ isLoading: true });
+
   const res = await fetch(`${API_BASE}/api/auth/login`, {
     method: 'POST',
+    credentials: 'include',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ email, password }),
   });
+
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
+    updateAuthState({ isLoading: false });
     throw new Error(err.error || 'Invalid credentials');
   }
+
   const data = await res.json();
-  if (data.accessToken && data.refreshToken) {
-    saveTokens(data.accessToken, data.refreshToken);
-  }
+  updateAuthState({
+    user: data.user,
+    isAuthenticated: true,
+    isLoading: false,
+  });
   return data.user;
 }
 
@@ -145,33 +182,69 @@ export async function loginWithGoogle() {
 }
 
 export async function logout() {
-  try { localStorage.removeItem('gyandeep_token'); } catch {}
-  try { localStorage.removeItem('gyandeep_refresh_token'); } catch {}
-  try { localStorage.removeItem('gyandeep_current_user'); } catch {}
+  try {
+    await fetch(`${API_BASE}/api/auth/logout`, {
+      method: 'POST',
+      credentials: 'include',
+    });
+  } catch {}
+
+  updateAuthState({
+    user: null,
+    isAuthenticated: false,
+    isLoading: false,
+  });
 }
 
 export async function getCurrentUser() {
-  const token = await ensureValidToken();
-  if (!token) return null;
+  if (authState.user && authState.isAuthenticated) {
+    return authState.user;
+  }
+
   try {
     const res = await fetch(`${API_BASE}/api/auth/me`, {
-      headers: { Authorization: `Bearer ${token}` },
+      credentials: 'include',
     });
-    if (res.status === 401) return null;
+
+    if (res.status === 401) {
+      const refreshed = await refreshAccessToken();
+      if (refreshed) {
+        return authState.user;
+      }
+      return null;
+    }
+
     if (!res.ok) return null;
-    return await res.json();
+
+    const user = await res.json();
+    updateAuthState({ user, isAuthenticated: true, isLoading: false });
+    return user;
   } catch {
-    // Server unreachable — fall back to cached user
-    try {
-      const raw = localStorage.getItem('gyandeep_current_user');
-      return raw ? JSON.parse(raw) : null;
-    } catch { return null; }
+    if (authState.user) {
+      return authState.user;
+    }
+    return null;
+  }
+}
+
+export async function initAuth() {
+  updateAuthState({ isLoading: true });
+  try {
+    const user = await getCurrentUser();
+    updateAuthState({
+      user,
+      isAuthenticated: !!user,
+      isLoading: false,
+    });
+  } catch {
+    updateAuthState({ isLoading: false });
   }
 }
 
 export async function requestPasswordReset(email: string) {
   const res = await fetch(`${API_BASE}/api/auth/password/request`, {
     method: 'POST',
+    credentials: 'include',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ email }),
   });
@@ -180,17 +253,11 @@ export async function requestPasswordReset(email: string) {
 
 // ── Face Recognition ──────────────────────────────────────────────────────────
 
-/**
- * Register a face image via the Express backend.
- */
 export async function registerFace(userId: string, imageDataUrl: string): Promise<{ ok: boolean }> {
-  const token = getStoredToken();
   const res = await fetch(`${API_BASE}/api/auth/face/register`, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    },
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ imageDataUrl }),
   });
   if (!res.ok) {
@@ -200,24 +267,14 @@ export async function registerFace(userId: string, imageDataUrl: string): Promis
   return { ok: true };
 }
 
-/**
- * Verify a face image against a stored reference.
- *
- * Priority:
- *  1. POST /api/auth/face  → Python service (deep learning, accurate)
- *  2. Local pixel-diff fallback (fast, approximate)
- */
 export async function verifyFace(
   capturedImageDataUrl: string,
   _storedImageDataUrl?: string | null,
 ): Promise<{ authenticated: boolean; confidence?: number; method?: string }> {
-  const token = getStoredToken();
   const res = await fetch(`${API_BASE}/api/auth/face`, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    },
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ image: capturedImageDataUrl }),
   });
   if (!res.ok) {
@@ -228,10 +285,6 @@ export async function verifyFace(
   return { authenticated, confidence: data.confidence, method: 'python' };
 }
 
-/**
- * Pixel-level similarity between two base64 images using canvas (browser only).
- * Returns a value 0–1 where 1 = identical.
- */
 async function compareImages(img1DataUrl: string, img2DataUrl: string): Promise<number> {
   const loadImage = (src: string): Promise<HTMLImageElement> =>
     new Promise((resolve, reject) => {
@@ -242,7 +295,7 @@ async function compareImages(img1DataUrl: string, img2DataUrl: string): Promise<
     });
 
   const [img1, img2] = await Promise.all([loadImage(img1DataUrl), loadImage(img2DataUrl)]);
-  const W = 64, H = 64; // downscale for speed
+  const W = 64, H = 64;
 
   const canvas = document.createElement('canvas');
   canvas.width = W; canvas.height = H;
@@ -256,7 +309,7 @@ async function compareImages(img1DataUrl: string, img2DataUrl: string): Promise<
   const d2 = ctx.getImageData(0, 0, W, H).data;
 
   let diff = 0;
-  const total = W * H * 3; // RGB only
+  const total = W * H * 3;
   for (let i = 0; i < d1.length; i += 4) {
     diff += Math.abs(d1[i] - d2[i]) + Math.abs(d1[i+1] - d2[i+1]) + Math.abs(d1[i+2] - d2[i+2]);
   }
@@ -276,7 +329,7 @@ export async function verifyLocation(
   return { authenticated, distance_m, radius_m: radiusMeters };
 }
 
-// ── Legacy password helpers (kept for Login.tsx backward compatibility) ────────
+// ── Legacy password helpers ────────────────────────────────────────────────────
 
 export async function hashPassword(plain: string): Promise<string> {
   const enc = new TextEncoder();

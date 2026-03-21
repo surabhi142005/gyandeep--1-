@@ -2,7 +2,7 @@ import React, { useEffect, useState, useCallback, useMemo } from 'react';
 
 /* ─── Toast Type ─────────────────────────────────────────────────────────── */
 
-export type ToastType = 'info' | 'success' | 'warning' | 'error';
+export type ToastType = 'info' | 'success' | 'warning' | 'error' | 'loading';
 
 export interface ToastNotificationProps {
   message: string;
@@ -10,6 +10,8 @@ export interface ToastNotificationProps {
   /** Auto-close delay in ms (default: 5000). Set to 0 to disable. */
   duration?: number;
   onClose: () => void;
+  /** Whether this is inside a ToastContainer (removes fixed positioning) */
+  inContainer?: boolean;
 }
 
 /* ─── Toast Icons (accessible SVGs) ──────────────────────────────────────── */
@@ -35,6 +37,11 @@ const icons: Record<ToastType, React.ReactNode> = {
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
     </svg>
   ),
+  loading: (
+    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 flex-shrink-0 animate-spin" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+    </svg>
+  ),
 };
 
 /* ─── Theme Styles (WCAG AA contrast) ────────────────────────────────────── */
@@ -44,6 +51,7 @@ const themeStyles: Record<ToastType, string> = {
   error: 'bg-red-600 text-white',
   warning: 'bg-amber-500 text-gray-900',
   info: 'bg-blue-600 text-white',
+  loading: 'bg-gray-600 text-white',
 };
 
 const progressColors: Record<ToastType, string> = {
@@ -51,6 +59,7 @@ const progressColors: Record<ToastType, string> = {
   error: 'bg-red-300',
   warning: 'bg-amber-300',
   info: 'bg-blue-300',
+  loading: 'bg-gray-300',
 };
 
 /* ─── Component ──────────────────────────────────────────────────────────── */
@@ -60,6 +69,7 @@ const ToastNotification: React.FC<ToastNotificationProps> = ({
   type,
   duration = 5000,
   onClose,
+  inContainer = true,
 }) => {
   const [isExiting, setIsExiting] = useState(false);
   const [progress, setProgress] = useState(100);
@@ -104,7 +114,7 @@ const ToastNotification: React.FC<ToastNotificationProps> = ({
       role="alert"
       aria-live="assertive"
       aria-atomic="true"
-      className={`fixed top-4 right-4 z-[100] max-w-sm w-full rounded-xl overflow-hidden ${style} ${animationClass}`}
+      className={`relative max-w-sm w-full rounded-xl overflow-hidden ${style} ${animationClass}`}
       style={{ boxShadow: 'var(--shadow-toast, 0 20px 60px -12px rgba(0,0,0,0.25))' }}
     >
       <div className="flex items-center gap-3 p-4">

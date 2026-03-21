@@ -1,14 +1,22 @@
 /**
  * server/routes/auth.js
- * Authentication routes with secure password handling and token refresh
+ * Authentication routes with httpOnly cookie support
  */
 
 import express from 'express';
 const router = express.Router();
+import cookieParser from 'cookie-parser';
 import { ObjectId } from 'mongodb';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { connectToDatabase, COLLECTIONS } from '../db/mongoAtlas.js';
+import {
+  setAuthCookies,
+  clearAuthCookies,
+  TOKEN_COOKIE_NAME,
+  REFRESH_COOKIE_NAME,
+  COOKIE_OPTIONS,
+} from '../middleware/auth.js';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'gyandeep-secret-key';
 const JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET || process.env.JWT_SECRET + '_refresh';
@@ -25,7 +33,7 @@ function signAccessToken(user) {
 
 function signRefreshToken(userId) {
   return jwt.sign(
-    { id: userId, type: 'refresh' },
+    { id: userId, type: 'refresh', iat: Date.now() },
     JWT_REFRESH_SECRET,
     { expiresIn: JWT_REFRESH_EXPIRES_IN }
   );
@@ -58,7 +66,8 @@ function isValidEmail(email) {
 
 router.post('/refresh', async (req, res) => {
   try {
-    const { refreshToken } = req.body;
+    let refreshToken = req.body?.refreshToken || req.cookies?.[REFRESH_COOKIE_NAME];
+
     if (!refreshToken) {
       return res.status(400).json({ error: 'Refresh token required' });
     }
@@ -78,8 +87,17 @@ router.post('/refresh', async (req, res) => {
       return res.status(401).json({ error: 'User not found' });
     }
 
+    if (!user.active) {
+      return res.status(403).json({ error: 'Account is deactivated' });
+    }
+
     const tokens = generateTokenPair(user);
-    res.json(tokens);
+    setAuthCookies(res, tokens.accessToken, tokens.refreshToken);
+
+    res.json({
+      ...tokens,
+      user: { id: user._id?.toString(), name: user.name, email: user.email, role: user.role },
+    });
   } catch (error) {
     console.error('Token refresh error:', error);
     res.status(401).json({ error: 'Invalid or expired refresh token' });
@@ -94,7 +112,7 @@ router.post('/login', async (req, res) => {
   try {
     const email = sanitize(req.body.email);
     const password = req.body.password;
-    
+
     if (!email || !password) {
       return res.status(400).json({ error: 'Email and password are required' });
     }
@@ -105,7 +123,7 @@ router.post('/login', async (req, res) => {
 
     const db = await connectToDatabase();
     const user = await db.collection(COLLECTIONS.USERS).findOne({ email });
-    
+
     if (!user) {
       return res.status(401).json({ error: 'Invalid credentials' });
     }
@@ -124,17 +142,22 @@ router.post('/login', async (req, res) => {
     }
 
     const tokens = generateTokenPair(user);
+    setAuthCookies(res, tokens.accessToken, tokens.refreshToken);
+
+    const safeUser = {
+      id: user._id?.toString() || user.id,
+      name: user.name,
+      email: user.email,
+      role: user.role,
+      faceImage: user.faceImage,
+      classId: user.classId,
+      assignedSubjects: user.assignedSubjects,
+    };
+
+    // Also return tokens in body for clients that prefer it
     res.json({
       ...tokens,
-      user: {
-        id: user._id?.toString() || user.id,
-        name: user.name,
-        email: user.email,
-        role: user.role,
-        faceImage: user.faceImage,
-        classId: user.classId,
-        assignedSubjects: user.assignedSubjects,
-      },
+      user: safeUser,
     });
   } catch (error) {
     console.error('Login error:', error);
@@ -159,7 +182,7 @@ router.post('/register', async (req, res) => {
 
     const passwordCheck = validatePassword(password);
     if (!passwordCheck.valid) {
-      return res.status(400).json({ 
+      return res.status(400).json({
         error: 'Password does not meet requirements',
         details: passwordCheck.errors
       });
@@ -189,7 +212,8 @@ router.post('/register', async (req, res) => {
 
     const user = { _id: result.insertedId, email, role, name };
     const tokens = generateTokenPair(user);
-    
+    setAuthCookies(res, tokens.accessToken, tokens.refreshToken);
+
     res.status(201).json({
       ...tokens,
       user: {
@@ -203,6 +227,11 @@ router.post('/register', async (req, res) => {
     console.error('Register error:', error);
     res.status(500).json({ error: 'Registration failed' });
   }
+});
+
+router.post('/logout', async (req, res) => {
+  clearAuthCookies(res);
+  res.json({ ok: true, message: 'Logged out successfully' });
 });
 
 router.post('/password/request', async (req, res) => {
@@ -230,7 +259,7 @@ router.post('/password/request', async (req, res) => {
     });
 
     console.log(`Password reset code for ${email}: ${code}`);
-    
+
     res.json({ ok: true, message: 'If the email exists, a reset code has been sent' });
   } catch (error) {
     console.error('Password request error:', error);
@@ -276,7 +305,7 @@ router.post('/password/complete', async (req, res) => {
 
     const passwordCheck = validatePassword(newPassword);
     if (!passwordCheck.valid) {
-      return res.status(400).json({ 
+      return res.status(400).json({
         error: 'Password does not meet requirements',
         details: passwordCheck.errors
       });
@@ -377,14 +406,13 @@ router.post('/email/verify-check', async (req, res) => {
 
 router.get('/me', async (req, res) => {
   try {
-    const authHeader = req.headers.authorization;
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return res.status(401).json({ error: 'Unauthorized' });
+    const token = req.cookies?.[TOKEN_COOKIE_NAME] || req.headers.authorization?.slice(7);
+
+    if (!token) {
+      return res.status(401).json({ error: 'Authentication required' });
     }
 
-    const token = authHeader.slice(7);
     const decoded = jwt.verify(token, JWT_SECRET);
-
     const db = await connectToDatabase();
     const user = await db.collection(COLLECTIONS.USERS).findOne(
       { _id: new ObjectId(decoded.id) },
@@ -398,8 +426,16 @@ router.get('/me', async (req, res) => {
     res.json({ ...user, id: user._id.toString() });
   } catch (error) {
     console.error('Auth me error:', error);
+    if (error.name === 'TokenExpiredError') {
+      return res.status(401).json({ error: 'Token expired', code: 'TOKEN_EXPIRED' });
+    }
     res.status(401).json({ error: 'Invalid token' });
   }
+});
+
+router.get('/csrf-token', (req, res) => {
+  const token = jwt.sign({ timestamp: Date.now() }, JWT_SECRET, { expiresIn: '1h' });
+  res.json({ token });
 });
 
 export default router;
