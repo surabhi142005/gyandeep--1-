@@ -62,13 +62,26 @@ export async function getAccessToken(): Promise<string | null> {
 }
 
 export function getStoredToken(): string | null {
-  // For backward compatibility with existing code that expects a token
-  // In practice, tokens are in httpOnly cookies
-  return 'cookie-auth';
+  // Returns null - actual tokens are in httpOnly cookies
+  // For realtime, use getRealtimeToken() which fetches socket-token
+  return null;
+}
+
+export async function getRealtimeToken(): Promise<string | null> {
+  try {
+    const res = await fetch(`${API_BASE}/api/auth/socket-token`, {
+      credentials: 'include',
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    return data.token || null;
+  } catch {
+    return null;
+  }
 }
 
 export function getStoredRefreshToken(): string | null {
-  return 'cookie-auth';
+  return null;
 }
 
 // ── Token refresh (automatic with cookies) ────────────────────────────────────
@@ -254,11 +267,11 @@ export async function requestPasswordReset(email: string) {
 // ── Face Recognition ──────────────────────────────────────────────────────────
 
 export async function registerFace(userId: string, imageDataUrl: string): Promise<{ ok: boolean }> {
-  const res = await fetch(`${API_BASE}/api/auth/face/register`, {
+  const res = await fetch(`${API_BASE}/api/face/register`, {
     method: 'POST',
     credentials: 'include',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ imageDataUrl }),
+    body: JSON.stringify({ userId, faceImage: imageDataUrl }),
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
@@ -271,18 +284,18 @@ export async function verifyFace(
   capturedImageDataUrl: string,
   _storedImageDataUrl?: string | null,
 ): Promise<{ authenticated: boolean; confidence?: number; method?: string }> {
-  const res = await fetch(`${API_BASE}/api/auth/face`, {
+  const res = await fetch(`${API_BASE}/api/face/verify`, {
     method: 'POST',
     credentials: 'include',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ image: capturedImageDataUrl }),
+    body: JSON.stringify({ faceImage: capturedImageDataUrl }),
   });
   if (!res.ok) {
     throw new Error('Face service unavailable. Please try again or use password login.');
   }
   const data = await res.json();
   const authenticated = data.authenticated ?? data.ok ?? false;
-  return { authenticated, confidence: data.confidence, method: 'python' };
+  return { authenticated, confidence: data.confidence, method: 'face-api' };
 }
 
 async function compareImages(img1DataUrl: string, img2DataUrl: string): Promise<number> {

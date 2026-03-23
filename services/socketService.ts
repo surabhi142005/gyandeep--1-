@@ -3,7 +3,7 @@
  * WebSocket client for bidirectional real-time communication
  */
 
-import { getStoredToken } from './authService';
+import { getRealtimeToken } from './authService';
 
 type MessageHandler = (data: any) => void;
 type ConnectionHandler = () => void;
@@ -37,14 +37,16 @@ class SocketService {
     this.userId = userId || null;
     this.userRole = userRole || null;
 
-    const token = getStoredToken();
-    const wsUrl = new URL('/ws', window.location.origin.replace(/^http/, 'ws'));
-    if (token && token !== 'cookie-auth') {
-      wsUrl.searchParams.set('token', token);
-    }
-
-    this.url = wsUrl.toString();
-    this.createConnection();
+    getRealtimeToken().then(token => {
+      const wsUrl = new URL('/ws', window.location.origin.replace(/^http/, 'ws'));
+      if (token) {
+        wsUrl.searchParams.set('token', token);
+      }
+      this.url = wsUrl.toString();
+      this.createConnection();
+    }).catch(() => {
+      console.warn('Failed to get realtime token for socket connection');
+    });
   }
 
   private createConnection() {

@@ -3,7 +3,7 @@
  * Bidirectional WebSocket client for real-time communication
  */
 
-import { getStoredToken } from './authService';
+import { getRealtimeToken } from './authService';
 
 const API_BASE = import.meta.env.VITE_API_URL || '';
 const WS_URL = API_BASE.replace(/^http/, 'ws') + '/ws';
@@ -47,21 +47,25 @@ class RealtimeClient {
     this.userRole = userRole;
     this.setStatus('connecting');
 
-    const token = getStoredToken();
-    if (!token) {
-      console.warn('Cannot connect WebSocket: no auth token');
-      this.setStatus('error');
-      return;
-    }
+    getRealtimeToken().then(token => {
+      if (!token) {
+        console.warn('Cannot connect WebSocket: no auth token');
+        this.setStatus('error');
+        return;
+      }
 
-    try {
-      this.ws = new WebSocket(`${WS_URL}?token=${encodeURIComponent(token)}`);
-      this.setupEventHandlers();
-    } catch (error) {
-      console.error('WebSocket connection error:', error);
+      try {
+        this.ws = new WebSocket(`${WS_URL}?token=${encodeURIComponent(token)}`);
+        this.setupEventHandlers();
+      } catch (error) {
+        console.error('WebSocket connection error:', error);
+        this.setStatus('error');
+        this.scheduleReconnect();
+      }
+    }).catch(error => {
+      console.error('Failed to get realtime token:', error);
       this.setStatus('error');
-      this.scheduleReconnect();
-    }
+    });
   }
 
   private setupEventHandlers(): void {
