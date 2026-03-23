@@ -7,6 +7,7 @@ import express from 'express';
 const router = express.Router();
 import { ObjectId } from 'mongodb';
 import { connectToDatabase, COLLECTIONS } from '../db/mongoAtlas.js';
+import { broadcastAttendanceUpdated } from '../services/broadcast.js';
 
 router.get('/', async (req, res) => {
   try {
@@ -86,6 +87,14 @@ router.post('/', async (req, res) => {
     };
 
     const result = await db.collection(COLLECTIONS.ATTENDANCE).insertOne(record);
+    
+    broadcastAttendanceUpdated(studentId, {
+      id: result.insertedId.toString(),
+      status,
+      classId,
+      sessionId,
+    });
+    
     res.status(201).json({
       ok: true,
       record: { ...record, id: result.insertedId.toString() },

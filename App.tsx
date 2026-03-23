@@ -16,6 +16,8 @@ import Header from './components/Header';
 import type { Announcement } from './components/AnnouncementBoard';
 import { ThemeSwitcher, ToastQueue } from './components/ui';
 import ErrorBoundary from './components/ErrorBoundary';
+import { RealtimeProvider } from './services/RealtimeProvider';
+import { ConnectionStatus, NotificationCenter, NotificationToastList } from './components/realtime';
 
 
 // Extracted hooks
@@ -260,6 +262,7 @@ const App: React.FC = () => {
 
     return (
         <ErrorBoundary>
+            <RealtimeProvider userId={currentUser?.id} userRole={currentUser?.role}>
             <LiquidChrome
                 color={currentUser ? [0.62, 0.62, 0.62] : [0.56, 0.56, 0.56]}
                 mouseReact amplitude={currentUser ? 0.15 : 0.1} speed={currentUser ? 1.2 : 1}
@@ -327,7 +330,17 @@ const App: React.FC = () => {
                 )}
                 <ThemeSwitcher currentTheme={theme} onThemeChange={setTheme} />
                 <ToastQueue />
+                <NotificationToastList />
+                {currentUser && (
+                    <div className="fixed top-4 right-4 z-40">
+                        <NotificationCenter />
+                    </div>
+                )}
+                <div className="fixed bottom-4 left-4 z-40">
+                    <ConnectionStatus variant="banner" />
+                </div>
             </div>
+            </RealtimeProvider>
         </ErrorBoundary>
     );
 };

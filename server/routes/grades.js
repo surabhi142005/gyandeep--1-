@@ -7,6 +7,7 @@ import express from 'express';
 const router = express.Router();
 import { ObjectId } from 'mongodb';
 import { connectToDatabase, COLLECTIONS } from '../db/mongoAtlas.js';
+import { broadcastGradesUpdated } from '../services/broadcast.js';
 
 router.get('/', async (req, res) => {
   try {
@@ -69,6 +70,15 @@ router.post('/', async (req, res) => {
       gradedAt: new Date(),
       _id: new ObjectId(),
       createdAt: new Date(),
+    });
+
+    broadcastGradesUpdated(studentId, {
+      id: result.insertedId.toString(),
+      subjectId,
+      score: Number(score),
+      maxScore: Number(maxScore),
+      title: title || 'Assignment',
+      category: category || 'General',
     });
 
     res.status(201).json({ ok: true, grade: { id: result.insertedId.toString(), ...req.body } });

@@ -7,6 +7,7 @@ import express from 'express';
 const router = express.Router();
 import { ObjectId } from 'mongodb';
 import { connectToDatabase, COLLECTIONS } from '../db/mongoAtlas.js';
+import { broadcastNotification } from '../services/broadcast.js';
 
 router.get('/', async (req, res) => {
   try {
@@ -40,7 +41,13 @@ router.post('/', async (req, res) => {
       createdAt: new Date(),
     });
 
-    res.status(201).json({ ok: true, notification: { id: result.insertedId.toString(), ...req.body } });
+    const notification = { id: result.insertedId.toString(), title, message, type, relatedId, relatedType };
+    
+    if (userId && userId !== 'all') {
+      broadcastNotification(userId, notification);
+    }
+
+    res.status(201).json({ ok: true, notification });
   } catch (error) {
     console.error('Create notification error:', error);
     res.status(500).json({ error: 'Failed to create notification' });
