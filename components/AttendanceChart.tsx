@@ -12,7 +12,7 @@ interface AttendanceChartProps {
 
 const AttendanceChart: React.FC<AttendanceChartProps> = ({ data }) => {
   return (
-    <div className="w-full h-80">
+    <div className="w-full h-[220px] sm:h-64 md:h-80">
       <ResponsiveContainer width="100%" height="100%">
         <BarChart data={data} margin={{ top: 5, right: 20, left: -10, bottom: 5 }}>
           <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E5E7EB" />
@@ -20,14 +20,14 @@ const AttendanceChart: React.FC<AttendanceChartProps> = ({ data }) => {
             dataKey="date" 
             axisLine={false} 
             tickLine={false} 
-            tick={{ fontSize: 12, fill: '#6B7280' }} 
+            tick={{ fontSize: 11, fill: '#6B7280' }} 
             dy={10}
           />
           <YAxis 
             allowDecimals={false} 
             axisLine={false} 
             tickLine={false} 
-            tick={{ fontSize: 12, fill: '#6B7280' }} 
+            tick={{ fontSize: 11, fill: '#6B7280' }} 
           />
           <Tooltip 
             cursor={{ fill: 'var(--color-primary)', opacity: 0.05 }}
@@ -44,7 +44,7 @@ const AttendanceChart: React.FC<AttendanceChartProps> = ({ data }) => {
             fill="var(--color-primary)" 
             radius={[4, 4, 0, 0]} 
             name="Present Students" 
-            barSize={32}
+            barSize={24}
           />
         </BarChart>
       </ResponsiveContainer>

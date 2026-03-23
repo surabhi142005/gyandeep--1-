@@ -214,22 +214,22 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({
                           </div>
                        </div>
 
-                       {!student.attendanceMarked ? (
-                         <div className="space-y-4">
-                            <label className="block text-sm font-bold text-gray-700">Enter Attendance Code</label>
-                            <div className="flex gap-3">
-                               <Input 
-                                 value={code} 
-                                 onChange={e => setCode(e.target.value)} 
-                                 placeholder="e.g. 4829" 
-                                 className="text-center text-2xl font-black tracking-widest h-14"
-                               />
-                               <Button variant="primary" className="h-14 px-8" onClick={() => setShowWebcam(true)}>
-                                 Verify & Mark
-                               </Button>
-                            </div>
-                         </div>
-                       ) : (
+                        {!student.attendanceMarked ? (
+                          <div className="space-y-4">
+                             <label className="block text-sm font-bold text-gray-700">Enter Attendance Code</label>
+                             <div className="flex flex-col sm:flex-row gap-3">
+                                <Input 
+                                  value={code} 
+                                  onChange={e => setCode(e.target.value)} 
+                                  placeholder="e.g. 4829" 
+                                  className="text-center text-2xl font-black tracking-widest h-11 sm:h-14"
+                                />
+                                <Button variant="primary" className="h-11 sm:h-14 px-6 sm:px-8 text-base" onClick={() => setShowWebcam(true)}>
+                                  Verify & Mark
+                                </Button>
+                             </div>
+                          </div>
+                        ) : (
                          <div className="p-4 bg-green-50 text-green-700 rounded-xl border border-green-100 flex items-center gap-3">
                             <CheckCircle2 size={24} />
                             <p className="font-bold">Attendance marked for this session!</p>

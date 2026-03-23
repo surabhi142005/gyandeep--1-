@@ -38,6 +38,7 @@ import metricsRouter from './routes/metrics.js';
 import auditLogsRouter from './routes/auditLogs.js';
 import announcementsRouter from './routes/announcements.js';
 import sessionsRouter from './routes/sessions.js';
+import faceRouter from './routes/face.js';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -148,6 +149,9 @@ app.use('/api/announcements', announcementsRouter);
 
 // Sessions routes (quiz, attendance)
 app.use('/api/sessions', sessionsRouter);
+
+// Face routes (registration/verification)
+app.use('/api/face', faceRouter);
 
 // Google OAuth routes
 app.use('/api/google', googleRouter);

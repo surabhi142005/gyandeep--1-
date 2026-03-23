@@ -25,6 +25,7 @@ interface ResponsiveTableProps<T> {
   searchKeys?: (keyof T)[];
   showPagination?: boolean;
   pageSize?: number;
+  cardMode?: boolean;
 }
 
 type SortDirection = 'asc' | 'desc' | null;
@@ -43,6 +44,7 @@ export function ResponsiveTable<T extends Record<string, any>>({
   searchKeys,
   showPagination = true,
   pageSize = 10,
+  cardMode = false,
 }: ResponsiveTableProps<T>) {
   const [sortKey, setSortKey] = useState<string | null>(null);
   const [sortDirection, setSortDirection] = useState<SortDirection>(null);
@@ -118,8 +120,131 @@ export function ResponsiveTable<T extends Record<string, any>>({
   };
 
   if (isLoading) {
-    return <SkeletonTable rows={pageSize} cols={columns.length} />;
+    return (
+      cardMode ? (
+        <div className="space-y-3 sm:hidden">
+          {Array.from({ length: pageSize }).map((_, i) => (
+            <div key={i} className="p-4 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 animate-pulse">
+              <div className="space-y-3">
+                {columns.map((col, j) => (
+                  <div key={j} className="flex justify-between">
+                    <Skeleton variant="text" height="12px" width="40%" />
+                    <Skeleton variant="text" height="12px" width="30%" />
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : <SkeletonTable rows={pageSize} cols={columns.length} />
+    );
   }
+
+  const renderTable = () => (
+    <div className="overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700">
+      <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+        <thead
+          className={`bg-gray-50 dark:bg-gray-800 ${
+            stickyHeader ? 'sticky top-0 z-10' : ''
+          }`}
+        >
+          <tr>
+            {columns.map((column) => (
+              <th
+                key={column.key}
+                style={{ width: column.width }}
+                className={`px-4 py-3 text-left text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider ${
+                  column.sortable ? 'cursor-pointer select-none hover:bg-gray-100 dark:hover:bg-gray-700' : ''
+                }`}
+                onClick={() => column.sortable && handleSort(column.key)}
+              >
+                <div className="flex items-center gap-1">
+                  {column.header}
+                  {column.sortable && getSortIcon(column.key)}
+                </div>
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody className="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-700">
+          {paginatedData.length === 0 ? (
+            <tr>
+              <td
+                colSpan={columns.length}
+                className="px-4 py-8 text-center text-gray-500 dark:text-gray-400"
+              >
+                {emptyMessage}
+              </td>
+            </tr>
+          ) : (
+            paginatedData.map((item, index) => (
+              <tr
+                key={String(item[keyField])}
+                onClick={() => onRowClick?.(item)}
+                className={`transition-colors ${
+                  onRowClick ? 'cursor-pointer' : ''
+                } ${
+                  selectedId === item[keyField]
+                    ? 'bg-indigo-50 dark:bg-indigo-900/20'
+                    : 'hover:bg-gray-50 dark:hover:bg-gray-800'
+                }`}
+              >
+                {columns.map((column) => (
+                  <td
+                    key={column.key}
+                    className={`px-4 py-3 text-sm text-gray-900 dark:text-gray-100 ${
+                      column.cellClassName || ''
+                    }`}
+                  >
+                    {column.render
+                      ? column.render(item, index)
+                      : item[column.key] ?? '-'}
+                  </td>
+                ))}
+              </tr>
+            ))
+          )}
+        </tbody>
+      </table>
+    </div>
+  );
+
+  const renderCards = () => (
+    <div className="space-y-3 sm:hidden">
+      {paginatedData.length === 0 ? (
+        <div className="text-center py-8 text-gray-500 dark:text-gray-400">
+          {emptyMessage}
+        </div>
+      ) : (
+        paginatedData.map((item) => (
+          <div
+            key={String(item[keyField])}
+            onClick={() => onRowClick?.(item)}
+            className={`p-4 rounded-lg border transition-colors ${
+              selectedId === item[keyField]
+                ? 'border-indigo-600 bg-indigo-50 dark:bg-indigo-900/20'
+                : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 hover:border-indigo-300 dark:hover:border-indigo-700'
+            } ${onRowClick ? 'cursor-pointer' : ''}`}
+          >
+            <div className="space-y-3">
+              {columns.map((column) => (
+                <div key={column.key} className="flex justify-between items-start">
+                  <span className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">
+                    {column.header}
+                  </span>
+                  <span className="text-sm text-gray-900 dark:text-gray-100 text-right max-w-[60%]">
+                    {column.render
+                      ? column.render(item, 0)
+                      : item[column.key] ?? '-'}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        ))
+      )}
+    </div>
+  );
 
   return (
     <div className="space-y-4">
@@ -139,72 +264,7 @@ export function ResponsiveTable<T extends Record<string, any>>({
         </div>
       )}
 
-      <div className="overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700">
-        <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-          <thead
-            className={`bg-gray-50 dark:bg-gray-800 ${
-              stickyHeader ? 'sticky top-0 z-10' : ''
-            }`}
-          >
-            <tr>
-              {columns.map((column) => (
-                <th
-                  key={column.key}
-                  style={{ width: column.width }}
-                  className={`px-4 py-3 text-left text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider ${
-                    column.sortable ? 'cursor-pointer select-none hover:bg-gray-100 dark:hover:bg-gray-700' : ''
-                  }`}
-                  onClick={() => column.sortable && handleSort(column.key)}
-                >
-                  <div className="flex items-center gap-1">
-                    {column.header}
-                    {column.sortable && getSortIcon(column.key)}
-                  </div>
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody className="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-700">
-            {paginatedData.length === 0 ? (
-              <tr>
-                <td
-                  colSpan={columns.length}
-                  className="px-4 py-8 text-center text-gray-500 dark:text-gray-400"
-                >
-                  {emptyMessage}
-                </td>
-              </tr>
-            ) : (
-              paginatedData.map((item, index) => (
-                <tr
-                  key={String(item[keyField])}
-                  onClick={() => onRowClick?.(item)}
-                  className={`transition-colors ${
-                    onRowClick ? 'cursor-pointer' : ''
-                  } ${
-                    selectedId === item[keyField]
-                      ? 'bg-indigo-50 dark:bg-indigo-900/20'
-                      : 'hover:bg-gray-50 dark:hover:bg-gray-800'
-                  }`}
-                >
-                  {columns.map((column) => (
-                    <td
-                      key={column.key}
-                      className={`px-4 py-3 text-sm text-gray-900 dark:text-gray-100 ${
-                        column.cellClassName || ''
-                      }`}
-                    >
-                      {column.render
-                        ? column.render(item, index)
-                        : item[column.key] ?? '-'}
-                    </td>
-                  ))}
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
+      {cardMode ? renderCards() : renderTable()}
 
       {showPagination && totalPages > 1 && (
         <div className="flex items-center justify-between">

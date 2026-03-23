@@ -100,15 +100,22 @@ class RealtimeClient {
   }
 
   private handleMessage(message: RealtimeMessage): void {
-    const { type, ...data } = message;
+    const { type, event, data, ...rest } = message;
 
     if (type === 'connected') {
       console.log('WebSocket handshake complete:', data);
     }
 
+    if (type === 'event' && event) {
+      const handlers = this.listeners.get(event);
+      if (handlers) {
+        handlers.forEach(handler => handler(data));
+      }
+    }
+
     const handlers = this.listeners.get(type);
     if (handlers) {
-      handlers.forEach(handler => handler(data));
+      handlers.forEach(handler => handler({ event, data, ...rest }));
     }
 
     const wildcardHandlers = this.listeners.get('*');

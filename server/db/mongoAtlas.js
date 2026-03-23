@@ -52,6 +52,8 @@ export const COLLECTIONS = {
   TAG_PRESETS: 'tag_presets',
   QUESTION_BANK: 'question_bank',
   AUDIT_LOGS: 'audit_logs',
+  FACE_EMBEDDINGS: 'face_embeddings',
+  AUDIT_FACE_VERIFY: 'audit_face_verify',
 };
 
 export async function connectToDatabase() {

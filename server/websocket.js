@@ -114,16 +114,20 @@ function handleMessage(clientId, data) {
       case 'broadcast':
         if (message.room && message.data) {
           broadcastToRoom(message.room, {
-            type: 'broadcast',
-            from: clientId,
-            ...message.data,
+            type: 'event',
+            event: message.data.event || 'broadcast',
+            data: message.data.data || message.data,
           }, clientId);
         }
         break;
 
       case 'emit':
         if (message.event && message.data !== undefined) {
-          emit(clientId, message.event, message.data);
+          broadcastToUser(clientId, {
+            type: 'event',
+            event: message.event,
+            data: message.data,
+          });
         }
         break;
 
@@ -143,10 +147,13 @@ function handleMessage(clientId, data) {
       case 'typing':
         if (message.room && client.user) {
           broadcastToRoom(message.room, {
-            type: 'user_typing',
-            userId: client.user.id,
-            userName: client.user.name,
-            isTyping: message.isTyping,
+            type: 'event',
+            event: 'user_typing',
+            data: {
+              userId: client.user.id,
+              userName: client.user.name,
+              isTyping: message.isTyping,
+            },
           }, clientId);
         }
         break;
@@ -172,8 +179,9 @@ function handleDisconnect(clientId) {
     if (client.user) {
       console.log(`WebSocket disconnected: ${client.user.email} (${clientId})`);
       broadcastToRoom(`user:${client.user.id}`, {
-        type: 'user_offline',
-        userId: client.user.id,
+        type: 'event',
+        event: 'user_offline',
+        data: { userId: client.user.id },
       }, clientId);
     } else {
       console.log(`WebSocket disconnected: anonymous (${clientId})`);
@@ -198,7 +206,7 @@ function joinRoom(clientId, room) {
   rooms.get(room).add(clientId);
   client.rooms.add(room);
 
-  send(clientId, { type: 'joined', room });
+  send(clientId, { type: 'event', event: 'joined', data: { room } });
 
   const roomClients = rooms.get(room);
   const users = Array.from(roomClients)
@@ -206,14 +214,17 @@ function joinRoom(clientId, room) {
     .filter(c => c?.user)
     .map(c => ({ id: c.user.id, name: c.user.name, role: c.user.role }));
 
-  send(clientId, { type: 'room_members', room, users, count: roomClients.size });
+  send(clientId, { type: 'event', event: 'room_members', data: { room, users, count: roomClients.size } });
 
   if (client.user) {
     broadcastToRoom(room, {
-      type: 'user_joined',
-      userId: client.user.id,
-      userName: client.user.name,
-      total: roomClients.size,
+      type: 'event',
+      event: 'user_joined',
+      data: {
+        userId: client.user.id,
+        userName: client.user.name,
+        total: roomClients.size,
+      },
     }, clientId);
   }
 }
@@ -231,15 +242,18 @@ function leaveRoom(clientId, room) {
       rooms.delete(room);
     } else {
       broadcastToRoom(room, {
-        type: 'user_left',
-        userId: client.user?.id,
-        userName: client.user?.name,
-        total: roomClients.size,
+        type: 'event',
+        event: 'user_left',
+        data: {
+          userId: client.user?.id,
+          userName: client.user?.name,
+          total: roomClients.size,
+        },
       }, clientId);
     }
   }
 
-  send(clientId, { type: 'left', room });
+  send(clientId, { type: 'event', event: 'left', data: { room } });
 }
 
 function leaveAllRooms(clientId) {
@@ -254,9 +268,12 @@ function leaveAllRooms(clientId) {
         rooms.delete(room);
       } else {
         broadcastToRoom(room, {
-          type: 'user_left',
-          userId: client.user?.id,
-          total: roomClients.size,
+          type: 'event',
+          event: 'user_left',
+          data: {
+            userId: client.user?.id,
+            total: roomClients.size,
+          },
         }, clientId);
       }
     }
@@ -303,10 +320,13 @@ function updatePresence(clientId, room, status) {
   if (!client || !client.user) return;
 
   broadcastToRoom(room, {
-    type: 'presence_update',
-    userId: client.user.id,
-    status,
-    timestamp: new Date().toISOString(),
+    type: 'event',
+    event: 'presence_update',
+    data: {
+      userId: client.user.id,
+      status,
+      timestamp: new Date().toISOString(),
+    },
   }, clientId);
 }
 

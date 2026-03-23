@@ -28,7 +28,7 @@ const AdminFaceViewer: React.FC<AdminFaceViewerProps> = ({ onClose }) => {
   const fetchFacesList = async () => {
     try {
       setLoading(true)
-      const response = await fetch('/api/faces/list')
+      const response = await fetch('/api/face/list')
       const data = await response.json()
       if (data.ok) {
         setFaces(data.faces)
@@ -43,7 +43,7 @@ const AdminFaceViewer: React.FC<AdminFaceViewerProps> = ({ onClose }) => {
   const viewFaceImage = async (userId: string) => {
     try {
       setLoadingImage(true)
-      const response = await fetch(`/api/face/image/${userId}`)
+      const response = await fetch(`/api/face/${userId}`)
       const data = await response.json()
       if (data.ok) {
         setSelectedUserId(userId)
@@ -58,10 +58,8 @@ const AdminFaceViewer: React.FC<AdminFaceViewerProps> = ({ onClose }) => {
 
   const deleteFace = async (userId: string) => {
     try {
-      const response = await fetch('/api/face/delete', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ user_id: userId })
+      const response = await fetch(`/api/face/${userId}`, {
+        method: 'DELETE',
       })
       const data = await response.json()
       if (data.ok) {

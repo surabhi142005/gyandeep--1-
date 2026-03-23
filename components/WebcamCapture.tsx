@@ -184,9 +184,9 @@ const WebcamCapture: React.FC<WebcamCaptureProps> = ({ onCapture, onClose, theme
   const currentHint = liveness ? livenessHints[currentHintIndex] : null;
 
   return (
-    <div className="fixed inset-0 bg-black/75 backdrop-blur-sm flex items-center justify-center z-50 p-4" role="dialog" aria-modal="true" aria-label={title}>
-      <div className="bg-white/95 backdrop-blur-xl rounded-3xl shadow-2xl p-6 w-full max-w-md text-center border border-white/20">
-        <h2 className="text-xl font-bold text-gray-800 mb-1">{title}</h2>
+    <div className="fixed inset-0 bg-black/75 backdrop-blur-sm flex items-center justify-center z-50 p-3 sm:p-4" role="dialog" aria-modal="true" aria-label={title}>
+      <div className="bg-white/95 backdrop-blur-xl rounded-3xl shadow-2xl p-4 sm:p-6 w-full max-w-sm sm:max-w-md text-center border border-white/20">
+        <h2 className="text-lg sm:text-xl font-bold text-gray-800 mb-1">{title}</h2>
 
         {liveness && (
           <div className="flex items-center justify-center gap-2 mb-3 px-3 py-1.5 rounded-full bg-indigo-50 border border-indigo-100 w-fit mx-auto">
@@ -195,9 +195,9 @@ const WebcamCapture: React.FC<WebcamCaptureProps> = ({ onCapture, onClose, theme
           </div>
         )}
 
-        <p className="text-gray-500 text-sm mb-4">Position your face within the oval guide.</p>
+        <p className="text-gray-500 text-sm mb-3 sm:mb-4">Position your face within the oval guide.</p>
 
-        <div className="relative w-full aspect-square bg-gray-100 rounded-2xl overflow-hidden mb-4 border-2 border-gray-200">
+        <div className="relative w-full aspect-[3/4] bg-gray-100 rounded-2xl overflow-hidden mb-3 sm:mb-4 border-2 border-gray-200 max-h-[50vh]">
           <video ref={videoRef} autoPlay playsInline className="w-full h-full object-cover" aria-label="Camera preview — position your face in the center" />
           <canvas ref={canvasRef} className="hidden" aria-hidden="true" />
 
@@ -277,10 +277,10 @@ const WebcamCapture: React.FC<WebcamCaptureProps> = ({ onCapture, onClose, theme
           </div>
         )}
 
-        <div className="flex gap-3">
+        <div className="flex gap-2 sm:gap-3">
           <button
             onClick={handleCaptureClick}
-            className={`flex-1 text-white font-bold py-3 px-6 rounded-xl transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed ${colors.primary} ${colors.hover} shadow-lg`}
+            className={`flex-1 text-white font-bold py-3 sm:py-3 px-4 sm:px-6 rounded-xl transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed h-11 sm:h-12 ${colors.primary} ${colors.hover} shadow-lg text-sm sm:text-base`}
             disabled={!!error || isProcessing}
           >
             {isProcessing ? (
@@ -295,7 +295,7 @@ const WebcamCapture: React.FC<WebcamCaptureProps> = ({ onCapture, onClose, theme
           </button>
           <button
             onClick={onClose}
-            className="flex-1 bg-gray-100 text-gray-700 font-bold py-3 px-6 rounded-xl hover:bg-gray-200 transition-colors duration-300"
+            className="flex-1 bg-gray-100 text-gray-700 font-bold py-3 sm:py-3 px-4 sm:px-6 rounded-xl hover:bg-gray-200 transition-colors duration-300 h-11 sm:h-12 text-sm sm:text-base"
           >
             Cancel
           </button>

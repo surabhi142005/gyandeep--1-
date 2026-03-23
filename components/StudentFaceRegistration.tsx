@@ -164,7 +164,7 @@ const StudentFaceRegistration: React.FC<StudentFaceRegistrationProps> = ({ userI
           {/* Captured Image Review */}
           {captured && capturedImage && (
             <div className="space-y-4">
-              <div className="relative bg-gray-200 rounded-lg overflow-hidden aspect-video">
+              <div className="relative bg-gray-200 rounded-lg overflow-hidden aspect-[3/4] max-h-[50vh] mx-auto max-w-xs">
                 <img src={capturedImage} alt="Captured face" className="w-full h-full object-cover" />
               </div>
               <p className="text-center text-gray-600 text-sm">Review your photo</p>

@@ -438,4 +438,27 @@ router.get('/csrf-token', (req, res) => {
   res.json({ token });
 });
 
+router.get('/socket-token', async (req, res) => {
+  try {
+    const token = req.cookies?.[TOKEN_COOKIE_NAME] || req.headers.authorization?.slice(7);
+    
+    if (!token) {
+      return res.status(401).json({ error: 'Authentication required' });
+    }
+    
+    const decoded = jwt.verify(token, JWT_SECRET);
+    
+    const socketToken = jwt.sign(
+      { id: decoded.id, email: decoded.email, role: decoded.role },
+      JWT_SECRET,
+      { expiresIn: '1h' }
+    );
+    
+    res.json({ token: socketToken });
+  } catch (error) {
+    console.error('Socket token error:', error);
+    res.status(401).json({ error: 'Invalid token' });
+  }
+});
+
 export default router;
