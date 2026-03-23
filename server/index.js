@@ -34,6 +34,8 @@ import storageRouter from './routes/storage.js';
 import eventsRouter from './routes/events.js';
 import googleRouter from './routes/google.js';
 import aiRouter from './routes/ai.js';
+import metricsRouter from './routes/metrics.js';
+import auditLogsRouter from './routes/auditLogs.js';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -144,6 +146,12 @@ app.use('/api/google', googleRouter);
 
 // AI routes
 app.use('/api', aiRouter);
+
+// Metrics endpoint (Prometheus)
+app.use('/metrics', metricsRouter);
+
+// Audit logs routes
+app.use('/api/admin/audit-logs', auditLogsRouter);
 
 // Create HTTP server and attach WebSocket
 const server = createServer(app);

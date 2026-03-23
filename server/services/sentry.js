@@ -1,6 +1,6 @@
 /**
  * server/services/sentry.js
- * Sentry error tracking setup for the server
+ * Sentry error tracking with distributed tracing setup
  */
 
 import * as Sentry from '@sentry/node';
@@ -28,6 +28,7 @@ export function initSentry() {
         new Sentry.Integrations.Http({ tracing: true }),
         new Sentry.Integrations.Express(),
         new Sentry.Integrations.Mongo(),
+        new Sentry.Integrations.Redis(),
       ],
       tracesSampleRate: NODE_ENV === 'production' ? 0.1 : 1.0,
       profilesSampleRate: NODE_ENV === 'production' ? 0.1 : 1.0,
@@ -47,7 +48,7 @@ export function initSentry() {
     });
 
     isInitialized = true;
-    console.log('Sentry initialized');
+    console.log('Sentry initialized with distributed tracing');
     return true;
   } catch (error) {
     console.error('Failed to initialize Sentry:', error);
@@ -131,6 +132,49 @@ export function setContext(name, context) {
 
 export function getSentryHub() {
   return Sentry.getHubFromExtension();
+}
+
+export function startTransaction(name, op = 'custom', description) {
+  if (!isInitialized) return null;
+  
+  const transaction = Sentry.startTransaction({
+    op,
+    name,
+    description,
+  });
+  
+  return transaction;
+}
+
+export function continueTrace(traceparent, baggage) {
+  if (!isInitialized) return null;
+  
+  const sentryTrace = traceparent || '';
+  const traceId = sentryTrace.split('-')[0] || '';
+  const parentSpanId = sentryTrace.split('-')[1] || '';
+  
+  const trace = {
+    traceId,
+    parentSpanId,
+    sampled: true,
+  };
+  
+  return trace;
+}
+
+export function recordDistributedTrace(serviceName, operation, duration, metadata = {}) {
+  if (!isInitialized) return;
+  
+  addBreadcrumb(
+    `Distributed trace: ${serviceName}/${operation}`,
+    'distributed-tracing',
+    {
+      service: serviceName,
+      operation,
+      duration_ms: duration,
+      ...metadata,
+    }
+  );
 }
 
 export { Sentry };

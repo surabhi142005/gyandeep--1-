@@ -1,0 +1,98 @@
+{
+  "apps": [
+    {
+      "name": "gyandeep-api",
+      "script": "server/production.js",
+      "instances": "max",
+      "exec_mode": "cluster",
+      "env": {
+        "NODE_ENV": "production",
+        "PORT": 3001
+      },
+      "env_production": {
+        "NODE_ENV": "production",
+        "INSTANCE_TYPE": "web"
+      },
+      "node_args": "--max-old-space-size=2048",
+      "wait_ready": true,
+      "listen_timeout": 10000,
+      "kill_timeout": 5000,
+      "shutdown_with_message": true,
+      "autorestart": true,
+      "max_restarts": 10,
+      "min_uptime": "10s",
+      "max_memory_restart": "1G",
+      "exp_backoff_restart_delay": 100,
+      "error_file": "./logs/err.log",
+      "out_file": "./logs/out.log",
+      "log_file": "./logs/combined.log",
+      "time": true,
+      "merge_logs": true,
+      "watch": false,
+      "ignore_watch": [
+        "node_modules",
+        "logs",
+        ".git"
+      ],
+      "source_map_support": true,
+      "stack_trace": true,
+      "vizion": true,
+      "post_update": [
+        "npm install --production"
+      ],
+      "pre_deploy": [
+        "npm run lint",
+        "npm run typecheck",
+        "npm test"
+      ],
+      "deploy": {
+        "production": {
+          "key": "~/.ssh/production.pem",
+          "user": "deploy",
+          "host": ["api.gyandeep.edu"],
+          "ref": "origin/main",
+          "repo": "git@github.com:your-org/gyandeep.git",
+          "path": "/var/www/gyandeep",
+          "post-setup": "npm install && npm run build",
+          "post-deploy": "pm2 reload gyandeep-api --update-env"
+        }
+      }
+    },
+    {
+      "name": "gyandeep-worker",
+      "script": "server/workers/session-cleanup.js",
+      "instances": 1,
+      "exec_mode": "fork",
+      "cron_restart": "0 3 * * *",
+      "env": {
+        "NODE_ENV": "production"
+      },
+      "error_file": "./logs/worker-err.log",
+      "out_file": "./logs/worker-out.log",
+      "watch": false
+    },
+    {
+      "name": "gyandeep-metrics",
+      "script": "server/workers/metrics-collector.js",
+      "instances": 1,
+      "exec_mode": "fork",
+      "env": {
+        "NODE_ENV": "production"
+      },
+      "error_file": "./logs/metrics-err.log",
+      "out_file": "./logs/metrics-out.log",
+      "watch": false
+    }
+  ],
+  "deploy": {
+    "production": {
+      "user": "deploy",
+      "host": ["api.gyandeep.edu"],
+      "ref": "origin/main",
+      "repo": "git@github.com:your-org/gyandeep.git",
+      "path": "/var/www/gyandeep",
+      "pre-deploy-local": "git pull",
+      "post-deploy": "npm install && npm run build && pm2 reload gyandeep-api --update-env"
+    }
+  }
+}

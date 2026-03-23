@@ -10,7 +10,7 @@ import AdminSetup from './components/AdminSetup';
 import UserProfile from './components/UserProfile';
 import LiquidChrome from './components/LiquidChrome';
 import AccessibilityPanel from './components/AccessibilityPanel';
-import { SkeletonDashboard } from './components/SkeletonLoader';
+import { SkeletonDashboard } from './components/ui/Skeletons';
 import { useThemeEngine } from './hooks/useThemeEngine';
 import Header from './components/Header';
 import type { Announcement } from './components/AnnouncementBoard';

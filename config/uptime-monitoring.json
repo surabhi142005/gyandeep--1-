@@ -1,0 +1,152 @@
+{
+  "monitoring": {
+    "services": [
+      {
+        "name": "gyandeep-api",
+        "url": "https://api.gyandeep.edu/api/health",
+        "interval": 5,
+        "timeout": 30,
+        "retries": 3,
+        "tags": ["api", "production"],
+        "notifications": {
+          "email": true,
+          "slack": true,
+          "webhook": "https://api.gyandeep.edu/api/webhooks/monitoring"
+        }
+      },
+      {
+        "name": "gyandeep-frontend",
+        "url": "https://gyandeep.edu",
+        "interval": 5,
+        "timeout": 30,
+        "retries": 3,
+        "tags": ["frontend", "production"],
+        "notifications": {
+          "email": true,
+          "slack": true
+        }
+      },
+      {
+        "name": "gyandeep-websocket",
+        "url": "wss://api.gyandeep.edu/ws",
+        "interval": 1,
+        "timeout": 10,
+        "retries": 5,
+        "type": "websocket",
+        "tags": ["websocket", "production"],
+        "notifications": {
+          "email": true,
+          "slack": true,
+          "pagerduty": true
+        }
+      },
+      {
+        "name": "gyandeep-mongodb",
+        "checkType": "mongodb",
+        "connectionString": "${MONGODB_URI}",
+        "interval": 5,
+        "retries": 3,
+        "tags": ["database", "production"],
+        "notifications": {
+          "email": true,
+          "slack": true,
+          "pagerduty": true
+        }
+      },
+      {
+        "name": "gyandeep-redis",
+        "checkType": "redis",
+        "connectionString": "${REDIS_URL}",
+        "interval": 5,
+        "retries": 3,
+        "tags": ["cache", "production"],
+        "notifications": {
+          "email": true,
+          "slack": true
+        }
+      }
+    ],
+    "heartbeatChecks": [
+      {
+        "name": "gyandeep-health",
+        "url": "https://api.gyandeep.edu/api/health",
+        "interval": 1,
+        "tags": ["heartbeat", "production"]
+      }
+    ],
+    "certificateChecks": [
+      {
+        "hostname": "api.gyandeep.edu",
+        "port": 443,
+        "interval": 60,
+        "alertDaysBeforeExpiry": 30,
+        "tags": ["ssl", "production"],
+        "notifications": {
+          "email": true,
+          "slack": true
+        }
+      },
+      {
+        "hostname": "gyandeep.edu",
+        "port": 443,
+        "interval": 60,
+        "alertDaysBeforeExpiry": 30,
+        "tags": ["ssl", "production"],
+        "notifications": {
+          "email": true,
+          "slack": true
+        }
+      }
+    ],
+    "statusPages": {
+      "publicUrl": "https://status.gyandeep.edu",
+      "subscribers": {
+        "email": true,
+        "slack": true,
+        "rss": true
+      },
+      "incidentTemplate": {
+        "impact": ["none", "minor", "major", "critical"],
+        "communicationInterval": 30
+      }
+    },
+    "onCall": {
+      "rotation": [
+        { "name": "DevOps Team", "email": "devops@gyandeep.edu" }
+      ],
+      "escalationTimeout": 15
+    }
+  },
+  "alerting": {
+    "responseThresholds": {
+      "apiHealth": 5000,
+      "apiResponseTime": 2000,
+      "websocketLatency": 1000
+    },
+    "consecutiveFailures": {
+      "warning": 2,
+      "critical": 5
+    },
+    "recoveryDelay": 3,
+    "blackoutPeriods": [
+      {
+        "name": "Scheduled Maintenance",
+        "start": "2024-12-01T02:00:00Z",
+        "end": "2024-12-01T04:00:00Z",
+        "recurrence": "monthly"
+      }
+    ]
+  },
+  "reporting": {
+    "weekly": {
+      "enabled": true,
+      "recipients": ["engineering@gyandeep.edu", "product@gyandeep.edu"],
+      "include": ["uptime", "incidents", "responseTime", "errorRate"]
+    },
+    "monthly": {
+      "enabled": true,
+      "recipients": ["leadership@gyandeep.edu"],
+      "include": ["uptime", "incidents", "slaCompliance", "trends"]
+    }
+  }
+}
