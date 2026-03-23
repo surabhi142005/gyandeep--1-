@@ -36,6 +36,8 @@ import googleRouter from './routes/google.js';
 import aiRouter from './routes/ai.js';
 import metricsRouter from './routes/metrics.js';
 import auditLogsRouter from './routes/auditLogs.js';
+import announcementsRouter from './routes/announcements.js';
+import sessionsRouter from './routes/sessions.js';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -140,6 +142,12 @@ app.use('/api/storage', storageRouter);
 
 // SSE events routes (real-time updates)
 app.use('/api/events', eventsRouter);
+
+// Announcements routes
+app.use('/api/announcements', announcementsRouter);
+
+// Sessions routes (quiz, attendance)
+app.use('/api/sessions', sessionsRouter);
 
 // Google OAuth routes
 app.use('/api/google', googleRouter);

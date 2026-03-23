@@ -7,6 +7,8 @@ import express from 'express';
 const router = express.Router();
 import { ObjectId } from 'mongodb';
 import { connectToDatabase, COLLECTIONS } from '../db/mongoAtlas.js';
+import { broadcastTicketUpdate } from '../services/broadcast.js';
+import { broadcastToUser, broadcastToAll } from './events.js';
 
 router.get('/', async (req, res) => {
   try {
@@ -73,7 +75,14 @@ router.post('/', async (req, res) => {
       });
     }
 
-    res.status(201).json({ ok: true, ticket: { ...ticket, id: result.insertedId.toString() } });
+    const ticketId = result.insertedId.toString();
+    broadcastToAll('ticket-created', { id: ticketId, ...ticket });
+    
+    if (ticket.userId) {
+      broadcastToUser(ticket.userId, 'ticket-update', { id: ticketId, status: 'open', type: 'created' });
+    }
+
+    res.status(201).json({ ok: true, ticket: { ...ticket, id: ticketId } });
   } catch (error) {
     console.error('Create ticket error:', error);
     res.status(500).json({ error: 'Failed to create ticket' });
@@ -140,6 +149,8 @@ router.post('/:id/reply', async (req, res) => {
       { $set: { updatedAt: now }, $inc: { version: 1 } }
     );
 
+    broadcastToAll('ticket-replied', { id: req.params.id, replyId: reply.insertedId.toString() });
+
     res.json({ ok: true, reply: { ...reply, id: reply.insertedId.toString() } });
   } catch (error) {
     console.error('Reply to ticket error:', error);
@@ -175,6 +186,8 @@ router.post('/:id/close', async (req, res) => {
       }
     );
 
+    broadcastToAll('ticket-update', { id: req.params.id, status: 'resolved', type: 'closed' });
+
     res.json({ ok: true });
   } catch (error) {
     console.error('Close ticket error:', error);
@@ -198,6 +211,8 @@ router.patch('/:id/assign', async (req, res) => {
         $inc: { version: 1 },
       }
     );
+
+    broadcastToUser(adminId, 'ticket-update', { id: req.params.id, assignedToId: adminId, type: 'assigned' });
 
     res.json({ ok: true, assignedToId: adminId });
   } catch (error) {
