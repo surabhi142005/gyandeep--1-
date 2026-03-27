@@ -14,12 +14,11 @@ import { getCurrentUser, getStoredToken, requestPasswordReset } from '../service
 import type { Coordinates } from '../types';
 
 interface UseAuthOptions {
-  allUsers: AnyUser[];
   setAllUsers: React.Dispatch<React.SetStateAction<AnyUser[]>>;
   showNotification: (message: string, type?: ToastType) => void;
 }
 
-export function useAuth({ allUsers, setAllUsers, showNotification }: UseAuthOptions) {
+export function useAuth({ setAllUsers, showNotification }: UseAuthOptions) {
   const [currentUser, setCurrentUser] = useState<AnyUser | null>(() => {
     // Restore session from localStorage on page reload
     try {
@@ -36,8 +35,8 @@ export function useAuth({ allUsers, setAllUsers, showNotification }: UseAuthOpti
     // If we already have a cached user, try to refresh from server in background
     getCurrentUser().then(user => {
       if (user) handleLogin(user as AnyUser);
-    }).catch(() => {
-      // Server unreachable — keep cached user if available
+    }).catch((err) => {
+      console.warn('Server unreachable during current user fetch', err);
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -46,7 +45,7 @@ export function useAuth({ allUsers, setAllUsers, showNotification }: UseAuthOpti
   const handleLogin = (user: AnyUser) => {
     setCurrentUser(user);
     // Persist session for page reloads
-    try { localStorage.setItem('gyandeep_current_user', JSON.stringify(user)); } catch {}
+    try { localStorage.setItem('gyandeep_current_user', JSON.stringify(user)); } catch (err) { console.warn('Persist user failed', err); }
     try { websocketService.connect(user.id, user.role); } catch (e: any) {
       console.warn('Real-time connection partial failure:', e?.message || e);
     }
@@ -61,9 +60,9 @@ export function useAuth({ allUsers, setAllUsers, showNotification }: UseAuthOpti
   const handleLogout = () => {
     setCurrentUser(null);
     setUserLocation(null);
-    try { localStorage.removeItem('gyandeep_current_user'); } catch {}
-    try { localStorage.removeItem('gyandeep_token'); } catch {}
-    try { websocketService.disconnect(); } catch {}
+    try { localStorage.removeItem('gyandeep_current_user'); } catch (err) { console.warn('Clear current user failed', err); }
+    try { localStorage.removeItem('gyandeep_token'); } catch (err) { console.warn('Clear token failed', err); }
+    try { websocketService.disconnect(); } catch (err) { console.warn('Realtime disconnect failed', err); }
   };
 
   const handleUpdateFaceImage = (userId: string, faceImage: string) => {
@@ -76,7 +75,7 @@ export function useAuth({ allUsers, setAllUsers, showNotification }: UseAuthOpti
     setAllUsers(prev => prev.map(u => u.id === updatedUser.id ? updatedUser : u));
     if (currentUser?.id === updatedUser.id) {
       setCurrentUser(updatedUser);
-      try { localStorage.setItem('gyandeep_current_user', JSON.stringify(updatedUser)); } catch {}
+      try { localStorage.setItem('gyandeep_current_user', JSON.stringify(updatedUser)); } catch (err) { console.warn('Persist updated user failed', err); }
     }
   };
 

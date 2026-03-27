@@ -39,6 +39,7 @@ import auditLogsRouter from './routes/auditLogs.js';
 import announcementsRouter from './routes/announcements.js';
 import sessionsRouter from './routes/sessions.js';
 import faceRouter from './routes/face.js';
+import emailRouter from './routes/email.js';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -158,6 +159,9 @@ app.use('/api/google', googleRouter);
 
 // AI routes
 app.use('/api', aiRouter);
+
+// Email notifications
+app.use('/api', emailRouter);
 
 // Metrics endpoint (Prometheus)
 app.use('/metrics', metricsRouter);

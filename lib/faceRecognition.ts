@@ -75,7 +75,7 @@ export async function captureFaceFromVideo(video: HTMLVideoElement): Promise<str
 export async function computeDescriptor(
   image: HTMLVideoElement | HTMLImageElement | HTMLCanvasElement
 ): Promise<Float32Array> {
-  const faceapi = await import('face-api.js');
+  await import('face-api.js');
   await isModelLoaded();
   
   const detections = await detectFace(image);

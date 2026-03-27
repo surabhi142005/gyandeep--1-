@@ -1,6 +1,6 @@
 import { NextRequest } from 'next/server';
 import { prisma } from '../../../lib/db';
-import { json, badRequest, auth } from '../../../lib/auth';
+import { json, auth } from '../../../lib/auth';
 
 /**
  * api/sessions/[id]/index.ts

@@ -3,7 +3,7 @@
  * React hook for SSE/WebSocket connection status
  */
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { websocketService } from '../services/websocketService';
 
 export type ConnectionStatus = 'connected' | 'disconnected' | 'connecting' | 'reconnecting';
@@ -27,11 +27,11 @@ export function useConnectionStatus(): UseConnectionStatusReturn {
       setReconnectAttempts(0);
     };
 
-    const handleDisconnect = () => {
+    const _handleDisconnect = () => {
       setStatus('disconnected');
     };
 
-    const handleReconnecting = () => {
+    const _handleReconnecting = () => {
       setStatus('reconnecting');
       setReconnectAttempts(prev => prev + 1);
     };

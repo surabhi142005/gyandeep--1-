@@ -200,7 +200,9 @@ export async function logout() {
       method: 'POST',
       credentials: 'include',
     });
-  } catch {}
+  } catch (err) {
+    console.warn('Logout request failed', err);
+  }
 
   updateAuthState({
     user: null,
@@ -298,7 +300,7 @@ export async function verifyFace(
   return { authenticated, confidence: data.confidence, method: 'face-api' };
 }
 
-async function compareImages(img1DataUrl: string, img2DataUrl: string): Promise<number> {
+async function _compareImages(img1DataUrl: string, img2DataUrl: string): Promise<number> {
   const loadImage = (src: string): Promise<HTMLImageElement> =>
     new Promise((resolve, reject) => {
       const img = new Image();

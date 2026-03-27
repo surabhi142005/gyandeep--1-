@@ -48,23 +48,6 @@ export const LiveQuizMonitor: React.FC<LiveQuizMonitorProps> = ({
   const totalTime = quiz.length * 20;
 
   useEffect(() => {
-    realtimeClient.connect(`teacher:${Date.now()}`, 'teacher');
-    realtimeClient.joinRoom(roomName);
-    realtimeClient.subscribe(['quiz_submission', 'quiz_progress', 'quiz_state']);
-
-    const unsubSubmission = realtimeClient.on('quiz_submission', handleSubmission);
-    const unsubProgress = realtimeClient.on('quiz_progress', handleProgress);
-    const unsubState = realtimeClient.on('quiz_state', handleStateChange);
-
-    return () => {
-      unsubSubmission();
-      unsubProgress();
-      unsubState();
-      realtimeClient.leaveRoom(roomName);
-    };
-  }, [roomName]);
-
-  useEffect(() => {
     if (quizState === 'active' && startTime) {
       const interval = setInterval(() => {
         setElapsedTime(Math.floor((Date.now() - startTime.getTime()) / 1000));
@@ -111,6 +94,23 @@ export const LiveQuizMonitor: React.FC<LiveQuizMonitorProps> = ({
       setCurrentQuestion(data.question);
     }
   }, []);
+
+  useEffect(() => {
+    realtimeClient.connect(`teacher:${Date.now()}`, 'teacher');
+    realtimeClient.joinRoom(roomName);
+    realtimeClient.subscribe(['quiz_submission', 'quiz_progress', 'quiz_state']);
+
+    const unsubSubmission = realtimeClient.on('quiz_submission', handleSubmission);
+    const unsubProgress = realtimeClient.on('quiz_progress', handleProgress);
+    const unsubState = realtimeClient.on('quiz_state', handleStateChange);
+
+    return () => {
+      unsubSubmission();
+      unsubProgress();
+      unsubState();
+      realtimeClient.leaveRoom(roomName);
+    };
+  }, [roomName, handleSubmission, handleProgress, handleStateChange]);
 
   const startQuiz = () => {
     setQuizState('active');

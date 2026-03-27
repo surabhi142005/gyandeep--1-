@@ -57,7 +57,7 @@ const AdminSetup: React.FC<AdminSetupProps> = ({ onSetupComplete, theme }) => {
         });
         if (res.ok) {
           const { token, user } = await res.json();
-          try { window.localStorage.setItem('gyandeep_token', token); } catch {}
+          try { window.localStorage.setItem('gyandeep_token', token); } catch (err) { console.warn('localStorage token save failed', err); }
           const newAdmin: Omit<Admin, 'faceImage'> = {
             id: user.id,
             name: user.name,

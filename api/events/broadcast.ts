@@ -5,7 +5,6 @@
 
 import { NextRequest } from 'next/server';
 import { requireAuth } from '../../lib/auth';
-import { COLLECTIONS } from '../../server/db/mongoAtlas';
 import { connectToDatabase } from '../../server/db/mongoAtlas';
 
 export async function POST(request: NextRequest) {

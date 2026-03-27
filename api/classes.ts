@@ -7,14 +7,14 @@ import { NextRequest } from 'next/server';
 import { prisma } from '../lib/db';
 import { requireAuth } from '../lib/auth';
 
-export async function GET(request: NextRequest) {
+export async function GET(_request: NextRequest) {
   try {
     const classes = await prisma.class.findMany({ orderBy: { name: 'asc' } });
     return new Response(JSON.stringify(classes), {
       status: 200,
       headers: { 'Content-Type': 'application/json' }
     });
-  } catch (error) {
+  } catch (_error) {
     return new Response(JSON.stringify([]), {
       status: 200,
       headers: { 'Content-Type': 'application/json' }

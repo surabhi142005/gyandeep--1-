@@ -91,17 +91,17 @@ export default function AuditLogPanel() {
       const emailMatch = log.user?.email?.toLowerCase().includes(search);
       return typeMatch || userNameMatch || emailMatch;
     });
-  }, [data?.logs, debouncedSearch]);
+  }, [data, debouncedSearch]);
 
   const totalPages = useMemo(() => {
     if (!data?.total) return 1;
     return Math.ceil(data.total / PAGE_SIZE);
-  }, [data?.total]);
+  }, [data]);
 
   const eventTypes = useMemo(() => {
     const types = new Set((data?.logs || []).map((log) => log.type));
     return Array.from(types).sort();
-  }, [data?.logs]);
+  }, [data]);
 
   const handleExport = async () => {
     const params = new URLSearchParams();

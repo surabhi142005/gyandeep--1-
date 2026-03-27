@@ -167,7 +167,7 @@ export function useFormValidation<T extends Record<string, any>>({
         const error = validateField(field, value);
         setErrors((prev) => {
           if (error) return { ...prev, [field as string]: error };
-          const { [field as string]: _, ...rest } = prev;
+          const { [field as string]: _, ...rest } = prev; // eslint-disable-line @typescript-eslint/no-unused-vars
           return rest;
         });
       }
@@ -197,7 +197,7 @@ export function useFormValidation<T extends Record<string, any>>({
         const error = validateField(name as keyof T, value);
         setErrors((prev) => {
           if (error) return { ...prev, [name]: error };
-          const { [name]: _, ...rest } = prev;
+          const { [name]: _, ...rest } = prev; // eslint-disable-line @typescript-eslint/no-unused-vars
           return rest;
         });
       }
@@ -217,7 +217,7 @@ export function useFormValidation<T extends Record<string, any>>({
         );
         setTouched(allTouched);
 
-        const isValid = validate();
+        validate();
 
         try {
           await onSubmit(values, errors);

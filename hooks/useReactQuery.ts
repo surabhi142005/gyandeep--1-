@@ -85,7 +85,7 @@ export function useApiMutation(
   }
 ) {
   const queryClient = useQueryClient();
-  const toastId = `${endpoint}-${method}-${Date.now()}`;
+  const _toastId = `${endpoint}-${method}-${Date.now()}`;
 
   return useMutation({
     mutationFn: (data?: any) => fetchAPI(endpoint, {

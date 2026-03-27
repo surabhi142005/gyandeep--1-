@@ -22,7 +22,6 @@ interface CursorPaginationOptions<T> {
 export function useCursorPagination<T>({
   fetchFn,
   initialCursor = null,
-  limit = 20,
 }: CursorPaginationOptions<T>): CursorPaginationResult<T> {
   const [data, setData] = useState<T[]>([]);
   const [cursor, setCursor] = useState<string | null>(initialCursor);
@@ -124,7 +123,7 @@ export function useOffsetPagination<T>({
   fetchFn,
   limit = 20,
 }: OffsetPaginationOptions<T>): OffsetPaginationResult<T> {
-  const [data, setData] = useState<T[]>([]);
+  const [_data, setData] = useState<T[]>([]);
   const [page, setPage] = useState(1);
   const [isLoading, setIsLoading] = useState(false);
   const [isFetching, setIsFetching] = useState(false);

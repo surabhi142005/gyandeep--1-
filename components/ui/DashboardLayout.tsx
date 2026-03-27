@@ -1,8 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import Sidebar from './Sidebar';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Search, Bell, User as UserIcon, Menu, X } from 'lucide-react';
-import { createPortal } from 'react-dom';
+import { Search, Bell, Menu, X } from 'lucide-react';
 
 interface SidebarItem {
   id: string;

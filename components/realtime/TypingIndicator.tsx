@@ -1,7 +1,7 @@
 import React, { useMemo } from 'react';
 import { useRealtime } from '../../services/RealtimeProvider';
 import { cn } from '../AuditLog/utils';
-import { MessageCircle, X } from 'lucide-react';
+import { MessageCircle } from 'lucide-react';
 
 interface TypingIndicatorProps {
   room: string;
@@ -82,9 +82,9 @@ interface ChatTypingIndicatorProps {
 }
 
 export function ChatTypingIndicator({ room, excludeUserId, className }: ChatTypingIndicatorProps) {
+  const { typing, presence } = useRealtime();
   const typingUsers = useMemo(() => {
     const users: string[] = [];
-    const { typing, presence } = useRealtime();
     
     typing.forEach((isTyping, key) => {
       if (isTyping && key.startsWith(`${room}-`)) {
@@ -98,7 +98,7 @@ export function ChatTypingIndicator({ room, excludeUserId, className }: ChatTypi
       }
     });
     return users;
-  }, [room, excludeUserId]);
+  }, [room, excludeUserId, typing, presence]);
 
   if (typingUsers.length === 0) {
     return null;

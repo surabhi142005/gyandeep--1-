@@ -4,6 +4,7 @@
  */
 
 import { NextRequest } from 'next/server';
+import bcrypt from 'bcryptjs';
 import { prisma } from '../../lib/db';
 import { requireAdmin, json, badRequest } from '../../lib/auth';
 
@@ -15,7 +16,7 @@ export async function GET(request: NextRequest) {
   try {
     const { role, classId, search } = Object.fromEntries(new URL(request.url).searchParams);
 
-    let where: any = {};
+    const where: any = {};
 
     if (role) where.role = role;
     if (classId) where.classId = classId;
@@ -66,7 +67,6 @@ export async function POST(request: NextRequest) {
       return badRequest('Email already registered');
     }
 
-    const bcrypt = require('bcryptjs');
     const hashedPassword = await bcrypt.hash(password, 10);
 
     const newUser = await prisma.user.create({

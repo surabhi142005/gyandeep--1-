@@ -1,27 +1,20 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import type { AnyUser, UserRole, Student, Teacher, Admin, SubjectConfig } from '../types';
-import { UserRole as UserRoleEnum, ROLE_DISPLAY_NAMES } from '../types';
-import { getCurrentPosition } from '../services/locationService';
-import type { Coordinates } from '../types';
+import type { AnyUser, Admin } from '../types';
+import { UserRole as UserRoleEnum } from '../types';
 import Spinner from './Spinner';
 import WebcamCapture from './WebcamCapture';
 import AdminFaceViewer from './AdminFaceViewer';
-import { adminOverride, bulkImportUsers, fetchQuestionBank, updateQuestionInBank, deleteQuestionFromBank, addQuestionsToBank, fetchTagPresets, updateTagPresets, checkEmailServiceHealth, sendEmailNotification, sendAIEmail } from '../services/dataService';
+import { bulkImportUsers, checkEmailServiceHealth, sendEmailNotification } from '../services/dataService';
 import { registerFace, verifyFace, hashPassword } from '../services/authService';
-import { t } from '../services/i18n';
 import TicketPanel from './TicketPanel';
 import { DashboardLayout, Card, Button, Badge, Input } from './ui';
 import { 
   Users, 
   UserPlus, 
-  BookOpen, 
   School, 
   Camera, 
   BarChart3, 
   HelpCircle,
-  Settings,
-  Bell,
-  LogOut,
   Search,
   CheckCircle2,
   AlertCircle,
@@ -29,14 +22,6 @@ import {
   RefreshCw,
   Trash2,
   Edit2,
-  Lock,
-  Mail,
-  Zap,
-  UserCheck,
-  MoreVertical,
-  Activity,
-  Globe,
-  Database,
   Shield,
   Plus,
   Download

@@ -6,7 +6,6 @@ interface UseTeacherSessionProps {
     classSession: ClassSession;
     onUpdateSession: (update: Partial<ClassSession>) => void;
     historicalRecords?: HistoricalSessionRecord[];
-    onUpdateHistoricalRecords?: (records: HistoricalSessionRecord[]) => void;
     duration?: number;
 }
 
@@ -14,7 +13,7 @@ interface UseTeacherSessionProps {
  * Humanizes teacher session management logic.
  * Handles timers, location fetching, and session code generation.
  */
-export function useTeacherSession({ classSession, onUpdateSession, historicalRecords = [], onUpdateHistoricalRecords, duration = 600 }: UseTeacherSessionProps) {
+export function useTeacherSession({ classSession, onUpdateSession, historicalRecords = [], duration = 600 }: UseTeacherSessionProps) {
     const [timeLeft, setTimeLeft] = useState(0);
     const [isFetchingLocation, setIsFetchingLocation] = useState(false);
     const [teacherLocation, setTeacherLocation] = useState<Coordinates | null>(classSession.teacherLocation || null);

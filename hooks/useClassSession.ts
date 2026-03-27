@@ -27,7 +27,9 @@ function loadHistoricalRecords(userId: string): HistoricalSessionRecord[] {
 function saveHistoricalRecords(userId: string, records: HistoricalSessionRecord[]) {
   try {
     window.localStorage.setItem(`attendanceHistory_${userId}`, JSON.stringify(records));
-  } catch {}
+  } catch (err) {
+    console.warn('Persist attendance history failed', err);
+  }
 }
 
 export function useClassSession({ allUsers, allSubjects, currentUserId }: UseClassSessionOptions) {

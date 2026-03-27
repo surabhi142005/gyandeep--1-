@@ -17,8 +17,7 @@ module.exports = {
     'eslint:recommended',
     'plugin:react/recommended',
     'plugin:@typescript-eslint/recommended',
-    'plugin:react-hooks/recommended',
-    'prettier'
+    'plugin:react-hooks/recommended'
   ],
   plugins: ['react', '@typescript-eslint', 'react-hooks'],
   settings: {
@@ -30,7 +29,12 @@ module.exports = {
     'react/react-in-jsx-scope': 'off',
     '@typescript-eslint/explicit-module-boundary-types': 'off',
     '@typescript-eslint/no-explicit-any': 'off',
-    '@typescript-eslint/no-unused-vars': ['warn', { 'argsIgnorePattern': '^_' }],
+    '@typescript-eslint/no-unused-vars': ['warn', { 
+      'argsIgnorePattern': '^_',
+      'varsIgnorePattern': '^_',
+      'destructuredArrayIgnorePattern': '.*',
+      'caughtErrorsIgnorePattern': '^_'
+    }],
     'react/no-unknown-property': 'off',
     'react-hooks/exhaustive-deps': 'off',
     'react-hooks/set-state-in-effect': 'off',

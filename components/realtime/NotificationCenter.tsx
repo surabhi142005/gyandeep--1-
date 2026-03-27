@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRealtime, RealtimeNotification } from '../../services/RealtimeProvider';
 import { cn } from '../AuditLog/utils';
 import { 

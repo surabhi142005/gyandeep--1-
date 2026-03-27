@@ -5,7 +5,7 @@
 
 import { NextRequest } from 'next/server';
 import { prisma } from '../../lib/db';
-import { signToken, badRequest, json, unauthorized } from '../../lib/auth';
+import { signToken, badRequest, json } from '../../lib/auth';
 import bcrypt from 'bcryptjs';
 
 export async function POST(request: NextRequest) {

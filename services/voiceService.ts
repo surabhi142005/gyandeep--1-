@@ -1,7 +1,5 @@
 // Voice Service - Web Speech API wrapper for STT and TTS
 
-type SpeechRecognitionType = typeof window extends { SpeechRecognition: infer T } ? T : any;
-
 interface VoiceServiceState {
   isListening: boolean;
   isSpeaking: boolean;

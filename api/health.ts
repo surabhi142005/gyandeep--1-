@@ -6,7 +6,7 @@
 import { NextRequest } from 'next/server';
 import { connectToDatabase } from '../lib/db';
 
-export async function GET(request: NextRequest) {
+export async function GET(_request: NextRequest) {
   try {
     const db = await connectToDatabase();
     await db.collection('users').findOne({});

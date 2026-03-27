@@ -14,12 +14,12 @@ const DEFAULT_SUBJECTS = [
   { id: 'english', name: 'English' },
 ];
 
-export async function GET(request: NextRequest) {
+export async function GET(_request: NextRequest) {
   try {
     let subjects = await prisma.subject.findMany({ orderBy: { name: 'asc' } });
     
     if (subjects.length === 0) {
-      for (const subject of DEFAULT_SUBJECTS) {
+      for (const _subject of DEFAULT_SUBJECTS) {
         await prisma.subject.findMany({}).then();
       }
       subjects = DEFAULT_SUBJECTS;
@@ -29,7 +29,7 @@ export async function GET(request: NextRequest) {
       status: 200,
       headers: { 'Content-Type': 'application/json' }
     });
-  } catch (error) {
+  } catch (_error) {
     return new Response(JSON.stringify(DEFAULT_SUBJECTS), {
       status: 200,
       headers: { 'Content-Type': 'application/json' }

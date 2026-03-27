@@ -241,7 +241,7 @@ export function useUserStatus(userId: string) {
   return { status, lastSeen };
 }
 
-export function useChatPresence(room: string, currentUserId: string, currentUserName: string) {
+export function useChatPresence(room: string, currentUserId: string) {
   const { onlineUsers, typingUsers, sendTyping, isUserOnline } = usePresence(room);
 
   useEffect(() => {

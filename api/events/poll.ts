@@ -5,7 +5,6 @@
 
 import { NextRequest } from 'next/server';
 import { verifyToken } from '../../lib/auth';
-import { COLLECTIONS } from '../../server/db/mongoAtlas';
 import { connectToDatabase } from '../../server/db/mongoAtlas';
 
 export async function GET(request: NextRequest) {

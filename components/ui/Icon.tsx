@@ -6,7 +6,6 @@
 import React from 'react';
 import {
   LucideProps,
-  icons,
   type LucideIcon,
   Home, Menu, X, ArrowLeft, ArrowRight, User, Users, LogIn, LogOut, Lock, Unlock, Eye, EyeOff,
   Plus, Edit, Trash2, Save, Search, Filter, Download, Upload, RefreshCw, Settings,

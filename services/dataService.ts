@@ -17,7 +17,7 @@ if (!API_BASE) {
 const uid = () => {
   try {
     if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') return crypto.randomUUID();
-  } catch { }
+  } catch (err) { console.warn('[dataService] crypto.randomUUID not available', err); }
   return `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
 };
 
@@ -49,8 +49,8 @@ const lsGet = <T>(key: string, defaultValue: T): T => {
   } catch { return defaultValue; }
 };
 
-const lsSet = (key: string, value: unknown) => {
-  try { localStorage.setItem(key, JSON.stringify(value)); } catch (err) { console.warn('[dataService] localStorage set failed', err); }
+const lsSet = (_key: string, _value: unknown) => {
+  // Reserved for future localStorage caching
 };
 
 // ─── Users / Profiles ────────────────────────────────────────────────────────
@@ -134,7 +134,18 @@ export const fetchCentralizedNotes = async (params: { subjectId: string; unitNum
 export const fetchCentralizedNotesCombined = async (params: { subjectId: string; classId?: string }) => {
   const qs = new URLSearchParams({ subjectId: params.subjectId });
   if (params.classId) qs.set('classId', params.classId);
-  return apiRequest(`/api/notes/centralized/combined?${qs.toString()}`, { method: 'GET' });
+  const notes = await apiRequest(`/api/notes/centralized?${qs.toString()}`, { method: 'GET' });
+  if (!Array.isArray(notes)) return [];
+
+  const grouped = new Map<number, { unitNumber: number; unitName: string; notes: any[] }>();
+  for (const note of notes) {
+    const unit = Number(note.unitNumber) || 0;
+    if (!grouped.has(unit)) {
+      grouped.set(unit, { unitNumber: unit, unitName: note.unitName || `Unit ${unit || 1}`, notes: [] });
+    }
+    grouped.get(unit)!.notes.push(note);
+  }
+  return Array.from(grouped.values()).sort((a, b) => a.unitNumber - b.unitNumber);
 };
 
 export const uploadCentralizedNotes = async (payload: {
@@ -461,7 +472,7 @@ export const getAnalyticsInsights = async (studentData: any, type?: string) => {
 // ─── Admin Override ──────────────────────────────────────────────────────────
 
 export const adminOverride = async (adminId: string, userId: string, action: string, reason?: string) => {
-  return apiRequest('/api/audit-logs', {
+  return apiRequest('/api/admin/audit-logs', {
     method: 'POST',
     body: JSON.stringify({
       type: 'admin_override',

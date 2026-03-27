@@ -13,7 +13,6 @@ interface OnlineUsersProps {
 }
 
 export function OnlineUsers({
-  room,
   maxDisplay = 5,
   showAvatar = true,
   showNames = true,

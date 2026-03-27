@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
   Play, 
   UserCheck, 
@@ -7,32 +7,15 @@ import {
   FileText, 
   Bell, 
   BarChart3, 
-  LogOut, 
-  Settings,
-  Plus,
-  Search,
-  CheckCircle2,
   XCircle,
   Clock,
   MapPin,
-  Calendar,
-  ChevronRight,
-  ChevronDown,
-  MoreVertical,
-  Activity,
   Award,
-  BookOpen,
-  Share2,
   Download,
-  Upload,
-  PieChart as PieChartIcon,
   RefreshCw,
   Zap
 } from 'lucide-react';
-import type { User, PerformanceData, Coordinates, QuizQuestion, HistoricalSessionRecord } from '../types';
-import { useQuizWorker } from '../hooks/useQuizWorker';
-import { syncCalendar, uploadToDrive, fetchTagPresets, uploadCentralizedNotes, fetchCentralizedNotesCombined } from '../services/dataService';
-import { t } from '../services/i18n';
+import type { User } from '../types';
 import { getCurrentPosition } from '../services/locationService';
 import Spinner from './Spinner';
 import PerformanceChart from './PerformanceChart';
@@ -40,14 +23,9 @@ import AttendanceChart from './AttendanceChart';
 import WebcamCapture from './WebcamCapture';
 import { uploadClassNotes } from '../services/dataService';
 import { TeacherDashboardProps } from './TeacherDashboardProps';
-import AnnouncementBoard from './AnnouncementBoard';
-import AnalyticsDashboard from './AnalyticsDashboard';
 import GradeBook from './GradeBook';
 import TicketPanel from './TicketPanel';
 import { useTeacherSession } from '../hooks/useTeacherSession';
-import { exportToCSV } from '../services/exportService';
-import { websocketService } from '../services/websocketService';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
 import { DashboardLayout, Card, Button, Badge, Input } from './ui';
 
 const SIDEBAR_ITEMS = [

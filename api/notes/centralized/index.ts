@@ -20,7 +20,7 @@ export async function GET(request: NextRequest) {
       return badRequest('subjectId is required');
     }
 
-    let query: any = { subjectId };
+    const query: any = { subjectId };
 
     if (unitNumber) {
       query.unitNumber = parseInt(unitNumber);

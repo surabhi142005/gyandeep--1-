@@ -1,10 +1,15 @@
 /// <reference types="cypress" />
+/* eslint-disable @typescript-eslint/no-namespace */
 
-declare namespace Cypress {
-  interface Chainable {
-    login(email: string, password: string): Chainable<void>;
-    logout(): Chainable<void>;
-    getByTestId(testId: string): Chainable<JQuery<HTMLElement>>;
+export {};
+
+declare global {
+  namespace Cypress {
+    interface Chainable {
+      login(email: string, password: string): Chainable<void>;
+      logout(): Chainable<void>;
+      getByTestId(testId: string): Chainable<JQuery<HTMLElement>>;
+    }
   }
 }
 
