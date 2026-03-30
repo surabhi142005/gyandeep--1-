@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import type { AnyUser, Admin } from '../types';
-import { UserRole as UserRoleEnum } from '../types';
+import type { AnyUser, Admin, SubjectConfig, Student, Teacher, UserRole, Coordinates } from '../types';
+import { UserRole as UserRoleEnum, ROLE_DISPLAY_NAMES } from '../types';
 import Spinner from './Spinner';
 import WebcamCapture from './WebcamCapture';
 import AdminFaceViewer from './AdminFaceViewer';
-import { bulkImportUsers, checkEmailServiceHealth, sendEmailNotification } from '../services/dataService';
+import { bulkImportUsers, checkEmailServiceHealth, sendEmailNotification, fetchQuestionBank, fetchTagPresets } from '../services/dataService';
 import { registerFace, verifyFace, hashPassword } from '../services/authService';
+import { getCurrentPosition } from '../services/locationService';
 import TicketPanel from './TicketPanel';
 import { DashboardLayout, Card, Button, Badge, Input } from './ui';
 import { 
@@ -24,7 +25,9 @@ import {
   Edit2,
   Shield,
   Plus,
-  Download
+  Download,
+  BookOpen,
+  Database
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer } from 'recharts';
@@ -35,7 +38,7 @@ interface AdminDashboardProps {
   onUpdateUsers: (users: AnyUser[]) => void;
   onLogout: () => void;
   theme: string;
-  setTheme: (theme: string) => void;
+  onThemeChange?: (theme: string) => void;
   onUpdateFaceImage: (adminId: string, faceImage: string) => void;
   allSubjects: SubjectConfig[];
   setAllSubjects: (subjects: SubjectConfig[]) => void;
@@ -53,9 +56,9 @@ const SIDEBAR_ITEMS = [
   { id: 'qbank', label: 'Question Bank', icon: HelpCircle },
 ];
 
-const AdminDashboard: React.FC<AdminDashboardProps> = ({ 
-  admin, users, onUpdateUsers, onLogout, theme, setTheme, 
-  onUpdateFaceImage, allSubjects, setAllSubjects, allClasses, setAllClasses 
+const AdminDashboard: React.FC<AdminDashboardProps> = ({
+  admin, users, onUpdateUsers, onLogout, theme, onThemeChange,
+  onUpdateFaceImage, allSubjects, setAllSubjects, allClasses, setAllClasses
 }) => {
   const [location, setLocation] = useState<Coordinates | null>(null);
   const [locationError, setLocationError] = useState<string | null>(null);

@@ -4,7 +4,6 @@
  */
 
 import crypto from 'crypto';
-import crypto from 'crypto';
 import DOMPurify from 'dompurify';
 import { JSDOM } from 'jsdom';
 

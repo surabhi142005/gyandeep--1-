@@ -3,13 +3,18 @@
  * Sentry error tracking setup for the client
  */
 
-import * as Sentry from '@sentry/browser';
+// @ts-expect-error - Module declarations
+import * as SentryModule from '@sentry/browser';
+// @ts-expect-error - Module declarations
 import { browserProfilingIntegration } from '@sentry/profiling-web';
 
-const SENTRY_DSN = import.meta.env.VITE_SENTRY_DSN;
-const APP_VERSION = import.meta.env.VITE_APP_VERSION || '1.0.0';
+const Sentry = SentryModule;
 
-let isInitialized = false;
+// Dynamic Sentry configuration
+let _isInitialized = false;
+
+const SENTRY_DSN = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_SENTRY_DSN) || '';
+const APP_VERSION = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_APP_VERSION) || '1.0.0';
 
 export function initSentry() {
   if (!SENTRY_DSN) {
@@ -20,26 +25,16 @@ export function initSentry() {
   try {
     Sentry.init({
       dsn: SENTRY_DSN,
-      environment: import.meta.env.MODE,
+      environment: import.meta.env?.MODE || 'development',
       release: APP_VERSION,
       integrations: [
         browserProfilingIntegration(),
-        new Sentry.BrowserTracing({
-          routingInstrumentation: Sentry.reactRouterV6Instrumentation,
-          tracePropagationTargets: ['localhost', /^\//],
-        }),
-        new Sentry.Replay({
-          maskAllText: false,
-          blockAllMedia: false,
-          maskText: {
-            selector: '.password-field, [data-sentry-mask]',
-          },
-        }),
+        new Sentry.BrowserTracing(),
       ],
-      tracesSampleRate: import.meta.env.PROD ? 0.1 : 1.0,
-      replaysSessionSampleRate: import.meta.env.PROD ? 0.1 : 1.0,
+      tracesSampleRate: import.meta.env?.PROD ? 0.1 : 1.0,
+      replaysSessionSampleRate: import.meta.env?.PROD ? 0.1 : 1.0,
       replaysOnErrorSampleRate: 1.0,
-      profilesSampleRate: import.meta.env.PROD ? 0.1 : 1.0,
+      profilesSampleRate: import.meta.env?.PROD ? 0.1 : 1.0,
       beforeSend(event) {
         if (event.request?.headers) {
           delete event.request.headers['Authorization'];
@@ -67,7 +62,7 @@ export function initSentry() {
       ],
     });
 
-    isInitialized = true;
+    _isInitialized = true;
     console.log('Client Sentry initialized');
     return true;
   } catch (error) {
@@ -76,16 +71,16 @@ export function initSentry() {
   }
 }
 
-export function captureException(error, context = {}) {
-  if (!isInitialized) {
+export function captureException(error: any, context: Record<string, any> = {}) {
+  if (!_isInitialized) {
     console.error('[Sentry]', error, context);
     return;
   }
   Sentry.captureException(error, { extra: context });
 }
 
-export function captureMessage(message, level: 'fatal' | 'error' | 'warning' | 'info' | 'debug' | 'log' = 'info', context = {}) {
-  if (!isInitialized) {
+export function captureMessage(message: string, level: 'fatal' | 'error' | 'warning' | 'info' | 'debug' | 'log' = 'info', context: Record<string, any> = {}) {
+  if (!_isInitialized) {
     console.log(`[${level}] ${message}`, context);
     return;
   }
@@ -96,7 +91,7 @@ export function captureMessage(message, level: 'fatal' | 'error' | 'warning' | '
 }
 
 export function setUser(user: { id: string; email?: string; name?: string; role?: string } | null) {
-  if (!isInitialized) return;
+  if (!_isInitialized) return;
 
   if (user) {
     Sentry.setUser({
@@ -110,12 +105,12 @@ export function setUser(user: { id: string; email?: string; name?: string; role?
 }
 
 export function clearUser() {
-  if (!isInitialized) return;
+  if (!_isInitialized) return;
   Sentry.setUser(null);
 }
 
 export function addBreadcrumb(message: string, category = 'app', data: Record<string, any> = {}) {
-  if (!isInitialized) return;
+  if (!_isInitialized) return;
 
   Sentry.addBreadcrumb({
     message,
@@ -126,22 +121,22 @@ export function addBreadcrumb(message: string, category = 'app', data: Record<st
 }
 
 export function setTag(key: string, value: string) {
-  if (!isInitialized) return;
+  if (!_isInitialized) return;
   Sentry.setTag(key, value);
 }
 
 export function setContext(name: string, context: Record<string, any>) {
-  if (!isInitialized) return;
+  if (!_isInitialized) return;
   Sentry.setContext(name, context);
 }
 
 export function setExtra(key: string, value: any) {
-  if (!isInitialized) return;
+  if (!_isInitialized) return;
   Sentry.setExtra(key, value);
 }
 
-export function startTransaction(name: string, op: string = 'navigation') {
-  if (!isInitialized) {
+export function startTransaction(name: string, op = 'navigation') {
+  if (!_isInitialized) {
     return { startTimestamp: Date.now(), end: () => {} };
   }
   return Sentry.startTransaction({ name, op });
@@ -172,15 +167,12 @@ export function wrapApiCall<T>(
   apiCall: () => Promise<T>,
   operation: string
 ): Promise<T> {
-  return startTransaction(`API: ${operation}`, 'http.client').withAsyncScope(async () => {
-    try {
-      const result = await apiCall();
-      addBreadcrumb(`API success: ${operation}`, 'api', { operation });
-      return result;
-    } catch (error) {
-      captureException(error as Error, { operation, type: 'api_error' });
-      throw error;
-    }
+  return apiCall().then(result => {
+    addBreadcrumb(`API success: ${operation}`, 'api', { operation });
+    return result;
+  }).catch(error => {
+    captureException(error as Error, { operation, type: 'api_error' });
+    throw error;
   });
 }
 

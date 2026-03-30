@@ -125,7 +125,7 @@ export function useFormValidation<T extends Record<string, any>>({
         const matchField = rule.match as keyof T;
         const matchValue = allValues?.[matchField];
         if (value !== matchValue) {
-          return `${field} must match ${String(matchField)}`;
+          return `${String(field)} must match ${String(matchField)}`;
         }
       }
 

@@ -140,36 +140,36 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({
       <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
         {/* Gamification Bar */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-           <Card padding="md" hover className="bg-theme-gradient text-white border-none shadow-primary/20">
+           <Card padding="md" featured hover>
               <div className="flex items-center gap-4">
                 <div className="w-12 h-12 rounded-xl bg-white/20 flex items-center justify-center">
-                  <Star size={24} className="fill-white" />
+                  <Star size={24} className="fill-white text-white" />
                 </div>
                 <div>
-                  <p className="text-xs font-bold uppercase tracking-wider opacity-80">Experience Points</p>
-                  <p className="text-2xl font-black">{stats.xp} XP</p>
+                  <p className="text-xs font-bold uppercase tracking-wider opacity-80 text-white">Experience Points</p>
+                  <p className="text-2xl font-black text-white">{stats.xp} XP</p>
                 </div>
               </div>
            </Card>
            <Card padding="md" hover>
               <div className="flex items-center gap-4">
-                <div className="w-12 h-12 rounded-xl bg-secondary/10 flex items-center justify-center text-secondary">
-                  <Award size={24} />
+                <div className="w-12 h-12 rounded-xl flex items-center justify-center" style={{ backgroundColor: 'var(--color-secondary-15)' }}>
+                  <Award size={24} style={{ color: 'var(--color-secondary)' }} />
                 </div>
                 <div>
-                  <p className="text-xs font-bold text-gray-500 uppercase tracking-wider">Current Level</p>
-                  <p className="text-2xl font-black text-secondary">Level {stats.level}</p>
+                  <p className="text-xs font-bold uppercase tracking-wider" style={{ color: 'var(--color-text-muted)' }}>Current Level</p>
+                  <p className="text-2xl font-black" style={{ color: 'var(--color-secondary)' }}>Level {stats.level}</p>
                 </div>
               </div>
            </Card>
            <Card padding="md" hover>
               <div className="flex items-center gap-4">
-                <div className="w-12 h-12 rounded-xl bg-amber-100 flex items-center justify-center text-amber-600">
-                  <Coins size={24} />
+                <div className="w-12 h-12 rounded-xl flex items-center justify-center" style={{ backgroundColor: 'rgba(245, 158, 11, 0.15)' }}>
+                  <Coins size={24} style={{ color: '#D97706' }} />
                 </div>
                 <div>
-                  <p className="text-xs font-bold text-gray-500 uppercase tracking-wider">Gyandeep Coins</p>
-                  <p className="text-2xl font-black text-amber-600">{stats.coins} GDC</p>
+                  <p className="text-xs font-bold uppercase tracking-wider" style={{ color: 'var(--color-text-muted)' }}>Gyandeep Coins</p>
+                  <p className="text-2xl font-black" style={{ color: '#D97706' }}>{stats.coins} GDC</p>
                 </div>
               </div>
            </Card>
@@ -182,41 +182,41 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({
                   <div className="flex justify-between items-start mb-8">
                     <div>
                       <h2 className="text-2xl font-bold mb-1">Active Session</h2>
-                      <p className="text-gray-500">Join your live classroom session</p>
+                      <p className="text-sm" style={{ color: 'var(--color-text-muted)' }}>Join your live classroom session</p>
                     </div>
                     {classSession.isActive ? (
-                      <Badge variant="streak" size="lg" className="animate-bounce">LIVE SESSION</Badge>
+                      <Badge variant="xp" size="lg" animated>LIVE SESSION</Badge>
                     ) : (
                       <Badge variant="default" size="lg">NO ACTIVE SESSION</Badge>
                     )}
                   </div>
 
                   {!classSession.isActive ? (
-                    <div className="py-12 text-center bg-gray-50 dark:bg-gray-800/50 rounded-2xl border-2 border-dashed border-gray-200 dark:border-gray-700">
-                       <Activity size={48} className="mx-auto text-gray-300 mb-4" />
-                       <h3 className="text-lg font-bold text-gray-400">Wait for your teacher to start</h3>
+                    <div className="py-12 text-center rounded-2xl border-2 border-dashed" style={{ backgroundColor: 'var(--color-bg)', borderColor: 'var(--color-border)' }}>
+                       <Activity size={48} className="mx-auto mb-4" style={{ color: 'var(--color-text-muted)' }} />
+                       <h3 className="text-lg font-bold" style={{ color: 'var(--color-text-muted)' }}>Wait for your teacher to start</h3>
                     </div>
                   ) : (
                     <div className="space-y-6">
-                       <div className="p-6 bg-primary/5 rounded-2xl border border-primary/10 flex items-center justify-between">
+                       <div className="p-6 rounded-2xl flex items-center justify-between" style={{ backgroundColor: 'var(--color-primary-10)', border: '1px solid var(--color-primary-15)' }}>
                           <div className="flex items-center gap-4">
-                             <div className="w-14 h-14 rounded-2xl bg-white dark:bg-gray-900 flex items-center justify-center shadow-sm text-primary">
+                             <div className="w-14 h-14 rounded-2xl flex items-center justify-center shadow-sm" style={{ backgroundColor: 'var(--color-surface)', color: 'var(--color-primary)' }}>
                                 <BookOpen size={28} />
                              </div>
                              <div>
-                                <p className="text-sm font-bold text-primary uppercase tracking-tighter">Current Subject</p>
+                                <p className="text-sm font-bold uppercase tracking-tighter" style={{ color: 'var(--color-primary)' }}>Current Subject</p>
                                 <p className="text-xl font-black">{classSession.subject}</p>
                              </div>
                           </div>
                           <div className="text-right">
-                             <p className="text-xs font-bold text-gray-500 uppercase">Started At</p>
+                             <p className="text-xs font-bold uppercase" style={{ color: 'var(--color-text-muted)' }}>Started At</p>
                              <p className="text-sm font-medium">{new Date(classSession.startedAt!).toLocaleTimeString()}</p>
                           </div>
                        </div>
 
                         {!student.attendanceMarked ? (
                           <div className="space-y-4">
-                             <label className="block text-sm font-bold text-gray-700">Enter Attendance Code</label>
+                             <label className="block text-sm font-bold" style={{ color: 'var(--color-text)' }}>Enter Attendance Code</label>
                              <div className="flex flex-col sm:flex-row gap-3">
                                 <Input 
                                   value={code} 
@@ -230,208 +230,212 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({
                              </div>
                           </div>
                         ) : (
-                         <div className="p-4 bg-green-50 text-green-700 rounded-xl border border-green-100 flex items-center gap-3">
+                         <div className="p-4 rounded-xl flex items-center gap-3" style={{ backgroundColor: 'rgba(34, 197, 94, 0.1)', border: '1px solid rgba(34, 197, 94, 0.2)', color: '#16A34A' }}>
                             <CheckCircle2 size={24} />
                             <p className="font-bold">Attendance marked for this session!</p>
                          </div>
                        )}
                     </div>
                   )}
-               </Card>
+                </Card>
 
-               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <Card padding="lg" hover onClick={() => setActiveTab('quiz')}>
-                     <div className="flex items-center gap-4">
-                        <div className="w-12 h-12 rounded-xl bg-orange-100 text-orange-600 flex items-center justify-center">
-                           <HelpCircle size={24} />
-                        </div>
-                        <div>
-                           <h3 className="font-bold">Live Quiz</h3>
-                           <p className="text-sm text-gray-500">Take the session quiz</p>
-                        </div>
-                        <ChevronRight className="ml-auto text-gray-300" size={20} />
-                     </div>
-                  </Card>
-                  <Card padding="lg" hover onClick={() => setActiveTab('twin')}>
-                     <div className="flex items-center gap-4">
-                        <div className="w-12 h-12 rounded-xl bg-purple-100 text-purple-600 flex items-center justify-center">
-                           <Zap size={24} />
-                        </div>
-                        <div>
-                           <h3 className="font-bold">Digital Twin</h3>
-                           <p className="text-sm text-gray-500">AI Learning Assistant</p>
-                        </div>
-                        <ChevronRight className="ml-auto text-gray-300" size={20} />
-                     </div>
-                  </Card>
-               </div>
-            </div>
-
-            <div className="space-y-8">
-               <AnnouncementBoard announcements={announcements} canPost={false} theme={theme} />
-               <Card padding="lg">
-                  <h3 className="text-lg font-bold mb-4 flex items-center gap-2">
-                    <Activity size={20} className="text-secondary" />
-                    Session Notes
-                  </h3>
-                  <div className="space-y-3">
-                     {classSession.notes ? (
-                       <p className="text-sm text-gray-600 leading-relaxed bg-gray-50 dark:bg-gray-800/50 p-4 rounded-xl italic">
-                         "{classSession.notes}"
-                       </p>
-                     ) : (
-                       <p className="text-sm text-gray-400 italic">No notes from teacher yet.</p>
-                     )}
-                  </div>
-               </Card>
-            </div>
-          </div>
-        )}
-
-        {activeTab === 'quiz' && (
-          <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-             <Card padding="xl">
-                <div className="flex justify-between items-center mb-8">
-                   <div>
-                      <h2 className="text-2xl font-bold">Quiz Center</h2>
-                      <p className="text-gray-500">Challenge yourself and earn XP</p>
-                   </div>
-                   <Badge variant="xp" size="lg">Ready to play</Badge>
-                </div>
-                
-                {quizTaken ? (
-                  <div className="py-16 text-center">
-                     <div className="w-20 h-20 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto mb-6">
-                        <CheckCircle2 size={40} />
-                     </div>
-                     <h3 className="text-xl font-bold mb-2">Quiz Completed!</h3>
-                     <p className="text-gray-500">You've earned 50 XP for completing today's quiz.</p>
-                     <Button variant="secondary" className="mt-8" onClick={() => setQuizTaken(false)}>Review Answers</Button>
-                  </div>
-                ) : (
-                  <QuizView 
-                    quiz={classSession.quiz || []}
-                    subject={classSession.subject || 'General'}
-                    onSubmit={(score) => {
-                      onUpdatePerformance(student.id, classSession.subject || 'General', score);
-                      setQuizTaken(true);
-                    }}
-                    theme={theme}
-                  />
-                )}
-             </Card>
-          </div>
-        )}
-
-        {activeTab === 'performance' && (
-          <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                <div className="lg:col-span-2 space-y-8">
-                   <Card padding="xl">
-                      <h3 className="text-xl font-bold mb-6">Your Progress</h3>
-                      <PerformanceChart data={student.performance || []} />
-                   </Card>
-                   <Card padding="xl">
-                      <h3 className="text-xl font-bold mb-6">Subject Breakdown</h3>
-                      <div className="space-y-4">
-                         {['Mathematics', 'Science', 'English'].map(sub => (
-                           <div key={sub}>
-                              <div className="flex justify-between text-sm mb-2">
-                                 <span className="font-bold">{sub}</span>
-                                 <span className="text-primary font-bold">85%</span>
-                              </div>
-                              <div className="w-full h-2 bg-gray-100 rounded-full overflow-hidden">
-                                 <div className="h-full bg-theme-gradient w-[85%]" />
-                              </div>
-                           </div>
-                         ))}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                   <Card padding="lg" hover onClick={() => setActiveTab('quiz')}>
+                      <div className="flex items-center gap-4">
+                         <div className="w-12 h-12 rounded-xl flex items-center justify-center" style={{ backgroundColor: 'rgba(249, 115, 22, 0.15)', color: '#F97316' }}>
+                            <HelpCircle size={24} />
+                         </div>
+                         <div>
+                            <h3 className="font-bold">Live Quiz</h3>
+                            <p className="text-sm" style={{ color: 'var(--color-text-muted)' }}>Take the session quiz</p>
+                         </div>
+                         <ChevronRight className="ml-auto" size={20} style={{ color: 'var(--color-text-muted)' }} />
                       </div>
                    </Card>
-                </div>
-                <div className="space-y-8">
-                   <Leaderboard students={allStudents} currentStudentId={student.id} theme={theme} />
+                   <Card padding="lg" hover onClick={() => setActiveTab('twin')}>
+                      <div className="flex items-center gap-4">
+                         <div className="w-12 h-12 rounded-xl flex items-center justify-center" style={{ backgroundColor: 'var(--color-secondary-15)', color: 'var(--color-secondary)' }}>
+                            <Zap size={24} />
+                         </div>
+                         <div>
+                            <h3 className="font-bold">Digital Twin</h3>
+                            <p className="text-sm" style={{ color: 'var(--color-text-muted)' }}>AI Learning Assistant</p>
+                         </div>
+                         <ChevronRight className="ml-auto" size={20} style={{ color: 'var(--color-text-muted)' }} />
+                      </div>
+                   </Card>
                 </div>
              </div>
-          </div>
-        )}
 
-        {activeTab === 'twin' && (
-          <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-             <Card padding="none" className="overflow-hidden h-[600px] flex flex-col">
-                <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-white">
-                   <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-full bg-purple-100 text-purple-600 flex items-center justify-center">
-                         <Zap size={20} />
+             <div className="space-y-8">
+                <AnnouncementBoard announcements={announcements} canPost={false} theme={theme} />
+                <Card padding="lg">
+                   <h3 className="text-lg font-bold mb-4 flex items-center gap-2">
+                     <Activity size={20} style={{ color: 'var(--color-secondary)' }} />
+                     Session Notes
+                   </h3>
+                   <div className="space-y-3">
+                      {classSession.notes ? (
+                        <p className="text-sm leading-relaxed p-4 rounded-xl italic" style={{ backgroundColor: 'var(--color-bg)', color: 'var(--color-text)' }}>
+                          "{classSession.notes}"
+                        </p>
+                      ) : (
+                        <p className="text-sm italic" style={{ color: 'var(--color-text-muted)' }}>No notes from teacher yet.</p>
+                      )}
+                   </div>
+                </Card>
+             </div>
+           </div>
+         )}
+
+         {activeTab === 'quiz' && (
+           <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+              <Card padding="xl">
+                 <div className="flex justify-between items-center mb-8">
+                    <div>
+                       <h2 className="text-2xl font-bold">Quiz Center</h2>
+                       <p className="text-sm" style={{ color: 'var(--color-text-muted)' }}>Challenge yourself and earn XP</p>
+                    </div>
+                    <Badge variant="xp" size="lg">Ready to play</Badge>
+                 </div>
+                 
+                 {quizTaken ? (
+                   <div className="py-16 text-center">
+                      <div className="w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-6" style={{ backgroundColor: 'rgba(34, 197, 94, 0.1)', color: '#22C55E' }}>
+                         <CheckCircle2 size={40} />
+                      </div>
+                      <h3 className="text-xl font-bold mb-2">Quiz Completed!</h3>
+                      <p className="text-sm" style={{ color: 'var(--color-text-muted)' }}>You've earned 50 XP for completing today's quiz.</p>
+                      <Button variant="secondary" className="mt-8" onClick={() => setQuizTaken(false)}>Review Answers</Button>
+                   </div>
+                 ) : (
+                   <QuizView 
+                     quiz={classSession.quiz || []}
+                     subject={classSession.subject || 'General'}
+                     onSubmit={(score) => {
+                       onUpdatePerformance(student.id, classSession.subject || 'General', score);
+                       setQuizTaken(true);
+                     }}
+                     theme={theme}
+                   />
+                 )}
+              </Card>
+           </div>
+         )}
+
+         {activeTab === 'performance' && (
+           <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                 <div className="lg:col-span-2 space-y-8">
+                    <Card padding="xl">
+                       <h3 className="text-xl font-bold mb-6">Your Progress</h3>
+                       <PerformanceChart data={student.performance || []} />
+                    </Card>
+                    <Card padding="xl">
+                       <h3 className="text-xl font-bold mb-6">Subject Breakdown</h3>
+                       <div className="space-y-4">
+                          {['Mathematics', 'Science', 'English'].map(sub => (
+                            <div key={sub}>
+                               <div className="flex justify-between text-sm mb-2">
+                                  <span className="font-bold">{sub}</span>
+                                  <span className="font-bold" style={{ color: 'var(--color-primary)' }}>85%</span>
+                               </div>
+                               <div className="w-full h-2 rounded-full overflow-hidden" style={{ backgroundColor: 'var(--color-primary-10)' }}>
+                                  <div className="h-full rounded-full" style={{ background: 'var(--gradient)', width: '85%' }} />
+                               </div>
+                            </div>
+                          ))}
+                       </div>
+                    </Card>
+                 </div>
+                 <div className="space-y-8">
+                    <Leaderboard students={allStudents} currentStudentId={student.id} theme={theme} />
+                 </div>
+              </div>
+           </div>
+         )}
+
+         {activeTab === 'twin' && (
+           <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+              <Card padding="none" className="overflow-hidden h-[600px] flex flex-col">
+                 <div className="p-6 flex justify-between items-center" style={{ borderBottom: '1px solid var(--color-border)', backgroundColor: 'var(--color-surface)' }}>
+                    <div className="flex items-center gap-3">
+                       <div className="w-10 h-10 rounded-full flex items-center justify-center" style={{ backgroundColor: 'var(--color-secondary-15)', color: 'var(--color-secondary)' }}>
+                          <Zap size={20} />
+                       </div>
+                       <div>
+                          <h3 className="font-bold">AI Learning Twin</h3>
+                          <p className="text-xs" style={{ color: 'var(--color-text-muted)' }}>Personalized study partner</p>
+                       </div>
+                    </div>
+                    <Badge variant="success" size="sm">Online</Badge>
+                 </div>
+                 <div className="flex-1 overflow-hidden relative">
+                    <StudentLearningTwin student={student} theme={theme} />
+                 </div>
+              </Card>
+           </div>
+         )}
+
+         {activeTab === 'announcements' && (
+           <div className="max-w-4xl mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+              <h2 className="text-2xl font-bold mb-6">Important Notices</h2>
+              {announcements.map((ann, idx) => (
+                <Card key={idx} padding="lg" hover>
+                   <div className="flex gap-4">
+                      <div className="w-12 h-12 rounded-xl shrink-0 flex items-center justify-center" style={{ 
+                        backgroundColor: ann.priority === 'high' ? 'rgba(239, 68, 68, 0.1)' : 'rgba(14, 165, 233, 0.1)',
+                        color: ann.priority === 'high' ? '#EF4444' : '#0EA5E9'
+                      }}>
+                         <Bell size={24} />
                       </div>
                       <div>
-                         <h3 className="font-bold">AI Learning Twin</h3>
-                         <p className="text-xs text-gray-500">Personalized study partner</p>
-                      </div>
-                   </div>
-                   <Badge variant="success" size="sm">Online</Badge>
-                </div>
-                <div className="flex-1 overflow-hidden relative">
-                   <StudentLearningTwin student={student} theme={theme} />
-                </div>
-             </Card>
-          </div>
-        )}
-
-        {activeTab === 'announcements' && (
-          <div className="max-w-4xl mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-             <h2 className="text-2xl font-bold mb-6">Important Notices</h2>
-             {announcements.map((ann, idx) => (
-               <Card key={idx} padding="lg" hover>
-                  <div className="flex gap-4">
-                     <div className={`w-12 h-12 rounded-xl shrink-0 flex items-center justify-center ${ann.priority === 'high' ? 'bg-red-100 text-red-600' : 'bg-blue-100 text-blue-600'}`}>
-                        <Bell size={24} />
-                     </div>
-                     <div>
-                        <div className="flex items-center gap-3 mb-1">
-                           <h3 className="font-bold">{ann.title}</h3>
-                           {ann.priority === 'high' && <Badge variant="danger" size="xs">Priority</Badge>}
-                        </div>
-                        <p className="text-gray-600 mb-3 leading-relaxed">{ann.content}</p>
-                        <p className="text-xs text-gray-400">{new Date(ann.createdAt).toLocaleDateString()} • By {ann.author}</p>
-                     </div>
-                  </div>
-               </Card>
-             ))}
-          </div>
-        )}
-
-        {activeTab === 'profile' && (
-          <div className="max-w-4xl mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-             <Card padding="xl">
-                <div className="flex flex-col md:flex-row items-center gap-8">
-                   <div className="relative group">
-                      <div className="w-32 h-32 rounded-3xl overflow-hidden border-4 border-primary ring-4 ring-primary/10 shadow-2xl">
-                         {student.faceImage ? (
-                           <img src={student.faceImage} alt="Profile" className="w-full h-full object-cover" />
-                         ) : (
-                           <div className="w-full h-full bg-theme-gradient flex items-center justify-center text-white text-4xl font-black">
-                              {student.name[0]}
-                           </div>
-                         )}
-                      </div>
-                      <button 
-                        onClick={() => setShowFaceRegistration(true)}
-                        className="absolute -bottom-2 -right-2 w-10 h-10 bg-white shadow-lg rounded-xl flex items-center justify-center text-primary hover:scale-110 transition-transform"
-                      >
-                         <Camera size={20} />
-                      </button>
-                   </div>
-                   <div className="text-center md:text-left flex-1">
-                      <div className="flex flex-wrap items-center justify-center md:justify-start gap-3 mb-2">
-                         <h2 className="text-3xl font-black">{student.name}</h2>
-                         <Badge variant="streak" size="sm">Top 5%</Badge>
-                      </div>
-                      <p className="text-gray-500 font-medium mb-4">{student.email} • ID: {student.id}</p>
-                      <div className="flex flex-wrap justify-center md:justify-start gap-4">
-                         <div className="px-4 py-2 bg-gray-50 rounded-xl border border-gray-100">
-                            <p className="text-[10px] font-bold text-gray-400 uppercase">Class</p>
-                            <p className="font-bold">{student.classId || 'Not Assigned'}</p>
+                         <div className="flex items-center gap-3 mb-1">
+                            <h3 className="font-bold">{ann.title}</h3>
+                            {ann.priority === 'high' && <Badge variant="danger" size="xs">Priority</Badge>}
                          </div>
+                         <p className="mb-3 leading-relaxed" style={{ color: 'var(--color-text)' }}>{ann.content}</p>
+                         <p className="text-xs" style={{ color: 'var(--color-text-muted)' }}>{new Date(ann.createdAt).toLocaleDateString()} • By {ann.author}</p>
+                      </div>
+                   </div>
+                </Card>
+              ))}
+           </div>
+         )}
+
+         {activeTab === 'profile' && (
+           <div className="max-w-4xl mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+              <Card padding="xl">
+                 <div className="flex flex-col md:flex-row items-center gap-8">
+                    <div className="relative group">
+                       <div className="w-32 h-32 rounded-3xl overflow-hidden shadow-2xl" style={{ border: '4px solid var(--color-primary)', padding: '2px', background: 'var(--color-surface)' }}>
+                          {student.faceImage ? (
+                            <img src={student.faceImage} alt="Profile" className="w-full h-full object-cover rounded-2xl" />
+                          ) : (
+                            <div className="w-full h-full rounded-2xl flex items-center justify-center text-white text-4xl font-black" style={{ background: 'var(--gradient)' }}>
+                               {student.name[0]}
+                            </div>
+                          )}
+                       </div>
+                       <button 
+                         onClick={() => setShowFaceRegistration(true)}
+                         className="absolute -bottom-2 -right-2 w-10 h-10 shadow-lg rounded-xl flex items-center justify-center hover:scale-110 transition-transform"
+                         style={{ backgroundColor: 'var(--color-surface)', color: 'var(--color-primary)' }}
+                       >
+                          <Camera size={20} />
+                       </button>
+                    </div>
+                    <div className="text-center md:text-left flex-1">
+                       <div className="flex flex-wrap items-center justify-center md:justify-start gap-3 mb-2">
+                          <h2 className="text-3xl font-black">{student.name}</h2>
+                          <Badge variant="streak" size="sm">Top 5%</Badge>
+                       </div>
+                       <p className="font-medium mb-4" style={{ color: 'var(--color-text-muted)' }}>{student.email} • ID: {student.id}</p>
+                       <div className="flex flex-wrap justify-center md:justify-start gap-4">
+                          <div className="px-4 py-2 rounded-xl" style={{ backgroundColor: 'var(--color-bg)', border: '1px solid var(--color-border)' }}>
+                             <p className="text-[10px] font-bold uppercase" style={{ color: 'var(--color-text-muted)' }}>Class</p>
+                             <p className="font-bold">{student.classId || 'Not Assigned'}</p>
+                          </div>
                          <div className="px-4 py-2 bg-gray-50 rounded-xl border border-gray-100">
                             <p className="text-[10px] font-bold text-gray-400 uppercase">Member Since</p>
                             <p className="font-bold">Aug 2025</p>

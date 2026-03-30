@@ -1,26 +1,72 @@
 import React from 'react';
 import { motion } from 'framer-motion';
 
-type BadgeVariant = 'default' | 'success' | 'warning' | 'danger' | 'info' | 'xp' | 'coin' | 'streak';
+type BadgeVariant = 'default' | 'success' | 'warning' | 'danger' | 'info' | 'xp' | 'coin' | 'streak' | 'primary' | 'secondary' | 'present' | 'absent';
 
 interface BadgeProps {
   children: React.ReactNode;
   variant?: BadgeVariant;
-  icon?: string;
+  icon?: React.ReactNode;
   animated?: boolean;
   size?: 'xs' | 'sm' | 'md' | 'lg' | 'xl';
   className?: string;
 }
 
-const variantClasses: Record<BadgeVariant, string> = {
-  default: 'bg-primary/10 text-primary border-primary/20',
-  success: 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-500/20',
-  warning: 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-500/10 dark:text-amber-400 dark:border-amber-500/20',
-  danger: 'bg-red-50 text-red-700 border-red-200 dark:bg-red-500/10 dark:text-red-400 dark:border-red-500/20',
-  info: 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-500/10 dark:text-blue-400 dark:border-blue-500/20',
-  xp: 'bg-theme-gradient text-white border-none shadow-sm',
-  coin: 'bg-theme-gradient text-white border-none shadow-sm',
-  streak: 'bg-theme-gradient text-white border-none shadow-sm',
+const getVariantStyles = (variant: BadgeVariant): React.CSSProperties => {
+  switch (variant) {
+    case 'primary':
+      return {
+        backgroundColor: 'var(--color-primary-15)',
+        color: 'var(--color-primary)',
+        borderColor: 'var(--color-primary-15)'
+      };
+    case 'secondary':
+      return {
+        backgroundColor: 'var(--color-secondary-15)',
+        color: 'var(--color-secondary)',
+        borderColor: 'var(--color-secondary-15)'
+      };
+    case 'success':
+    case 'present':
+      return {
+        backgroundColor: 'rgba(34, 197, 94, 0.1)',
+        color: '#16A34A',
+        borderColor: 'rgba(34, 197, 94, 0.2)'
+      };
+    case 'warning':
+      return {
+        backgroundColor: 'rgba(245, 158, 11, 0.1)',
+        color: '#D97706',
+        borderColor: 'rgba(245, 158, 11, 0.2)'
+      };
+    case 'danger':
+    case 'absent':
+      return {
+        backgroundColor: 'rgba(239, 68, 68, 0.1)',
+        color: '#DC2626',
+        borderColor: 'rgba(239, 68, 68, 0.2)'
+      };
+    case 'info':
+      return {
+        backgroundColor: 'rgba(14, 165, 233, 0.1)',
+        color: '#0284C7',
+        borderColor: 'rgba(14, 165, 233, 0.2)'
+      };
+    case 'xp':
+    case 'coin':
+    case 'streak':
+      return {
+        background: 'var(--gradient)',
+        color: 'white',
+        borderColor: 'transparent'
+      };
+    default:
+      return {
+        backgroundColor: 'var(--color-bg)',
+        color: 'var(--color-text)',
+        borderColor: 'var(--color-border)'
+      };
+  }
 };
 
 const sizeClasses = {
@@ -39,35 +85,32 @@ const Badge: React.FC<BadgeProps> = ({
   size = 'md',
   className = '',
 }) => {
+  const baseClasses = `
+    inline-flex items-center gap-1.5 font-semibold rounded-full border
+    ${sizeClasses[size]}
+    ${className}
+  `;
+
+  const badgeStyle = getVariantStyles(variant);
+
   if (animated) {
     return (
       <motion.span
         initial={{ scale: 0, opacity: 0 }}
         animate={{ scale: 1, opacity: 1 }}
         transition={{ type: 'spring' as const, stiffness: 400, damping: 15 }}
-        className={`
-          inline-flex items-center gap-1 font-semibold rounded-full border
-          ${variantClasses[variant]}
-          ${sizeClasses[size]}
-          ${className}
-        `}
+        className={baseClasses}
+        style={badgeStyle}
       >
-        {icon && <span>{icon}</span>}
+        {icon && <span className="flex-shrink-0">{icon}</span>}
         {children}
       </motion.span>
     );
   }
 
   return (
-    <span
-      className={`
-        inline-flex items-center gap-1 font-semibold rounded-full border
-        ${variantClasses[variant]}
-        ${sizeClasses[size]}
-        ${className}
-      `}
-    >
-      {icon && <span>{icon}</span>}
+    <span className={baseClasses} style={badgeStyle}>
+      {icon && <span className="flex-shrink-0">{icon}</span>}
       {children}
     </span>
   );

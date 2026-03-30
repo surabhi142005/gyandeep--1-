@@ -9,6 +9,6 @@ export { default as DashboardLayout } from './DashboardLayout';
 export { default as ToastQueue } from './ToastQueue';
 export { default as Icon } from './Icon';
 export { AppIcons } from './Icon';
-export { default as Skeleton, SkeletonGroup, SkeletonCard, SkeletonTable, SkeletonDashboard, SkeletonUserCard, SkeletonChart, SkeletonList, SkeletonAttendance } from './Skeletons';
+export { default as Skeleton, SkeletonGroup, SkeletonCard, SkeletonTable, SkeletonDashboard, SkeletonUserCard, SkeletonChart, SkeletonList, SkeletonAttendance, ProgressBar, XPProgressBar } from './Skeletons';
 export { default as SkipLink } from './SkipLink';
 export { default as ResponsiveContainer, ShowOn, MobileOnly, DesktopOnly, TabletOnly, TouchOnly } from './ResponsiveContainer';

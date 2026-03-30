@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import Sidebar from './Sidebar';
+import ThemeSwitcher from './ThemeSwitcher';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Search, Bell, Menu, X } from 'lucide-react';
 
@@ -19,6 +20,8 @@ interface DashboardLayoutProps {
   userAvatar?: string | null;
   onLogout: () => void;
   onShowProfile: () => void;
+  theme?: string;
+  onThemeChange?: (theme: string) => void;
 }
 
 const DashboardLayout: React.FC<DashboardLayoutProps> = ({
@@ -30,7 +33,9 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({
   userRole,
   userAvatar,
   onLogout,
-  onShowProfile
+  onShowProfile,
+  theme = 'cosmic-purple',
+  onThemeChange
 }) => {
   const [collapsed, setCollapsed] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -81,19 +86,19 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({
   };
 
   return (
-    <div className="min-h-screen bg-app-bg text-app-text transition-colors duration-300">
+    <div className="min-h-screen bg-[var(--color-bg)] text-[var(--color-text)] transition-colors duration-300">
       {/* Mobile Menu Button */}
       {isMobile && (
         <button
           onClick={() => setMobileMenuOpen(true)}
-          className="fixed top-4 left-4 z-50 p-2 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700"
+          className="fixed top-4 left-4 z-50 p-2.5 bg-[var(--color-surface)] rounded-xl shadow-lg border border-[var(--color-border)]"
           aria-label="Open menu"
         >
-          <Menu size={24} className="text-gray-700 dark:text-gray-300" />
+          <Menu size={24} className="text-[var(--color-text)]" />
         </button>
       )}
 
-      {/* Desktop Sidebar - hidden on mobile, shown as drawer on mobile */}
+      {/* Desktop Sidebar */}
       {!isMobile ? (
         <Sidebar
           items={sidebarItems}
@@ -112,7 +117,7 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
-                className="fixed inset-0 bg-black/50 z-40"
+                className="fixed inset-0 bg-black/50 z-40 backdrop-blur-sm"
                 onClick={handleOverlayClick}
               />
               {/* Drawer */}
@@ -122,32 +127,45 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({
                 animate={{ x: 0 }}
                 exit={{ x: -280 }}
                 transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-                className="fixed left-0 top-0 h-screen w-[280px] bg-primary text-white flex flex-col z-50 shadow-2xl"
+                className="fixed left-0 top-0 h-screen w-[280px] flex flex-col z-50 shadow-2xl"
+                style={{ background: 'var(--color-sidebar-bg)' }}
                 role="dialog"
                 aria-modal="true"
                 aria-label="Navigation menu"
               >
                 {/* Drawer Header */}
-                <div className="h-16 flex items-center justify-between px-4 border-b border-white/10 shrink-0">
+                <div 
+                  className="h-16 flex items-center justify-between px-4 shrink-0"
+                  style={{ borderBottom: '1px solid rgba(255,255,255,0.1)' }}
+                >
                   <div className="flex items-center">
-                    <div className="w-8 h-8 rounded-lg overflow-hidden shrink-0 border border-white/20">
+                    <div className="w-9 h-9 rounded-lg overflow-hidden shrink-0 border-2 border-white/20">
                       <img src="/logo.png" alt="Logo" className="w-full h-full object-cover" />
                     </div>
-                    <span className="ml-3 font-bold text-lg tracking-tight bg-theme-gradient bg-clip-text text-transparent" style={{ WebkitTextFillColor: 'transparent' }}>
+                    <span
+                      className="ml-3 font-bold text-lg tracking-tight"
+                      style={{
+                        background: 'var(--gradient)',
+                        WebkitBackgroundClip: 'text',
+                        WebkitTextFillColor: 'transparent',
+                        backgroundClip: 'text',
+                      }}
+                    >
                       Gyandeep
                     </span>
                   </div>
                   <button
                     onClick={() => setMobileMenuOpen(false)}
-                    className="p-2 hover:bg-white/10 rounded-lg"
+                    className="p-2 hover:bg-white/10 rounded-lg transition-colors"
                     aria-label="Close menu"
+                    style={{ color: 'var(--color-sidebar-text)' }}
                   >
                     <X size={20} />
                   </button>
                 </div>
 
                 {/* Drawer Nav */}
-                <nav className="flex-1 py-6 px-2 space-y-2 overflow-y-auto custom-scrollbar">
+                <nav className="flex-1 py-6 px-3 space-y-2 overflow-y-auto custom-scrollbar">
                   {sidebarItems.map((item) => {
                     const isActive = activeTab === item.id;
                     const Icon = item.icon;
@@ -155,14 +173,19 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({
                       <button
                         key={item.id}
                         onClick={() => handleMenuItemClick(item.id)}
-                        className={`w-full flex items-center h-11 rounded-xl transition-all duration-200 relative ${
-                          isActive 
-                            ? 'bg-theme-gradient text-white shadow-lg shadow-black/20' 
-                            : 'text-white/50 hover:text-white hover:bg-white/10'
+                        className={`w-full flex items-center h-12 rounded-xl transition-all duration-200 relative ${
+                          isActive
+                            ? 'shadow-lg'
+                            : 'hover:bg-white/10'
                         }`}
+                        style={isActive ? {
+                          background: 'var(--gradient)'
+                        } : {
+                          color: 'var(--color-sidebar-text)'
+                        }}
                       >
                         <div className="w-12 flex justify-center shrink-0">
-                          <Icon size={20} className={isActive ? 'text-white' : 'text-inherit'} />
+                          <Icon size={20} className={isActive ? 'text-white' : ''} />
                         </div>
                         <span className="text-sm font-medium">{item.label}</span>
                         {isActive && (
@@ -174,13 +197,17 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({
                 </nav>
 
                 {/* Drawer Footer */}
-                <div className="p-2 border-t border-white/10 bg-black/5">
+                <div 
+                  className="p-2"
+                  style={{ borderTop: '1px solid rgba(255,255,255,0.1)' }}
+                >
                   <button
                     onClick={() => {
                       setMobileMenuOpen(false);
                       setCollapsed(!collapsed);
                     }}
-                    className="w-full flex items-center h-10 rounded-lg text-white/50 hover:text-white hover:bg-white/10 transition-all duration-200"
+                    className="w-full flex items-center h-10 rounded-lg transition-all duration-200 hover:bg-white/10"
+                    style={{ color: 'var(--color-sidebar-text)' }}
                   >
                     <div className="w-12 flex justify-center shrink-0">
                       {collapsed ? <Menu size={18} /> : <Menu size={18} />}
@@ -195,51 +222,92 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({
       )}
 
       {/* Main Content */}
-      <div 
+      <div
         className={`flex flex-col transition-all duration-300 ${!isMobile ? (collapsed ? 'pl-16' : 'pl-[220px]') : 'pl-0'}`}
       >
         {/* Navbar */}
-        <header className="sticky top-0 z-30 h-16 bg-white/80 dark:bg-gray-900/80 backdrop-blur-md border-b border-gray-100 dark:border-gray-800 flex items-center justify-between px-4 md:px-6 shadow-sm">
+        <header 
+          className="sticky top-0 z-30 h-16 flex items-center justify-between px-4 md:px-6 backdrop-blur-md transition-all duration-300"
+          style={{
+            backgroundColor: 'rgba(255, 255, 255, 0.85)',
+            borderBottom: '1px solid var(--color-border)'
+          }}
+        >
           <div className="flex items-center flex-1 max-w-md ml-12 md:ml-0">
             <div className={`relative flex items-center w-full group transition-all duration-200 ${searchFocused ? 'scale-[1.02]' : ''}`}>
-              <Search className={`absolute left-3 w-4 h-4 transition-colors duration-200 ${searchFocused ? 'text-primary' : 'text-gray-400'}`} />
+              <Search 
+                className={`absolute left-3 w-5 h-5 transition-colors duration-200 ${searchFocused ? 'text-[var(--color-primary)]' : 'text-[var(--color-text-muted)]'}`} 
+              />
               <input
                 type="text"
                 placeholder="Search anything..."
                 onFocus={() => setSearchFocused(true)}
                 onBlur={() => setSearchFocused(false)}
-                className="w-full h-10 pl-10 pr-4 bg-gray-50 dark:bg-gray-800 border-none rounded-xl text-sm focus:ring-2 focus:ring-primary/20 transition-all outline-none"
+                className="w-full h-11 pl-11 pr-4 rounded-xl text-sm transition-all duration-200 outline-none gd-input-focus"
+                style={{
+                  backgroundColor: 'var(--color-bg)',
+                  color: 'var(--color-text)',
+                  border: '2px solid var(--color-border)'
+                }}
               />
             </div>
           </div>
 
           <div className="flex items-center gap-2 md:gap-4">
-            <button className="relative p-2 text-gray-500 hover:text-primary transition-colors rounded-xl hover:bg-gray-50 dark:hover:bg-gray-800">
+            <button 
+              className="relative p-2.5 rounded-xl transition-all duration-200 hover:bg-[var(--color-bg)]"
+              style={{ color: 'var(--color-text-muted)' }}
+            >
               <Bell size={20} />
-              <span className="absolute top-2 right-2 w-2 h-2 bg-secondary rounded-full border-2 border-white dark:border-gray-900"></span>
+              <span 
+                className="absolute top-2.5 right-2.5 w-2.5 h-2.5 rounded-full border-2 border-white"
+                style={{ backgroundColor: 'var(--color-secondary)' }}
+              />
             </button>
 
-            <div className="h-8 w-px bg-gray-100 dark:bg-gray-800 mx-1 hidden sm:block"></div>
+            <div 
+              className="h-8 w-px mx-1 hidden sm:block" 
+              style={{ backgroundColor: 'var(--color-border)' }}
+            />
 
-            <button 
+            <button
               onClick={onShowProfile}
-              className="flex items-center gap-3 p-1 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-800 transition-all group"
+              className="flex items-center gap-3 p-1.5 rounded-xl transition-all duration-200 group"
+              style={{ backgroundColor: 'transparent' }}
             >
               <div className="relative">
-                <div className="w-8 h-8 rounded-lg overflow-hidden border-2 border-transparent group-hover:border-primary transition-all shadow-sm">
-                  {userAvatar ? (
-                    <img src={userAvatar} alt={userName} className="w-full h-full object-cover" />
-                  ) : (
-                    <div className="w-full h-full bg-theme-gradient flex items-center justify-center text-white text-xs font-bold uppercase">
-                      {userName[0]}
-                    </div>
-                  )}
+                <div 
+                  className="w-9 h-9 rounded-xl overflow-hidden border-2 transition-all duration-200 group-hover:border-[var(--color-primary)]"
+                  style={{
+                    borderColor: 'transparent',
+                    padding: '2px',
+                    background: 'var(--gradient)'
+                  }}
+                >
+                  <div 
+                    className="w-full h-full rounded-lg overflow-hidden"
+                    style={{ background: 'var(--color-surface)' }}
+                  >
+                    {userAvatar ? (
+                      <img src={userAvatar} alt={userName} className="w-full h-full object-cover" />
+                    ) : (
+                      <div 
+                        className="w-full h-full flex items-center justify-center text-white text-sm font-bold uppercase"
+                        style={{ background: 'var(--gradient)' }}
+                      >
+                        {userName[0]}
+                      </div>
+                    )}
+                  </div>
                 </div>
-                <div className="absolute -bottom-1 -right-1 w-3 h-3 bg-green-500 border-2 border-white dark:border-gray-900 rounded-full"></div>
+                <div 
+                  className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-white"
+                  style={{ backgroundColor: '#22C55E' }}
+                />
               </div>
               <div className="hidden sm:block text-left">
-                <p className="text-xs font-bold leading-none mb-1">{userName}</p>
-                <p className="text-[10px] text-gray-400 font-medium capitalize">{userRole}</p>
+                <p className="text-sm font-bold leading-none mb-0.5" style={{ color: 'var(--color-text)' }}>{userName}</p>
+                <p className="text-xs font-medium capitalize" style={{ color: 'var(--color-text-muted)' }}>{userRole}</p>
               </div>
             </button>
           </div>
@@ -260,6 +328,11 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({
           </AnimatePresence>
         </main>
       </div>
+
+      {/* Theme Switcher */}
+      {onThemeChange && (
+        <ThemeSwitcher currentTheme={theme} onThemeChange={onThemeChange} />
+      )}
     </div>
   );
 };

@@ -47,6 +47,7 @@ const statusConfig: Record<ConnectionStatus, {
 
 export const ConnectionStatusIndicator: React.FC<ConnectionStatusIndicatorProps> = ({
   showLabel = true,
+  showReconnectAttempts = false,
   className = '',
 }) => {
   const { status, isConnected, reconnectAttempts } = useConnectionStatus();

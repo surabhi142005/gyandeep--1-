@@ -14,11 +14,12 @@ import { getCurrentUser, getStoredToken, requestPasswordReset } from '../service
 import type { Coordinates } from '../types';
 
 interface UseAuthOptions {
+  allUsers: AnyUser[];
   setAllUsers: React.Dispatch<React.SetStateAction<AnyUser[]>>;
   showNotification: (message: string, type?: ToastType) => void;
 }
 
-export function useAuth({ setAllUsers, showNotification }: UseAuthOptions) {
+export function useAuth({ allUsers: _allUsers, setAllUsers, showNotification }: UseAuthOptions) {
   const [currentUser, setCurrentUser] = useState<AnyUser | null>(() => {
     // Restore session from localStorage on page reload
     try {

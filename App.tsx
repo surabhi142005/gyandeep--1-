@@ -239,14 +239,14 @@ const App: React.FC = () => {
                         />
                     );
                 })()}
-                {currentUser.role === UserRoleEnum.ADMIN && (
+                    {currentUser.role === UserRoleEnum.ADMIN && (
                     <AdminDashboard
                         admin={currentUser as Admin}
                         users={allUsers}
                         onUpdateUsers={handleUsersUpdate}
                         onLogout={handleLogoutWithReset}
                         theme={theme}
-                        setTheme={setTheme}
+                        onThemeChange={setTheme}
                         onUpdateFaceImage={handleUpdateFaceImage}
                         allSubjects={allSubjects}
                         setAllSubjects={setAllSubjects}
@@ -328,7 +328,7 @@ const App: React.FC = () => {
                         <Chatbot theme={theme} userLocation={userLocation} />
                     </Suspense>
                 )}
-                <ThemeSwitcher currentTheme={theme} onThemeChange={setTheme} />
+                {/* ThemeSwitcher removed - now integrated in each Dashboard */}
                 <ToastQueue />
                 <NotificationToastList />
                 {currentUser && (

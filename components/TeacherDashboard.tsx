@@ -21,11 +21,12 @@ import Spinner from './Spinner';
 import PerformanceChart from './PerformanceChart';
 import AttendanceChart from './AttendanceChart';
 import WebcamCapture from './WebcamCapture';
-import { uploadClassNotes } from '../services/dataService';
+import { uploadClassNotes, fetchTagPresets, fetchCentralizedNotesCombined } from '../services/dataService';
 import { TeacherDashboardProps } from './TeacherDashboardProps';
 import GradeBook from './GradeBook';
 import TicketPanel from './TicketPanel';
 import { useTeacherSession } from '../hooks/useTeacherSession';
+import { useQuizWorker } from '../hooks/useQuizWorker';
 import { DashboardLayout, Card, Button, Badge, Input } from './ui';
 
 const SIDEBAR_ITEMS = [
@@ -99,7 +100,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
   const [sessionInsights, setSessionInsights] = useState<any>(null);
   const [loadingInsights, setLoadingInsights] = useState(false);
 
-  const { startSession, endSession, generateCode, exportSession } = useTeacherSession({ classSession, onUpdateSession, historicalRecords, onUpdateHistoricalRecords });
+  const { startSession, endSession, generateCode, exportSession } = useTeacherSession({ classSession, onUpdateSession, historicalRecords });
 
   const handleStartSession = async () => {
     if (!selectedSubject) {

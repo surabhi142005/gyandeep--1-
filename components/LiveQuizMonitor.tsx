@@ -290,22 +290,18 @@ export const LiveQuizMonitor: React.FC<LiveQuizMonitorProps> = ({
                 Question {currentQuestion + 1} of {totalQuestions}
               </span>
               <div className="flex gap-2">
-                {quizState === 'active' && (
-                  <button
-                    onClick={pauseQuiz}
-                    className="p-2 rounded-lg bg-amber-100 text-amber-600 hover:bg-amber-200 transition-colors"
-                  >
-                    <Pause className="w-4 h-4" />
-                  </button>
-                )}
-                {quizState === 'paused' && (
-                  <button
-                    onClick={resumeQuiz}
-                    className="p-2 rounded-lg bg-emerald-100 text-emerald-600 hover:bg-emerald-200 transition-colors"
-                  >
-                    <Play className="w-4 h-4" />
-                  </button>
-                )}
+                <button
+                  onClick={pauseQuiz}
+                  className="p-2 rounded-lg bg-amber-100 text-amber-600 hover:bg-amber-200 transition-colors"
+                >
+                  <Pause className="w-4 h-4" />
+                </button>
+                <button
+                  onClick={resumeQuiz}
+                  className="p-2 rounded-lg bg-emerald-100 text-emerald-600 hover:bg-emerald-200 transition-colors"
+                >
+                  <Play className="w-4 h-4" />
+                </button>
                 <button
                   onClick={endQuiz}
                   className="p-2 rounded-lg bg-red-100 text-red-600 hover:bg-red-200 transition-colors"

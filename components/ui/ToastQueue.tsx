@@ -7,20 +7,12 @@ import React, { useEffect, useState } from 'react';
 import { toastQueue, type Toast } from '../../services/toastService';
 import { CheckCircle, XCircle, AlertTriangle, Info, X, Loader2 } from 'lucide-react';
 
-const toastStyles: Record<string, { bg: string; border: string; icon: React.ElementType }> = {
-  success: { bg: 'bg-green-50 dark:bg-green-900/30', border: 'border-green-500', icon: CheckCircle },
-  error: { bg: 'bg-red-50 dark:bg-red-900/30', border: 'border-red-500', icon: XCircle },
-  warning: { bg: 'bg-yellow-50 dark:bg-yellow-900/30', border: 'border-yellow-500', icon: AlertTriangle },
-  info: { bg: 'bg-blue-50 dark:bg-blue-900/30', border: 'border-blue-500', icon: Info },
-  loading: { bg: 'bg-gray-50 dark:bg-gray-800/50', border: 'border-blue-500', icon: Loader2 },
-};
-
-const iconColors: Record<string, string> = {
-  success: 'text-green-500',
-  error: 'text-red-500',
-  warning: 'text-yellow-500',
-  info: 'text-blue-500',
-  loading: 'text-blue-500 animate-spin',
+const toastStyles: Record<string, { icon: React.ElementType; iconColor: string }> = {
+  success: { icon: CheckCircle, iconColor: '#22C55E' },
+  error: { icon: XCircle, iconColor: '#EF4444' },
+  warning: { icon: AlertTriangle, iconColor: '#F59E0B' },
+  info: { icon: Info, iconColor: 'var(--color-primary)' },
+  loading: { icon: Loader2, iconColor: 'var(--color-primary)' },
 };
 
 interface ToastItemProps {
@@ -36,23 +28,26 @@ const ToastItem: React.FC<ToastItemProps> = ({ toast, onRemove }) => {
     <div
       role="alert"
       aria-live="polite"
-      className={`
-        flex items-start gap-3 p-4 rounded-lg border-l-4 shadow-lg
-        ${style.bg} ${style.border}
-        animate-slide-in-right
-        transition-all duration-300 ease-out
-        max-w-sm w-full
-      `}
+      className="flex items-start gap-3 p-4 rounded-xl shadow-lg animate-slide-in-right transition-all duration-300 ease-out max-w-sm w-full"
+      style={{
+        backgroundColor: 'var(--color-surface)',
+        borderLeft: '4px solid var(--color-primary)',
+        color: 'var(--color-text)'
+      }}
     >
-      <Icon className={`w-5 h-5 flex-shrink-0 mt-0.5 ${iconColors[toast.type] || iconColors.info}`} />
-      <p className="flex-1 text-sm text-gray-700 dark:text-gray-200">{toast.message}</p>
+      <Icon 
+        className="w-5 h-5 flex-shrink-0 mt-0.5 animate-spin" 
+        style={{ color: style.iconColor, animation: toast.type === 'loading' ? 'spin 1s linear infinite' : 'none' }} 
+      />
+      <p className="flex-1 text-sm">{toast.message}</p>
       {toast.type !== 'loading' && (
         <button
           onClick={() => onRemove(toast.id)}
-          className="flex-shrink-0 p-1 rounded hover:bg-black/10 dark:hover:bg-white/10 transition-colors"
+          className="flex-shrink-0 p-1 rounded transition-colors"
+          style={{ color: 'var(--color-text-muted)' }}
           aria-label="Dismiss notification"
         >
-          <X className="w-4 h-4 text-gray-500" />
+          <X className="w-4 h-4" />
         </button>
       )}
     </div>
@@ -74,7 +69,7 @@ const ToastQueue: React.FC = () => {
 
   return (
     <div
-      className="fixed bottom-4 right-4 z-[9999] flex flex-col gap-2"
+      className="fixed bottom-6 right-6 z-[9999] flex flex-col gap-3"
       aria-label="Notifications"
     >
       {toasts.map(toast => (

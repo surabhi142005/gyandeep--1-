@@ -18,6 +18,15 @@ export default {
         'app-bg': 'var(--color-bg)',
         'app-surface': 'var(--color-surface)',
         'app-text': 'var(--color-text)',
+        'text-muted': 'var(--color-text-muted)',
+        border: 'var(--color-border)',
+        sidebar: {
+          bg: 'var(--color-sidebar-bg)',
+          text: 'var(--color-sidebar-text)',
+          'text-active': 'var(--color-sidebar-text-active)',
+          hover: 'var(--color-sidebar-hover)',
+          active: 'var(--color-sidebar-active)',
+        },
         brand: {
           50: 'var(--color-primary-50)',
           100: 'var(--color-primary-100)',
@@ -30,14 +39,19 @@ export default {
           800: 'var(--color-primary-800)',
           900: 'var(--color-primary-900)',
         },
-        surface: {
-          DEFAULT: 'var(--color-neutral-50)',
-          100: 'var(--color-neutral-100)',
-          200: 'var(--color-neutral-200)',
-        },
       },
       backgroundImage: {
         'theme-gradient': 'var(--gradient)',
+        'gradient-radial': 'radial-gradient(var(--tw-gradient-stops))',
+      },
+      boxShadow: {
+        'glow': '0 0 20px var(--color-primary-glow)',
+        'glow-lg': '0 0 40px var(--color-primary-glow)',
+        'inner-glow': 'inset 0 1px 4px 0 var(--color-primary-glow)',
+        'theme': '0 4px 20px -2px var(--color-primary-shadow)',
+        'theme-lg': '0 10px 40px -4px var(--color-primary-shadow)',
+        'primary': '0 8px 30px -8px var(--color-primary-shadow)',
+        'primary-lg': '0 20px 60px -12px var(--color-primary-shadow)',
       },
       spacing: {
         '18': '4.5rem',
@@ -46,11 +60,6 @@ export default {
       },
       borderRadius: {
         '4xl': '2rem',
-      },
-      boxShadow: {
-        'glow': '0 0 20px rgba(99, 102, 241, 0.3)',
-        'glow-lg': '0 0 40px rgba(99, 102, 241, 0.4)',
-        'inner-glow': 'inset 0 1px 4px 0 rgba(99, 102, 241, 0.1)',
       },
       animation: {
         'float': 'float 6s ease-in-out infinite',
