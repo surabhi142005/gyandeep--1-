@@ -3,13 +3,14 @@
  * Express server for local development
  */
 
+import 'dotenv/config';
 import express from 'express';
 import { createServer } from 'http';
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
 import { connectToDatabase } from './db/mongoAtlas.js';
 import { standardRateLimiter, authRateLimiter, strictRateLimiter } from './middleware/rateLimiter.js';
-import { securityHeaders, sanitizeInput, requestSizeLimit } from './middleware/security.js';
+import { securityHeaders, sanitizeInput, requestSizeLimit, csrfProtection } from './middleware/security.js';
 import { setupWebSocket } from './websocket.js';
 import { initRedis, isRedisConnected, healthCheck as redisHealthCheck } from './services/cache.js';
 import { initSentry, setupSentryErrorHandlers, captureException, addBreadcrumb } from './services/sentry.js';
@@ -40,9 +41,11 @@ import announcementsRouter from './routes/announcements.js';
 import sessionsRouter from './routes/sessions.js';
 import faceRouter from './routes/face.js';
 import emailRouter from './routes/email.js';
+import teacherStatsRouter from './routes/teacherStats.js';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
+const BODY_SIZE_LIMIT = process.env.BODY_SIZE_LIMIT || '10mb';
 
 // Security headers for all routes
 app.use(securityHeaders);
@@ -59,8 +62,8 @@ app.use(cors({
 }));
 
 // Body parsing with size limit
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+app.use(express.json({ limit: BODY_SIZE_LIMIT }));
+app.use(express.urlencoded({ extended: true, limit: BODY_SIZE_LIMIT }));
 
 // Request size validation
 app.use(requestSizeLimit);
@@ -91,83 +94,86 @@ app.get('/api/health', async (req, res) => {
   }
 });
 
-// Auth routes with stricter rate limiting
-app.use('/api/auth', authRateLimiter.middleware(), authRouter);
+// Auth routes with stricter rate limiting and CSRF protection
+app.use('/api/auth', authRateLimiter.middleware(), csrfProtection, authRouter);
 
-// User routes
-app.use('/api/users', usersRouter);
+// User routes with CSRF protection for mutating operations
+app.use('/api/users', csrfProtection, usersRouter);
 
-// Classes routes
-app.use('/api/classes', classesRouter);
+// Classes routes with CSRF protection
+app.use('/api/classes', csrfProtection, classesRouter);
 
-// Grades routes
-app.use('/api/grades', gradesRouter);
+// Grades routes with CSRF protection
+app.use('/api/grades', csrfProtection, gradesRouter);
 
-// Attendance routes
-app.use('/api/attendance', attendanceRouter);
+// Attendance routes with CSRF protection
+app.use('/api/attendance', csrfProtection, attendanceRouter);
 
-// Notes routes
-app.use('/api/notes', notesRouter);
+// Notes routes with CSRF protection
+app.use('/api/notes', csrfProtection, notesRouter);
 
-// Question bank routes
-app.use('/api/question-bank', questionBankRouter);
+// Question bank routes with CSRF protection
+app.use('/api/question-bank', csrfProtection, questionBankRouter);
 
-// Timetable routes
-app.use('/api/timetable', timetableRouter);
+// Timetable routes with CSRF protection
+app.use('/api/timetable', csrfProtection, timetableRouter);
 
-// Tickets routes
-app.use('/api/tickets', ticketsRouter);
+// Tickets routes with CSRF protection
+app.use('/api/tickets', csrfProtection, ticketsRouter);
 
-// Notifications routes
-app.use('/api/notifications', notificationsRouter);
+// Notifications routes with CSRF protection
+app.use('/api/notifications', csrfProtection, notificationsRouter);
 
-// Webhooks routes
-app.use('/api/webhooks', webhooksRouter);
+// Webhooks routes with CSRF protection
+app.use('/api/webhooks', csrfProtection, webhooksRouter);
 
-// Admin routes
-app.use('/api/admin', adminRouter);
+// Admin routes with CSRF protection
+app.use('/api/admin', csrfProtection, adminRouter);
 
-// Integrations routes
-app.use('/api/integrations', integrationsRouter);
+// Integrations routes with CSRF protection
+app.use('/api/integrations', csrfProtection, integrationsRouter);
 
-// Analytics routes
+// Analytics routes (read-only, no CSRF needed)
 app.use('/api/analytics', analyticsRouter);
 
-// Subjects routes
-app.use('/api/subjects', subjectsRouter);
+// Subjects routes with CSRF protection
+app.use('/api/subjects', csrfProtection, subjectsRouter);
 
-// Tags presets routes
-app.use('/api/tags-presets', tagPresetsRouter);
+// Tags presets routes with CSRF protection
+app.use('/api/tags-presets', csrfProtection, tagPresetsRouter);
 
-// Storage routes (file uploads)
-app.use('/api/storage', storageRouter);
+// Storage routes (file uploads) with CSRF protection
+app.use('/api/storage', csrfProtection, storageRouter);
 
 // SSE events routes (real-time updates)
 app.use('/api/events', eventsRouter);
 
-// Announcements routes
-app.use('/api/announcements', announcementsRouter);
+// Announcements routes with CSRF protection
+app.use('/api/announcements', csrfProtection, announcementsRouter);
 
-// Sessions routes (quiz, attendance)
-app.use('/api/sessions', sessionsRouter);
+// Sessions routes (quiz, attendance) with CSRF protection
+app.use('/api/sessions', csrfProtection, sessionsRouter);
 
-// Face routes (registration/verification)
-app.use('/api/face', faceRouter);
+// Face routes (registration/verification) with CSRF protection
+app.use('/api/face', csrfProtection, faceRouter);
 
-// Google OAuth routes
-app.use('/api/google', googleRouter);
+// Google OAuth routes with CSRF protection
+app.use('/api/google', csrfProtection, googleRouter);
 
-// AI routes
-app.use('/api', aiRouter);
+// AI routes with CSRF protection
+app.use('/api', csrfProtection, aiRouter);
 
-// Email notifications
-app.use('/api', emailRouter);
+// Email notifications with CSRF protection
+app.use('/api', csrfProtection, emailRouter);
 
 // Metrics endpoint (Prometheus)
 app.use('/metrics', metricsRouter);
 
-// Audit logs routes
-app.use('/api/admin/audit-logs', auditLogsRouter);
+// Audit logs routes with CSRF protection
+app.use('/api/admin/audit-logs', csrfProtection, auditLogsRouter);
+
+// Teacher stats routes with CSRF protection
+app.use('/api/teacher', csrfProtection, teacherStatsRouter);
 
 // Create HTTP server and attach WebSocket
 const server = createServer(app);

@@ -7,8 +7,9 @@ import express from 'express';
 const router = express.Router();
 import { ObjectId } from 'mongodb';
 import { connectToDatabase, COLLECTIONS } from '../db/mongoAtlas.js';
+import { authMiddleware } from '../middleware/auth.js';
 
-router.get('/', async (req, res) => {
+router.get('/', authMiddleware, async (req, res) => {
   try {
     const db = await connectToDatabase();
     const classes = await db.collection(COLLECTIONS.CLASSES)
@@ -22,7 +23,7 @@ router.get('/', async (req, res) => {
   }
 });
 
-router.post('/', async (req, res) => {
+router.post('/', authMiddleware, async (req, res) => {
   try {
     const classes = Array.isArray(req.body) ? req.body : [req.body];
     if (classes.length === 0) {
@@ -70,7 +71,7 @@ router.post('/', async (req, res) => {
   }
 });
 
-router.post('/assign', async (req, res) => {
+router.post('/assign', authMiddleware, async (req, res) => {
   try {
     const { studentId, classId } = req.body;
     if (!studentId) {

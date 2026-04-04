@@ -165,7 +165,7 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({
                 </div>
 
                 {/* Drawer Nav */}
-                <nav className="flex-1 py-6 px-3 space-y-2 overflow-y-auto custom-scrollbar">
+                <nav className="flex-1 py-6 px-3 space-y-2 overflow-y-auto custom-scrollbar ios-overflow-scroll" style={{ paddingBottom: 'max(1rem, env(safe-area-inset-bottom))' }}>
                   {sidebarItems.map((item) => {
                     const isActive = activeTab === item.id;
                     const Icon = item.icon;
@@ -233,7 +233,7 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({
             borderBottom: '1px solid var(--color-border)'
           }}
         >
-          <div className="flex items-center flex-1 max-w-md ml-12 md:ml-0">
+          <div className="flex items-center flex-1 max-w-md ml-12 md:ml-0 pl-10 sm:pl-0">
             <div className={`relative flex items-center w-full group transition-all duration-200 ${searchFocused ? 'scale-[1.02]' : ''}`}>
               <Search 
                 className={`absolute left-3 w-5 h-5 transition-colors duration-200 ${searchFocused ? 'text-[var(--color-primary)]' : 'text-[var(--color-text-muted)]'}`} 

@@ -66,7 +66,6 @@ export async function connectToDatabase() {
     
     const clientOptions = {
       ...POOL_CONFIG,
-      loggerLevel: ENVIRONMENT === 'development' ? 'debug' : 'error',
     };
 
     cachedClient = new MongoClient(MONGODB_URI, clientOptions);
@@ -115,6 +114,10 @@ export async function connectToDatabase() {
     
     const connectTime = Date.now() - connectionStartTime;
     console.log(`[MongoDB] Connected successfully in ${connectTime}ms`);
+    
+    if (ENVIRONMENT !== 'test') {
+      await createIndexes();
+    }
   }
 
   const db = cachedClient.db(MONGODB_DB);
@@ -156,5 +159,55 @@ export async function healthCheck() {
       status: 'unhealthy',
       error: error.message,
     };
+  }
+}
+
+export async function createIndexes() {
+  const db = await connectToDatabase();
+  
+  try {
+    await db.collection(COLLECTIONS.USERS).createIndex({ email: 1 }, { unique: true });
+    await db.collection(COLLECTIONS.USERS).createIndex({ role: 1 });
+    await db.collection(COLLECTIONS.USERS).createIndex({ classId: 1 });
+    await db.collection(COLLECTIONS.USERS).createIndex({ createdAt: -1 });
+    
+    await db.collection(COLLECTIONS.ATTENDANCE).createIndex({ studentId: 1, timestamp: -1 });
+    await db.collection(COLLECTIONS.ATTENDANCE).createIndex({ classId: 1, timestamp: -1 });
+    await db.collection(COLLECTIONS.ATTENDANCE).createIndex({ sessionId: 1 });
+    
+    await db.collection(COLLECTIONS.GRADES).createIndex({ studentId: 1, subjectId: 1 });
+    await db.collection(COLLECTIONS.GRADES).createIndex({ studentId: 1, gradedAt: -1 });
+    await db.collection(COLLECTIONS.GRADES).createIndex({ subjectId: 1 });
+    
+    await db.collection(COLLECTIONS.FACE_EMBEDDINGS).createIndex({ userId: 1 }, { unique: true });
+    
+    await db.collection(COLLECTIONS.PASSWORD_RESETS).createIndex({ email: 1, code: 1 });
+    await db.collection(COLLECTIONS.PASSWORD_RESETS).createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0 });
+    
+    await db.collection(COLLECTIONS.EMAIL_VERIFICATIONS).createIndex({ email: 1 });
+    await db.collection(COLLECTIONS.EMAIL_VERIFICATIONS).createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0 });
+    
+    await db.collection(COLLECTIONS.TICKETS).createIndex({ status: 1, createdAt: -1 });
+    await db.collection(COLLECTIONS.TICKETS).createIndex({ assignedToId: 1 });
+    
+    await db.collection(COLLECTIONS.TICKET_REPLIES).createIndex({ ticketId: 1, createdAt: 1 });
+    
+    await db.collection(COLLECTIONS.CLASS_SESSIONS).createIndex({ classId: 1, startTime: 1 });
+    
+    await db.collection(COLLECTIONS.TIMETABLE).createIndex({ classId: 1, dayOfWeek: 1 });
+    
+    await db.collection(COLLECTIONS.NOTIFICATIONS).createIndex({ userId: 1, read: 1 });
+    await db.collection(COLLECTIONS.NOTIFICATIONS).createIndex({ createdAt: -1 });
+    
+    await db.collection(COLLECTIONS.ACTIVITY_LOGS).createIndex({ userId: 1, createdAt: -1 });
+    
+    await db.collection(COLLECTIONS.AUDIT_LOGS).createIndex({ userId: 1, createdAt: -1 });
+    await db.collection(COLLECTIONS.AUDIT_LOGS).createIndex({ action: 1, createdAt: -1 });
+    
+    await db.collection(COLLECTIONS.AUDIT_FACE_VERIFY).createIndex({ userId: 1, timestamp: -1 });
+    
+    console.log('[MongoDB] All indexes created successfully');
+  } catch (error) {
+    console.error('[MongoDB] Error creating indexes:', error.message);
   }
 }

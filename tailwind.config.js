@@ -145,6 +145,9 @@ export default {
       backdropBlur: {
         xs: '2px',
       },
+      transitionDuration: {
+        '0': '0ms',
+      },
     },
   },
   plugins: [],

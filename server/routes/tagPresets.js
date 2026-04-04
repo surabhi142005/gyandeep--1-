@@ -6,8 +6,9 @@
 import express from 'express';
 const router = express.Router();
 import { connectToDatabase, COLLECTIONS } from '../db/mongoAtlas.js';
+import { authMiddleware } from '../middleware/auth.js';
 
-router.get('/', async (req, res) => {
+router.get('/', authMiddleware, async (req, res) => {
   try {
     const db = await connectToDatabase();
     const presets = await db.collection(COLLECTIONS.TAG_PRESETS).find({}).toArray();
@@ -24,7 +25,7 @@ router.get('/', async (req, res) => {
   }
 });
 
-router.post('/update', async (req, res) => {
+router.post('/update', authMiddleware, async (req, res) => {
   try {
     const { subject, tags } = req.body;
     if (!subject || !Array.isArray(tags)) {

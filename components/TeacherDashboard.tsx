@@ -28,6 +28,7 @@ import TicketPanel from './TicketPanel';
 import { useTeacherSession } from '../hooks/useTeacherSession';
 import { useQuizWorker } from '../hooks/useQuizWorker';
 import { DashboardLayout, Card, Button, Badge, Input } from './ui';
+import { fetchTeacherStats, fetchQuizStats, fetchWeeklyAttendance, fetchPerformanceBySubject } from '../services/dataService';
 
 const SIDEBAR_ITEMS = [
   { id: 'session', label: 'Session Control', icon: Play },
@@ -58,6 +59,9 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
   const [isUploading, setIsUploading] = useState(false);
   const { generateQuiz: generateQuizWorker, isGenerating: workerGenerating, progress: workerProgress, error: workerError } = useQuizWorker();
   const [isGeneratingQuiz, setIsGeneratingQuiz] = useState(false);
+  const [quizTopic, setQuizTopic] = useState('');
+  const [generatedQuiz, setGeneratedQuiz] = useState<any[]>([]);
+  const [quizQuestionCount, setQuizQuestionCount] = useState(10);
   const [isPublishingQuiz, setIsPublishingQuiz] = useState(false);
   const [quizThinkingMode, setQuizThinkingMode] = useState(false);
   const [weeklyAttendance, setWeeklyAttendance] = useState<{ date: string; present: number }[]>([]);
@@ -70,6 +74,36 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
   const [showFaceRegistration, setShowFaceRegistration] = useState(false);
   const [isHistoryVisible, setIsHistoryVisible] = useState(false);
   const [showCopySuccess, setShowCopySuccess] = useState(false);
+  
+  const [teacherStats, setTeacherStats] = useState({ quizzesTaken: 0, avgScore: 0, totalStudents: 0, attendanceRate: 0 });
+  const [quizStats, setQuizStats] = useState({ totalQuizzes: 0, avgScore: 0, totalAttempts: 0 });
+  const [weeklyAttendanceData, setWeeklyAttendanceData] = useState<{ date: string; present: number }[]>([]);
+  const [performanceData, setPerformanceData] = useState<{ subject: string; avgScore: number }[]>([]);
+  
+  useEffect(() => {
+    const loadTeacherStats = async () => {
+      try {
+        const [stats, quiz] = await Promise.all([
+          fetchTeacherStats(teacher.id),
+          fetchQuizStats(teacher.id),
+        ]);
+        setTeacherStats(stats || { quizzesTaken: 0, avgScore: 0, totalStudents: 0, attendanceRate: 0 });
+        setQuizStats(quiz || { totalQuizzes: 0, avgScore: 0, totalAttempts: 0 });
+      } catch (err) { console.error('Failed to load teacher stats:', err); }
+    };
+    loadTeacherStats();
+  }, [teacher.id]);
+  
+  useEffect(() => {
+    if (classSession.classId) {
+      fetchWeeklyAttendance(classSession.classId)
+        .then(setWeeklyAttendanceData)
+        .catch(err => console.error('Failed to load weekly attendance:', err));
+      fetchPerformanceBySubject(classSession.classId)
+        .then(setPerformanceData)
+        .catch(err => console.error('Failed to load performance data:', err));
+    }
+  }, [classSession.classId]);
 
   const [tagPresets, setTagPresets] = useState<Record<string, string[]>>({});
   const [notesText, setNotesText] = useState(classSession.notes || '');
@@ -77,6 +111,34 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
   const [centralizedNotes, setCentralizedNotes] = useState<any[]>([]);
   const [selectedQuizClass, setSelectedQuizClass] = useState<string>('');
   const [expiryWarning, setExpiryWarning] = useState<string | null>(null);
+  const [timeRemaining, setTimeRemaining] = useState<string>('--:--');
+  
+  useEffect(() => {
+    if (!classSession.isActive || !classSession.expiry) {
+      setTimeRemaining('--:--');
+      return;
+    }
+    
+    const updateTimer = () => {
+      const now = Date.now();
+      const remaining = classSession.expiry! - now;
+      if (remaining <= 0) {
+        setTimeRemaining('00:00');
+        return;
+      }
+      const minutes = Math.floor(remaining / 60000);
+      const seconds = Math.floor((remaining % 60000) / 1000);
+      setTimeRemaining(`${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`);
+      
+      if (remaining < 300000 && remaining > 294000) {
+        setExpiryWarning('Session expires in 5 minutes!');
+      }
+    };
+    
+    updateTimer();
+    const interval = setInterval(updateTimer, 1000);
+    return () => clearInterval(interval);
+  }, [classSession.isActive, classSession.expiry]);
   
   useEffect(() => { fetchTagPresets().then(setTagPresets).catch((err) => { console.error('Failed to load tag presets:', err); }) }, []);
   useEffect(() => setNotesText(classSession.notes || ''), [classSession.notes]);
@@ -200,8 +262,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
                           <p className="text-xs font-bold text-gray-500 uppercase mb-1">Time Remaining</p>
                           <p className="text-2xl font-bold flex items-center gap-2">
                              <Clock className="text-secondary" size={20} />
-                             {/* Timer logic would go here */}
-                             09:42
+                             {timeRemaining}
                           </p>
                         </div>
                       </div>
@@ -268,10 +329,10 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
                  <div className="w-12 h-12 rounded-xl bg-orange-100 dark:bg-orange-500/10 flex items-center justify-center text-orange-600">
                    <HelpCircle size={24} />
                  </div>
-                 <div>
-                   <p className="text-sm font-medium text-gray-500">Quizzes Taken</p>
-                   <p className="text-2xl font-bold">12</p>
-                 </div>
+                  <div>
+                    <p className="text-sm font-medium text-gray-500">Quizzes Taken</p>
+                    <p className="text-2xl font-bold">{quizStats.totalQuizzes || teacherStats.quizzesTaken}</p>
+                  </div>
                </div>
             </Card>
             <Card padding="md" hover>
@@ -279,10 +340,10 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
                  <div className="w-12 h-12 rounded-xl bg-blue-100 dark:bg-blue-500/10 flex items-center justify-center text-blue-600">
                    <Award size={24} />
                  </div>
-                 <div>
-                   <p className="text-sm font-medium text-gray-500">Avg. Score</p>
-                   <p className="text-2xl font-bold">84%</p>
-                 </div>
+                  <div>
+                    <p className="text-sm font-medium text-gray-500">Avg. Score</p>
+                    <p className="text-2xl font-bold">{quizStats.avgScore || teacherStats.avgScore || 0}%</p>
+                  </div>
                </div>
             </Card>
           </div>
@@ -292,29 +353,29 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
       {activeTab === 'attendance' && (
         <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-              <Card className="lg:col-span-2" padding="xl">
-                 <h3 className="text-xl font-bold mb-6">Attendance Trends</h3>
-                 <AttendanceChart data={[
-                    { date: 'Mon', present: 24 },
-                    { date: 'Tue', present: 28 },
-                    { date: 'Wed', present: 26 },
-                    { date: 'Thu', present: 30 },
-                    { date: 'Fri', present: 22 },
-                 ]} />
-              </Card>
+               <Card className="lg:col-span-2" padding="xl">
+                  <h3 className="text-xl font-bold mb-6">Attendance Trends</h3>
+                  <AttendanceChart data={weeklyAttendanceData.length > 0 ? weeklyAttendanceData : [
+                     { date: 'Mon', present: 0 },
+                     { date: 'Tue', present: 0 },
+                     { date: 'Wed', present: 0 },
+                     { date: 'Thu', present: 0 },
+                     { date: 'Fri', present: 0 },
+                  ]} />
+               </Card>
               <Card padding="lg">
-                 <h3 className="text-lg font-bold mb-4">Quick Stats</h3>
-                 <div className="space-y-4">
-                    <div className="p-4 rounded-xl bg-green-500/10 border border-green-500/20">
-                       <p className="text-xs font-bold text-green-600 uppercase">Weekly Average</p>
-                       <p className="text-2xl font-black text-green-700">92%</p>
-                    </div>
-                    <div className="p-4 rounded-xl bg-orange-500/10 border border-orange-500/20">
-                       <p className="text-xs font-bold text-orange-600 uppercase">Lowest Turnout</p>
-                       <p className="text-2xl font-black text-orange-700">Friday (22)</p>
-                    </div>
-                 </div>
-              </Card>
+                  <h3 className="text-lg font-bold mb-4">Quick Stats</h3>
+                  <div className="space-y-4">
+                     <div className="p-4 rounded-xl bg-green-500/10 border border-green-500/20">
+                        <p className="text-xs font-bold text-green-600 uppercase">Weekly Average</p>
+                        <p className="text-2xl font-black text-green-700">{teacherStats.attendanceRate || Math.round((weeklyAttendanceData.reduce((s, d) => s + d.present, 0) / Math.max(weeklyAttendanceData.length, 1) / Math.max(students.length, 1)) * 100)}%</p>
+                     </div>
+                     <div className="p-4 rounded-xl bg-orange-500/10 border border-orange-500/20">
+                        <p className="text-xs font-bold text-orange-600 uppercase">Total Students</p>
+                        <p className="text-2xl font-black text-orange-700">{teacherStats.totalStudents || students.length}</p>
+                     </div>
+                  </div>
+               </Card>
            </div>
         </div>
       )}
@@ -323,12 +384,11 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
         <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
            <Card padding="xl">
               <h3 className="text-xl font-bold mb-6">Class Performance Overview</h3>
-              <PerformanceChart data={[
-                 { date: 'Unit 1', score: 75 },
-                 { date: 'Unit 2', score: 82 },
-                 { date: 'Unit 3', score: 78 },
-                 { date: 'Unit 4', score: 88 },
-                 { date: 'Unit 5', score: 91 },
+              <PerformanceChart data={performanceData.length > 0 ? performanceData.map((p, i) => ({
+                 date: p.subject || `Subject ${i + 1}`,
+                 score: p.avgScore || 0,
+              })) : [
+                 { date: 'No Data', score: 0 },
               ]} />
            </Card>
             <GradeBook 
@@ -353,8 +413,53 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
                  <h3 className="text-xl font-bold mb-2">AI Quiz Generator</h3>
                  <p className="text-gray-500 mb-6">Generate assessment questions instantly using Google Gemini AI.</p>
                  <div className="space-y-4">
-                    <Input placeholder="Enter topic or paste content..." />
-                    <Button variant="primary" className="w-full">Generate 10 Questions</Button>
+                    <Input 
+                      placeholder="Enter topic or paste content..." 
+                      value={quizTopic}
+                      onChange={(e) => setQuizTopic(e.target.value)}
+                    />
+                    <div className="flex gap-4">
+                       <select 
+                         className="flex-1 h-12 px-4 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-sm"
+                         value={quizQuestionCount}
+                         onChange={(e) => setQuizQuestionCount(parseInt(e.target.value))}
+                       >
+                         <option value={5}>5 Questions</option>
+                         <option value={10}>10 Questions</option>
+                         <option value={15}>15 Questions</option>
+                         <option value={20}>20 Questions</option>
+                       </select>
+                       <Button 
+                          variant="primary" 
+                          className="flex-1"
+                          onClick={async () => {
+                            if (!quizTopic.trim()) return;
+                            setIsGeneratingQuiz(true);
+                            try {
+                              const result = await generateQuizWorker({ notesText: quizTopic, subject: selectedSubject });
+                              const quizArray = result?.quiz || [];
+                              setGeneratedQuiz(quizArray);
+                              setSuccessMessage(`Generated ${quizArray.length} questions!`);
+                              setTimeout(() => setSuccessMessage(null), 3000);
+                            } catch (err) {
+                              setError('Failed to generate quiz');
+                            } finally {
+                              setIsGeneratingQuiz(false);
+                            }
+                          }}
+                          loading={isGeneratingQuiz || workerGenerating}
+                          disabled={!quizTopic.trim()}
+                          icon={<Zap size={16} />}
+                        >
+                          {isGeneratingQuiz || workerGenerating ? 'Generating...' : `Generate ${quizQuestionCount} Questions`}
+                       </Button>
+                    </div>
+                    {workerError && <p className="text-sm text-red-500">{workerError}</p>}
+                    {workerGenerating && (
+                      <div className="w-full h-2 bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden">
+                        <div className="h-full bg-primary transition-all" style={{ width: `${workerProgress}%` }} />
+                      </div>
+                    )}
                  </div>
               </Card>
               <Card padding="xl">
@@ -368,6 +473,214 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
                  </div>
               </Card>
            </div>
+           
+           {generatedQuiz.length > 0 && (
+             <Card padding="xl">
+               <div className="flex justify-between items-center mb-6">
+                 <h3 className="text-xl font-bold">Generated Questions</h3>
+                 <div className="flex gap-2">
+                   <Button variant="secondary" size="sm" onClick={async () => {
+                     try {
+                       await import('../services/dataService').then(m => m.upsertQuizToBank(generatedQuiz, selectedSubject));
+                       setSuccessMessage('Questions saved to bank!');
+                       setTimeout(() => setSuccessMessage(null), 3000);
+                     } catch (err) { console.error('Save failed:', err); }
+                   }} icon={<Download size={14} />}>Save to Bank</Button>
+                   <Button variant="ghost" size="sm" onClick={() => setGeneratedQuiz([])}>Clear</Button>
+                 </div>
+               </div>
+               <div className="space-y-4">
+                 {generatedQuiz.map((q, idx) => (
+                   <div key={idx} className="p-4 bg-gray-50 dark:bg-gray-800/50 rounded-xl border border-gray-100 dark:border-gray-700">
+                     <div className="flex items-start gap-3">
+                       <span className="w-8 h-8 rounded-full bg-primary/10 text-primary flex items-center justify-center font-bold text-sm flex-shrink-0">{idx + 1}</span>
+                       <div className="flex-1">
+                         <p className="font-medium mb-2">{q.question}</p>
+                         {q.options && Array.isArray(q.options) && (
+                           <div className="space-y-1 text-sm">
+                             {q.options.map((opt: string, i: number) => (
+                               <div key={i} className={opt === q.correctAnswer ? 'text-green-600 font-medium' : 'text-gray-600 dark:text-gray-400'}>
+                                 {String.fromCharCode(65 + i)}. {opt}
+                               </div>
+                             ))}
+                           </div>
+                         )}
+                       </div>
+                     </div>
+                   </div>
+                 ))}
+               </div>
+             </Card>
+           )}
+        </div>
+      )}
+
+      {activeTab === 'notes' && (
+        <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+           <Card padding="xl">
+              <div className="flex justify-between items-center mb-6">
+                 <div>
+                    <h3 className="text-xl font-bold">Class Notes</h3>
+                    <p className="text-sm text-gray-500">Upload and manage teaching materials</p>
+                 </div>
+              </div>
+              
+              <div className="flex gap-4 mb-6">
+                <button
+                  onClick={() => setNotesTab('session')}
+                  className={`px-4 py-2 rounded-lg font-medium transition-colors ${notesTab === 'session' ? 'bg-primary text-white' : 'bg-gray-100 dark:bg-gray-800'}`}
+                >
+                  Session Notes
+                </button>
+                <button
+                  onClick={() => setNotesTab('centralized')}
+                  className={`px-4 py-2 rounded-lg font-medium transition-colors ${notesTab === 'centralized' ? 'bg-primary text-white' : 'bg-gray-100 dark:bg-gray-800'}`}
+                >
+                  Centralized Notes
+                </button>
+              </div>
+              
+              {notesTab === 'session' && (
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-bold mb-2">Upload File</label>
+                    <input
+                      type="file"
+                      accept=".pdf,.doc,.docx,.txt,.png,.jpg,.jpeg"
+                      onChange={async (e) => {
+                        const file = e.target.files?.[0];
+                        if (!file) return;
+                        setIsUploading(true);
+                        try {
+                          const formData = new FormData();
+                          formData.append('file', file);
+                          formData.append('classId', classSession.classId || '');
+                          formData.append('subjectId', selectedSubject);
+                          formData.append('type', 'session_notes');
+                          formData.append('userId', teacher.id);
+                          
+                          const res = await fetch('/api/notes/upload', {
+                            method: 'POST',
+                            headers: { Authorization: `Bearer ${localStorage.getItem('gyandeep_token')}` },
+                            body: formData,
+                          });
+                          
+                          if (res.ok) {
+                            setSuccessMessage('File uploaded successfully!');
+                            setTimeout(() => setSuccessMessage(null), 3000);
+                          } else {
+                            setError('Upload failed');
+                          }
+                        } catch (err) {
+                          setError('Upload failed');
+                        } finally {
+                          setIsUploading(false);
+                        }
+                      }}
+                      className="w-full px-4 py-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-bold mb-2">Quick Notes</label>
+                    <textarea
+                      value={notesText}
+                      onChange={(e) => setNotesText(e.target.value)}
+                      className="w-full px-4 py-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 h-40"
+                      placeholder="Type your notes here..."
+                    />
+                    <Button
+                      variant="primary"
+                      className="mt-2"
+                      onClick={async () => {
+                        if (!notesText.trim()) return;
+                        setIsUploading(true);
+                        try {
+                          await import('../services/dataService').then(m => 
+                            m.uploadClassNotes({
+                              classId: classSession.classId || '',
+                              subjectId: selectedSubject,
+                              content: notesText,
+                            })
+                          );
+                          setSuccessMessage('Notes saved!');
+                          setTimeout(() => setSuccessMessage(null), 3000);
+                        } catch (err) {
+                          setError('Failed to save notes');
+                        } finally {
+                          setIsUploading(false);
+                        }
+                      }}
+                      loading={isUploading}
+                    >
+                      Save Notes
+                    </Button>
+                  </div>
+                </div>
+              )}
+              
+              {notesTab === 'centralized' && (
+                <div className="space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {centralizedNotes.length === 0 ? (
+                      <div className="col-span-2 p-8 text-center bg-gray-50 dark:bg-gray-800/50 rounded-xl">
+                        <FileText size={48} className="mx-auto mb-4 text-gray-300" />
+                        <p className="text-gray-500">No centralized notes yet</p>
+                      </div>
+                    ) : (
+                      centralizedNotes.map((note: any, idx: number) => (
+                        <div key={note.id || idx} className="p-4 bg-gray-50 dark:bg-gray-800/50 rounded-xl border border-gray-100 dark:border-gray-700">
+                          <div className="flex items-start justify-between">
+                            <div className="flex-1">
+                              <h4 className="font-medium">{note.title || 'Untitled'}</h4>
+                              <p className="text-sm text-gray-500">{note.subjectId || selectedSubject}</p>
+                              {note.createdAt && <p className="text-xs text-gray-400 mt-1">{new Date(note.createdAt).toLocaleDateString()}</p>}
+                            </div>
+                            <a href={note.url} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline text-sm">View</a>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                  <div className="border-t border-gray-100 dark:border-gray-800 pt-4 mt-4">
+                    <h4 className="font-bold mb-2">Upload to Centralized Bank</h4>
+                    <input
+                      type="file"
+                      accept=".pdf,.doc,.docx,.txt,.png,.jpg,.jpeg"
+                      onChange={async (e) => {
+                        const file = e.target.files?.[0];
+                        if (!file) return;
+                        setIsUploading(true);
+                        try {
+                          const formData = new FormData();
+                          formData.append('file', file);
+                          formData.append('classId', classSession.classId || '');
+                          formData.append('subjectId', selectedSubject);
+                          formData.append('title', file.name);
+                          formData.append('noteType', 'centralized_notes');
+                          formData.append('userId', teacher.id);
+                          
+                          const res = await fetch('/api/notes/centralized', {
+                            method: 'POST',
+                            headers: { Authorization: `Bearer ${localStorage.getItem('gyandeep_token')}` },
+                            body: formData,
+                          });
+                          
+                          if (res.ok) {
+                            setSuccessMessage('Uploaded to centralized bank!');
+                            setTimeout(() => setSuccessMessage(null), 3000);
+                          }
+                        } catch (err) {
+                          setError('Upload failed');
+                        } finally {
+                          setIsUploading(false);
+                        }
+                      }}
+                      className="w-full px-4 py-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800"
+                    />
+                  </div>
+                </div>
+              )}
+           </Card>
         </div>
       )}
 

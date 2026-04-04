@@ -5,8 +5,9 @@
 
 import express from 'express';
 const router = express.Router();
+import { authMiddleware } from '../middleware/auth.js';
 
-router.post('/calendar/sync', async (req, res) => {
+router.post('/calendar/sync', authMiddleware, async (req, res) => {
   try {
     const { title, start, end, description } = req.body;
     
@@ -26,7 +27,7 @@ router.post('/calendar/sync', async (req, res) => {
   }
 });
 
-router.post('/drive/upload', async (req, res) => {
+router.post('/drive/upload', authMiddleware, async (req, res) => {
   try {
     const { name, url, mimeType } = req.body;
     

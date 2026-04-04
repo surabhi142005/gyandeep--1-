@@ -8,8 +8,9 @@ const router = express.Router();
 import { ObjectId } from 'mongodb';
 import { connectToDatabase, COLLECTIONS } from '../db/mongoAtlas.js';
 import { broadcastNotification } from '../services/broadcast.js';
+import { authMiddleware } from '../middleware/auth.js';
 
-router.get('/', async (req, res) => {
+router.get('/', authMiddleware, async (req, res) => {
   try {
     const db = await connectToDatabase();
     const notifications = await db.collection(COLLECTIONS.NOTIFICATIONS)
@@ -24,7 +25,7 @@ router.get('/', async (req, res) => {
   }
 });
 
-router.post('/', async (req, res) => {
+router.post('/', authMiddleware, async (req, res) => {
   try {
     const db = await connectToDatabase();
     const { userId, title, message, type, relatedId, relatedType } = req.body;
@@ -54,7 +55,7 @@ router.post('/', async (req, res) => {
   }
 });
 
-router.patch('/:id/read', async (req, res) => {
+router.patch('/:id/read', authMiddleware, async (req, res) => {
   try {
     const db = await connectToDatabase();
     await db.collection(COLLECTIONS.NOTIFICATIONS).updateOne(
@@ -68,7 +69,7 @@ router.patch('/:id/read', async (req, res) => {
   }
 });
 
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', authMiddleware, async (req, res) => {
   try {
     const db = await connectToDatabase();
     await db.collection(COLLECTIONS.NOTIFICATIONS).deleteOne(

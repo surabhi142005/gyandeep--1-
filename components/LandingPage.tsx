@@ -106,9 +106,9 @@ const ScrollScene: React.FC<{ scene: typeof scenes[0]; index: number }> = ({ sce
         transition={{ duration: 0.7, delay: 0.2, ease: 'easeOut' }}
         className="flex-1"
       >
-        <div className={`${scene.visual} rounded-3xl p-12 flex items-center justify-center shadow-inner`}>
+        <div className={`${scene.visual} rounded-3xl p-8 sm:p-12 flex items-center justify-center shadow-inner`}>
           <motion.span
-            className="text-8xl"
+            className="text-6xl sm:text-7xl lg:text-8xl select-none"
             animate={isInView ? { scale: [0.5, 1.1, 1], rotate: [0, 5, 0] } : {}}
             transition={{ duration: 0.8, delay: 0.4 }}
           >
@@ -203,7 +203,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, theme }) => {
             initial={{ opacity: 0, y: 30 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.7, delay: 0.3 }}
-            className="text-6xl md:text-7xl lg:text-8xl font-extrabold tracking-tight mb-6"
+            className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-extrabold tracking-tight mb-6"
           >
             <span className="bg-gradient-to-r from-indigo-700 via-purple-700 to-pink-600 bg-clip-text text-transparent drop-shadow-lg">
               Gyandeep

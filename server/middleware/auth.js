@@ -4,9 +4,14 @@
  */
 
 import jwt from 'jsonwebtoken';
+import { ObjectId } from 'mongodb';
 import { connectToDatabase, COLLECTIONS } from '../db/mongoAtlas.js';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'gyandeep-secret-key';
+if (!process.env.JWT_SECRET && process.env.NODE_ENV === 'production') {
+  throw new Error('JWT_SECRET environment variable is required in production');
+}
+
+const JWT_SECRET = process.env.JWT_SECRET || 'dev-only-secret-do-not-use-in-production';
 const JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET || process.env.JWT_SECRET + '_refresh';
 
 export const TOKEN_COOKIE_NAME = 'gyandeep_token';
@@ -92,7 +97,7 @@ export async function getUserFromToken(token) {
     const decoded = jwt.verify(token, JWT_SECRET);
     const db = await connectToDatabase();
     const user = await db.collection(COLLECTIONS.USERS).findOne(
-      { _id: new (require('mongodb').ObjectId)(decoded.id) },
+      { _id: new ObjectId(decoded.id) },
       { projection: { password: 0 } }
     );
     return user;

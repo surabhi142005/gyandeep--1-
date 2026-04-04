@@ -8,8 +8,9 @@ const router = express.Router();
 import { ObjectId } from 'mongodb';
 import { connectToDatabase, COLLECTIONS } from '../db/mongoAtlas.js';
 import { broadcastToRoom, broadcastToAll } from './events.js';
+import { authMiddleware } from '../middleware/auth.js';
 
-router.get('/', async (req, res) => {
+router.get('/', authMiddleware, async (req, res) => {
   try {
     const db = await connectToDatabase();
     const { classId, subjectId, active } = req.query;
@@ -34,7 +35,7 @@ router.get('/', async (req, res) => {
   }
 });
 
-router.post('/', async (req, res) => {
+router.post('/', authMiddleware, async (req, res) => {
   try {
     const db = await connectToDatabase();
     const { authorId, classId, subjectId, title, content, priority, expiresAt } = req.body;

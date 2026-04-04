@@ -3,10 +3,14 @@
  * Sentry error tracking setup for the client
  */
 
-// @ts-expect-error - Module declarations
 import * as SentryModule from '@sentry/browser';
-// @ts-expect-error - Module declarations
-import { browserProfilingIntegration } from '@sentry/profiling-web';
+
+let browserProfilingIntegration: any = null;
+try {
+  browserProfilingIntegration = require('@sentry/profiling-web').browserProfilingIntegration;
+} catch {
+  console.warn('Sentry profiling module not available');
+}
 
 const Sentry = SentryModule;
 
@@ -28,9 +32,9 @@ export function initSentry() {
       environment: import.meta.env?.MODE || 'development',
       release: APP_VERSION,
       integrations: [
-        browserProfilingIntegration(),
+        browserProfilingIntegration ? browserProfilingIntegration() : undefined,
         new Sentry.BrowserTracing(),
-      ],
+      ].filter(Boolean),
       tracesSampleRate: import.meta.env?.PROD ? 0.1 : 1.0,
       replaysSessionSampleRate: import.meta.env?.PROD ? 0.1 : 1.0,
       replaysOnErrorSampleRate: 1.0,

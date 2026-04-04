@@ -230,16 +230,17 @@ const Login: React.FC<LoginProps> = ({ onLogin, users, theme, onPasswordReset })
               <div className="space-y-4">
                 <div>
                   <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">Email</label>
-                  <input
-                    id="email"
-                    type="email"
-                    value={email}
-                    onChange={handleEmailChange}
-                    onKeyDown={e => e.key === 'Enter' && handleEmailPasswordLogin()}
-                    placeholder="your@email.com"
-                    autoComplete="email"
-                    className={`w-full p-3 text-base border ${emailError ? 'border-red-400' : 'border-gray-300'} rounded-xl shadow-sm focus:outline-none focus:ring-2 ${colors.ring}`}
-                  />
+                    <input
+                      id="email"
+                      type="email"
+                      value={email}
+                      onChange={handleEmailChange}
+                      onKeyDown={e => e.key === 'Enter' && handleEmailPasswordLogin()}
+                      placeholder="your@email.com"
+                      autoComplete="email"
+                      className={`w-full p-3 text-base border ${emailError ? 'border-red-400' : 'border-gray-300'} rounded-xl shadow-sm focus:outline-none focus:ring-2 ${colors.ring}`}
+                      style={{ fontSize: '16px' }}
+                    />
                   {emailError && <p className="text-red-500 text-xs mt-1">{emailError}</p>}
                 </div>
                 <div>
@@ -254,12 +255,14 @@ const Login: React.FC<LoginProps> = ({ onLogin, users, theme, onPasswordReset })
                       placeholder="Enter your password"
                       autoComplete="current-password"
                       className={`w-full p-3 pr-10 text-base border border-gray-300 rounded-xl shadow-sm focus:outline-none focus:ring-2 ${colors.ring}`}
+                      style={{ fontSize: '16px' }}
                     />
                     <button
                       type="button"
                       onClick={() => setShowPassword(!showPassword)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                      className="absolute right-3 top-1/2 -translate-y-1/2 p-2 text-gray-400 hover:text-gray-600 min-w-[44px] min-h-[44px] flex items-center justify-center"
                       tabIndex={-1}
+                      aria-label={showPassword ? 'Hide password' : 'Show password'}
                     >
                       {showPassword ? (
                         <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" /></svg>

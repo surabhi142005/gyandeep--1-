@@ -5,10 +5,11 @@
 
 import express from 'express';
 import emailService from '../services/emailService.js';
+import { authMiddleware } from '../middleware/auth.js';
 
 const router = express.Router();
 
-router.post('/email-notification', async (req, res) => {
+router.post('/email-notification', authMiddleware, async (req, res) => {
   try {
     const { to, subject, html } = req.body || {};
     if (!to || !subject || !html) {

@@ -8,6 +8,7 @@ const router = express.Router();
 import multer from 'multer';
 import { ObjectId } from 'mongodb';
 import { connectToDatabase, COLLECTIONS } from '../db/mongoAtlas.js';
+import { authMiddleware } from '../middleware/auth.js';
 
 const multerStorage = multer.memoryStorage();
 
@@ -48,7 +49,7 @@ function handleUpload(req, res, next) {
   });
 }
 
-router.post('/upload', handleUpload, async (req, res) => {
+router.post('/upload', authMiddleware, handleUpload, async (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({ error: 'No file uploaded' });
@@ -134,7 +135,7 @@ router.post('/upload', handleUpload, async (req, res) => {
   }
 });
 
-router.post('/centralized', handleUpload, async (req, res) => {
+router.post('/centralized', authMiddleware, handleUpload, async (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({ error: 'No file uploaded' });
@@ -179,7 +180,7 @@ router.post('/centralized', handleUpload, async (req, res) => {
   }
 });
 
-router.post('/profile', handleUpload, async (req, res) => {
+router.post('/profile', authMiddleware, handleUpload, async (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({ error: 'No file uploaded' });

@@ -197,7 +197,7 @@ const Chatbot: React.FC<ChatbotProps> = ({ theme, userLocation }) => {
                         </button>
                     </div>
                 </header>
-                <div className="flex-1 p-4 overflow-y-auto bg-gray-50 min-h-0">
+                <div className="flex-1 p-4 overflow-y-auto bg-gray-50 min-h-0 ios-overflow-scroll">
                     <div className="space-y-4">
                         {messages.map((msg, index) => (
                             <div key={index} className={`flex ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}`}>

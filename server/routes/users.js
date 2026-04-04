@@ -6,23 +6,25 @@
 import express from 'express';
 const router = express.Router();
 import { ObjectId } from 'mongodb';
+import bcrypt from 'bcryptjs';
 import { connectToDatabase, COLLECTIONS } from '../db/mongoAtlas.js';
+import { authMiddleware } from '../middleware/auth.js';
 
-router.get('/', async (req, res) => {
+router.get('/', authMiddleware, async (req, res) => {
   try {
     const db = await connectToDatabase();
     const users = await db.collection(COLLECTIONS.USERS)
       .find({})
       .project({ password: 0 })
       .toArray();
-    res.json(users.map(u => ({ ...u, id: u._id?.toString() || u.id })));
+    res.json({ items: users.map(u => ({ ...u, id: u._id?.toString() || u.id })) });
   } catch (error) {
     console.error('Get users error:', error);
     res.status(500).json({ error: 'Failed to fetch users' });
   }
 });
 
-router.post('/bulk', async (req, res) => {
+router.post('/bulk', authMiddleware, async (req, res) => {
   try {
     const { users } = req.body;
     if (!Array.isArray(users)) {
@@ -84,7 +86,7 @@ router.post('/bulk', async (req, res) => {
   }
 });
 
-router.get('/:id', async (req, res) => {
+router.get('/:id', authMiddleware, async (req, res) => {
   try {
     const db = await connectToDatabase();
     const user = await db.collection(COLLECTIONS.USERS).findOne(
@@ -101,13 +103,12 @@ router.get('/:id', async (req, res) => {
   }
 });
 
-router.patch('/:id', async (req, res) => {
+router.patch('/:id', authMiddleware, async (req, res) => {
   try {
     const db = await connectToDatabase();
     const { password, ...updates } = req.body;
     
     if (password) {
-      const bcrypt = require('bcryptjs');
       updates.password = await bcrypt.hash(password, 10);
     }
     
@@ -122,7 +123,7 @@ router.patch('/:id', async (req, res) => {
   }
 });
 
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', authMiddleware, async (req, res) => {
   try {
     const db = await connectToDatabase();
     await db.collection(COLLECTIONS.USERS).deleteOne({ _id: new ObjectId(req.params.id) });

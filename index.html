@@ -32,9 +32,18 @@
         background-color: var(--color-bg);
         color: var(--color-text);
         transition: background-color 300ms ease;
+        /* Prevent horizontal overflow on mobile */
+        overflow-x: hidden;
+        /* Smooth scrolling */
+        -webkit-overflow-scrolling: touch;
       }
       #root {
         min-height: 100vh;
+        min-height: 100dvh; /* Dynamic viewport height */
+      }
+      /* Prevent pull-to-refresh on mobile while allowing scroll */
+      html {
+        overscroll-behavior-y: contain;
       }
     </style>
   </head>

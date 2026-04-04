@@ -96,7 +96,7 @@ const Header: React.FC<HeaderProps> = ({
       <motion.header
         initial={{ y: -10, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
-        className="sticky top-0 z-40 w-full"
+        className="sticky top-0 z-40 w-full safe-area-top"
       >
         <div className="mx-auto px-4 sm:px-6">
           <div className="flex items-center justify-between h-16 bg-white/70 dark:bg-gray-900/70 backdrop-blur-xl rounded-2xl mt-2 px-4 shadow-lg shadow-black/5 border border-white/20">
@@ -252,7 +252,7 @@ const Header: React.FC<HeaderProps> = ({
                   className="flex items-center gap-2 p-1.5 rounded-xl hover:bg-gray-100 transition-colors"
                 >
                   {user.faceImage ? (
-                    <img src={user.faceImage} alt="Profile" className="w-8 h-8 rounded-xl object-cover" />
+                    <img src={user.faceImage} alt="Profile" className="w-8 h-8 rounded-xl object-cover" loading="lazy" decoding="async" />
                   ) : (
                     <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-indigo-400 to-purple-500 flex items-center justify-center text-white font-bold text-sm">
                       {user.name?.[0]?.toUpperCase() || '?'}
@@ -384,7 +384,7 @@ const Header: React.FC<HeaderProps> = ({
               <div className="p-4 space-y-2">
                 <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl">
                   {user.faceImage ? (
-                    <img src={user.faceImage} alt="" className="w-10 h-10 rounded-xl object-cover" />
+                    <img src={user.faceImage} alt="" className="w-10 h-10 rounded-xl object-cover" loading="lazy" decoding="async" />
                   ) : (
                     <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-400 to-purple-500 flex items-center justify-center text-white font-bold">
                       {user.name?.[0]?.toUpperCase() || '?'}

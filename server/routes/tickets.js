@@ -9,8 +9,9 @@ import { ObjectId } from 'mongodb';
 import { connectToDatabase, COLLECTIONS } from '../db/mongoAtlas.js';
 import { broadcastTicketUpdate } from '../services/broadcast.js';
 import { broadcastToUser, broadcastToAll } from './events.js';
+import { authMiddleware } from '../middleware/auth.js';
 
-router.get('/', async (req, res) => {
+router.get('/', authMiddleware, async (req, res) => {
   try {
     const db = await connectToDatabase();
     const { status, priority, assignedTo } = req.query;
@@ -32,7 +33,7 @@ router.get('/', async (req, res) => {
   }
 });
 
-router.get('/unassigned', async (req, res) => {
+router.get('/unassigned', authMiddleware, async (req, res) => {
   try {
     const db = await connectToDatabase();
     const tickets = await db.collection(COLLECTIONS.TICKETS)
@@ -46,7 +47,7 @@ router.get('/unassigned', async (req, res) => {
   }
 });
 
-router.post('/', async (req, res) => {
+router.post('/', authMiddleware, async (req, res) => {
   try {
     const db = await connectToDatabase();
     const now = new Date();
@@ -89,7 +90,7 @@ router.post('/', async (req, res) => {
   }
 });
 
-router.get('/:id', async (req, res) => {
+router.get('/:id', authMiddleware, async (req, res) => {
   try {
     const db = await connectToDatabase();
     const ticket = await db.collection(COLLECTIONS.TICKETS).findOne(
@@ -115,7 +116,7 @@ router.get('/:id', async (req, res) => {
   }
 });
 
-router.post('/:id/reply', async (req, res) => {
+router.post('/:id/reply', authMiddleware, async (req, res) => {
   try {
     const { message, expectedVersion, authorId, authorName, isStaff } = req.body;
     if (!message) {
@@ -158,7 +159,7 @@ router.post('/:id/reply', async (req, res) => {
   }
 });
 
-router.post('/:id/close', async (req, res) => {
+router.post('/:id/close', authMiddleware, async (req, res) => {
   try {
     const { expectedVersion, resolvedById } = req.body;
 
@@ -195,7 +196,7 @@ router.post('/:id/close', async (req, res) => {
   }
 });
 
-router.patch('/:id/assign', async (req, res) => {
+router.patch('/:id/assign', authMiddleware, async (req, res) => {
   try {
     const { adminId } = req.body;
     const db = await connectToDatabase();
@@ -221,7 +222,7 @@ router.patch('/:id/assign', async (req, res) => {
   }
 });
 
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', authMiddleware, async (req, res) => {
   try {
     const db = await connectToDatabase();
     

@@ -8,8 +8,9 @@ const router = express.Router();
 import { ObjectId } from 'mongodb';
 import { connectToDatabase, COLLECTIONS } from '../db/mongoAtlas.js';
 import { broadcastToRoom, broadcastToAll } from './events.js';
+import { authMiddleware } from '../middleware/auth.js';
 
-router.get('/', async (req, res) => {
+router.get('/', authMiddleware, async (req, res) => {
   try {
     const db = await connectToDatabase();
     const { teacherId, classId, status } = req.query;
@@ -32,29 +33,35 @@ router.get('/', async (req, res) => {
   }
 });
 
-router.post('/', async (req, res) => {
+router.post('/', authMiddleware, async (req, res) => {
   try {
     const db = await connectToDatabase();
-    const { teacherId, classId, subjectId, code } = req.body;
+    const { teacherId, classId, subjectId, code, locationEnabled, locationRadius, locationLat, locationLng, faceEnabled } = req.body;
 
     if (!teacherId || !subjectId) {
       return res.status(400).json({ error: 'Missing required fields' });
     }
 
     const sessionCode = code || `SESSION-${Date.now().toString(36).toUpperCase()}`;
-    const expiry = new Date(Date.now() + 4 * 60 * 60 * 1000);
+    const expiry = new Date(Date.now() + 10 * 60 * 1000);
 
-    const result = await db.collection(COLLECTIONS.CLASS_SESSIONS).insertOne({
+    const sessionData = {
       teacherId,
       classId: classId || null,
       subjectId,
       code: sessionCode,
       sessionStatus: 'waiting',
       expiry,
+      locationEnabled: locationEnabled || false,
+      locationRadius: locationRadius || 100,
+      locationAnchor: locationLat && locationLng ? { lat: locationLat, lng: locationLng } : null,
+      faceEnabled: faceEnabled || false,
       _id: new ObjectId(),
       createdAt: new Date(),
       updatedAt: new Date(),
-    });
+    };
+
+    const result = await db.collection(COLLECTIONS.CLASS_SESSIONS).insertOne(sessionData);
 
     const sessionId = result.insertedId.toString();
     const room = `session-${sessionId}`;
@@ -144,6 +151,11 @@ router.post('/:id/quiz/start', async (req, res) => {
     const { questions, title } = req.body;
     const room = `session-${sessionId}`;
 
+    const session = await db.collection(COLLECTIONS.CLASS_SESSIONS).findOne({ _id: new ObjectId(sessionId) });
+    if (!session) {
+      return res.status(404).json({ error: 'Session not found' });
+    }
+
     const quiz = {
       sessionId: new ObjectId(sessionId),
       questions,
@@ -160,6 +172,29 @@ router.post('/:id/quiz/start', async (req, res) => {
       { _id: new ObjectId(sessionId) },
       { $set: { quizPublished: true, quizPublishedAt: new Date(), updatedAt: new Date() } }
     );
+
+    if (session.classId) {
+      const students = await db.collection(COLLECTIONS.USERS)
+        .find({ classId: session.classId, role: 'student', active: true })
+        .project({ _id: 1 })
+        .toArray();
+      
+      const notifications = students.map(s => ({
+        userId: s._id.toString(),
+        title: 'New Quiz Published',
+        message: `A new quiz "${quiz.title}" has been published for ${session.subjectId}`,
+        type: 'quiz',
+        relatedId: quiz._id.toString(),
+        relatedType: 'quiz',
+        read: false,
+        _id: new ObjectId(),
+        createdAt: new Date(),
+      }));
+      
+      if (notifications.length > 0) {
+        await db.collection(COLLECTIONS.NOTIFICATIONS).insertMany(notifications);
+      }
+    }
 
     broadcastToRoom(room, 'quiz-update', {
       id: quiz._id.toString(),
@@ -261,6 +296,131 @@ router.post('/:id/attendance', async (req, res) => {
   } catch (error) {
     console.error('Mark attendance error:', error);
     res.status(500).json({ error: 'Failed to mark attendance' });
+  }
+});
+
+router.get('/code/:code/verify', async (req, res) => {
+  try {
+    const db = await connectToDatabase();
+    const { code } = req.params;
+
+    const session = await db.collection(COLLECTIONS.CLASS_SESSIONS).findOne({
+      code: code.toUpperCase(),
+      sessionStatus: { $ne: 'ended' }
+    });
+
+    if (!session) {
+      return res.status(404).json({ valid: false, error: 'Invalid or expired session code' });
+    }
+
+    if (session.expiry && new Date(session.expiry) < new Date()) {
+      return res.status(410).json({ valid: false, error: 'Session code has expired' });
+    }
+
+    res.json({
+      valid: true,
+      sessionId: session._id.toString(),
+      teacherId: session.teacherId,
+      classId: session.classId,
+      subjectId: session.subjectId,
+      locationEnabled: session.locationEnabled || false,
+      locationRadius: session.locationRadius || 100,
+      locationAnchor: session.locationAnchor || null,
+      faceEnabled: session.faceEnabled || false,
+    });
+  } catch (error) {
+    console.error('Verify session code error:', error);
+    res.status(500).json({ valid: false, error: 'Failed to verify session code' });
+  }
+});
+
+router.post('/:id/quiz/submit', async (req, res) => {
+  try {
+    const db = await connectToDatabase();
+    const sessionId = req.params.id;
+    const { studentId, answers } = req.body;
+
+    if (!studentId || !answers) {
+      return res.status(400).json({ error: 'studentId and answers are required' });
+    }
+
+    const quiz = await db.collection(COLLECTIONS.QUIZZES).findOne(
+      { sessionId: new ObjectId(sessionId) },
+      { sort: { createdAt: -1 } }
+    );
+
+    if (!quiz) {
+      return res.status(404).json({ error: 'No quiz found for this session' });
+    }
+
+    let correctCount = 0;
+    const results = quiz.questions.map((question, index) => {
+      const studentAnswer = answers[index]?.answer || '';
+      const isCorrect = studentAnswer.toUpperCase().trim() === question.correctAnswer?.toUpperCase().trim();
+      if (isCorrect) correctCount++;
+      return {
+        questionId: question.id,
+        correctAnswer: question.correctAnswer,
+        studentAnswer,
+        isCorrect,
+        explanation: question.explanation,
+      };
+    });
+
+    const totalQuestions = quiz.questions.length;
+    const score = Math.round((correctCount / totalQuestions) * 100);
+
+    const attempt = {
+      sessionId: new ObjectId(sessionId),
+      studentId,
+      quizId: quiz._id,
+      answers: results,
+      score,
+      totalQuestions,
+      correctCount,
+      submittedAt: new Date(),
+      _id: new ObjectId(),
+      createdAt: new Date(),
+    };
+
+    await db.collection(COLLECTIONS.QUIZ_ATTEMPTS).insertOne(attempt);
+
+    await db.collection(COLLECTIONS.CLASS_SESSIONS).updateOne(
+      { _id: new ObjectId(sessionId) },
+      { $inc: { quizAttempts: 1 } }
+    );
+
+    let xpAwarded = 0;
+    let coinsAwarded = 0;
+    if (score >= 60) {
+      xpAwarded = 50;
+      coinsAwarded = 10;
+      if (score === 100) {
+        xpAwarded += 30;
+        coinsAwarded += 5;
+      }
+      await db.collection(COLLECTIONS.USERS).updateOne(
+        { _id: new ObjectId(studentId) },
+        { 
+          $inc: { xp: xpAwarded, coins: coinsAwarded },
+          $set: { lastActive: new Date() }
+        }
+      );
+    }
+
+    res.json({
+      ok: true,
+      attempt: { ...attempt, id: attempt._id.toString() },
+      score,
+      totalQuestions,
+      correctCount,
+      passed: score >= 60,
+      xpAwarded,
+      coinsAwarded,
+    });
+  } catch (error) {
+    console.error('Quiz submit error:', error);
+    res.status(500).json({ error: 'Failed to submit quiz' });
   }
 });
 

@@ -21,6 +21,36 @@ export const getCurrentPosition = (): Promise<Coordinates> => {
     });
 };
 
+export const verifyLocation = async (
+    studentPos: Coordinates,
+    teacherPos: Coordinates,
+    radiusMeters: number
+): Promise<{ authenticated: boolean; distance?: number; error?: string }> => {
+    const distance = calculateDistance(studentPos, teacherPos);
+    if (distance <= radiusMeters) {
+        return { authenticated: true, distance: Math.round(distance) };
+    }
+    return { 
+        authenticated: false, 
+        distance: Math.round(distance),
+        error: `You are ${Math.round(distance)}m away. Must be within ${radiusMeters}m of teacher.`
+    };
+};
+
+export const requestLocationPermission = async (): Promise<boolean> => {
+    return new Promise((resolve) => {
+        if (!navigator.geolocation) {
+            resolve(false);
+            return;
+        }
+        navigator.geolocation.getCurrentPosition(
+            () => resolve(true),
+            () => resolve(false),
+            { enableHighAccuracy: true, timeout: 5000 }
+        );
+    });
+};
+
 // Haversine formula to calculate distance between two lat/lng points in meters
 export const calculateDistance = (coord1: Coordinates, coord2: Coordinates): number => {
     const R = 6371e3; // metres

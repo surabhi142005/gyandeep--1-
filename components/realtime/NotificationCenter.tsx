@@ -125,7 +125,7 @@ export function NotificationCenter({ className, maxHeight = '400px' }: Notificat
           </div>
 
           <div 
-            className="overflow-y-auto"
+            className="overflow-y-auto ios-overflow-scroll"
             style={{ maxHeight }}
           >
             {filteredNotifications.length === 0 ? (

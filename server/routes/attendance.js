@@ -6,9 +6,11 @@
 import express from 'express';
 const router = express.Router();
 import { ObjectId } from 'mongodb';
+import path from 'path';
 import { connectToDatabase, COLLECTIONS } from '../db/mongoAtlas.js';
 import { broadcastAttendanceUpdated } from '../services/broadcast.js';
 import { isWithinGeofence, validateCoordinates } from '../utils/locationUtils.js';
+import { authMiddleware } from '../middleware/auth.js';
 
 async function verifyFaceWithApi(userId, faceImage, sessionId, classId) {
   try {
@@ -19,7 +21,6 @@ async function verifyFaceWithApi(userId, faceImage, sessionId, classId) {
       return { authenticated: false, error: 'No registered face found' };
     }
     
-    const path = require('path');
     const MODELS_PATH = path.join(process.cwd(), 'public', 'models');
     
     let faceApi;
@@ -94,7 +95,7 @@ async function verifyFaceWithApi(userId, faceImage, sessionId, classId) {
   }
 }
 
-router.get('/', async (req, res) => {
+router.get('/', authMiddleware, async (req, res) => {
   try {
     const db = await connectToDatabase();
     const {
@@ -151,7 +152,7 @@ router.get('/', async (req, res) => {
   }
 });
 
-router.post('/', async (req, res) => {
+router.post('/', authMiddleware, async (req, res) => {
   try {
     const db = await connectToDatabase();
     const { studentId, classId, sessionId, status, notes, coords, faceImage } = req.body;
@@ -213,10 +214,23 @@ router.post('/', async (req, res) => {
       classId,
       sessionId,
     });
+
+    const isPresent = status === 'Present' || status === 'present';
+    if (isPresent && sessionId) {
+      const XP_ATTENDANCE = 20;
+      await db.collection(COLLECTIONS.USERS).updateOne(
+        { _id: new ObjectId(studentId) },
+        { 
+          $inc: { xp: XP_ATTENDANCE, coins: 5 },
+          $set: { lastActive: new Date() }
+        }
+      );
+    }
     
     res.status(201).json({
       ok: true,
       record: { ...record, id: result.insertedId.toString() },
+      xpAwarded: isPresent && sessionId ? XP_ATTENDANCE : 0,
     });
   } catch (error) {
     console.error('Create attendance error:', error);
@@ -224,7 +238,7 @@ router.post('/', async (req, res) => {
   }
 });
 
-router.post('/bulk', async (req, res) => {
+router.post('/bulk', authMiddleware, async (req, res) => {
   try {
     const db = await connectToDatabase();
     const { records } = req.body;
@@ -253,7 +267,7 @@ router.post('/bulk', async (req, res) => {
   }
 });
 
-router.patch('/:id', async (req, res) => {
+router.patch('/:id', authMiddleware, async (req, res) => {
   try {
     const db = await connectToDatabase();
     const { status, notes } = req.body;
@@ -280,7 +294,7 @@ router.patch('/:id', async (req, res) => {
   }
 });
 
-router.get('/stats', async (req, res) => {
+router.get('/stats', authMiddleware, async (req, res) => {
   try {
     const db = await connectToDatabase();
     const { studentId, classId, startDate, endDate } = req.query;
@@ -320,6 +334,45 @@ router.get('/stats', async (req, res) => {
   } catch (error) {
     console.error('Attendance stats error:', error);
     res.status(500).json({ error: 'Failed to get attendance stats' });
+  }
+});
+
+router.get('/weekly', authMiddleware, async (req, res) => {
+  try {
+    const db = await connectToDatabase();
+    const { classId } = req.query;
+
+    const oneWeekAgo = new Date();
+    oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
+
+    const matchStage = {
+      timestamp: { $gte: oneWeekAgo },
+      status: 'Present',
+    };
+    if (classId) matchStage.classId = classId;
+
+    const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    const result = await db.collection(COLLECTIONS.ATTENDANCE).aggregate([
+      { $match: matchStage },
+      {
+        $group: {
+          _id: { $dayOfWeek: '$timestamp' },
+          count: { $sum: 1 },
+        },
+      },
+      { $sort: { _id: 1 } },
+    ]).toArray();
+
+    const weeklyData = dayNames.map((name, idx) => {
+      const dayNum = idx + 1;
+      const found = result.find(r => r._id === dayNum);
+      return { date: name, present: found ? found.count : 0 };
+    });
+
+    res.json(weeklyData);
+  } catch (error) {
+    console.error('Weekly attendance error:', error);
+    res.status(500).json({ error: 'Failed to get weekly attendance' });
   }
 });
 

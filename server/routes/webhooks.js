@@ -7,8 +7,10 @@ import express from 'express';
 const router = express.Router();
 import { ObjectId } from 'mongodb';
 import { connectToDatabase, COLLECTIONS } from '../db/mongoAtlas.js';
+import webhookDelivery from '../services/webhookDelivery.js';
+import { authMiddleware } from '../middleware/auth.js';
 
-router.get('/', async (req, res) => {
+router.get('/', authMiddleware, async (req, res) => {
   try {
     const db = await connectToDatabase();
     const webhooks = await db.collection(COLLECTIONS.WEBHOOKS)
@@ -22,7 +24,7 @@ router.get('/', async (req, res) => {
   }
 });
 
-router.post('/', async (req, res) => {
+router.post('/', authMiddleware, async (req, res) => {
   try {
     const { name, url, events, secret, active } = req.body;
     if (!name || !url || !events) {
@@ -48,7 +50,7 @@ router.post('/', async (req, res) => {
   }
 });
 
-router.get('/:id', async (req, res) => {
+router.get('/:id', authMiddleware, async (req, res) => {
   try {
     const db = await connectToDatabase();
     const webhook = await db.collection(COLLECTIONS.WEBHOOKS).findOne(
@@ -64,7 +66,7 @@ router.get('/:id', async (req, res) => {
   }
 });
 
-router.patch('/:id', async (req, res) => {
+router.patch('/:id', authMiddleware, async (req, res) => {
   try {
     const db = await connectToDatabase();
     const updates = { ...req.body, updatedAt: new Date() };
@@ -81,7 +83,7 @@ router.patch('/:id', async (req, res) => {
   }
 });
 
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', authMiddleware, async (req, res) => {
   try {
     const db = await connectToDatabase();
     const result = await db.collection(COLLECTIONS.WEBHOOKS).deleteOne(
@@ -97,26 +99,64 @@ router.delete('/:id', async (req, res) => {
   }
 });
 
-router.post('/:id/test', async (req, res) => {
+router.post('/:id/test', authMiddleware, async (req, res) => {
   try {
-    const db = await connectToDatabase();
-    const webhook = await db.collection(COLLECTIONS.WEBHOOKS).findOne(
-      { _id: new ObjectId(req.params.id) }
-    );
-    if (!webhook) {
-      return res.status(404).json({ error: 'Webhook not found' });
+    const result = await webhookDelivery.testWebhook(req.params.id);
+
+    if (result.success) {
+      res.json({
+        ok: true,
+        message: 'Webhook test delivered successfully',
+        webhook: result.webhook,
+        url: result.url,
+        attempts: result.attempts,
+        httpStatus: result.httpStatus,
+      });
+    } else {
+      res.status(502).json({
+        ok: false,
+        error: result.error || 'Webhook delivery failed',
+        webhook: result.webhook,
+        url: result.url,
+      });
     }
-
-    const testPayload = {
-      event: 'test',
-      timestamp: new Date().toISOString(),
-      data: { message: 'This is a test webhook delivery' },
-    };
-
-    res.json({ ok: true, message: 'Webhook test queued', payload: testPayload });
   } catch (error) {
     console.error('Test webhook error:', error);
-    res.status(500).json({ error: 'Failed to test webhook' });
+    res.status(500).json({ error: 'Failed to test webhook', details: error.message });
+  }
+});
+
+router.get('/:id/deliveries', authMiddleware, async (req, res) => {
+  try {
+    const { limit = '50' } = req.query;
+    const deliveries = await webhookDelivery.getWebhookDeliveries(
+      req.params.id,
+      parseInt(limit, 10)
+    );
+    res.json({ ok: true, deliveries });
+  } catch (error) {
+    console.error('Get deliveries error:', error);
+    res.status(500).json({ error: 'Failed to fetch delivery history' });
+  }
+});
+
+router.post('/:id/retry', authMiddleware, async (req, res) => {
+  try {
+    const { deliveryId } = req.body;
+    if (!deliveryId) {
+      return res.status(400).json({ error: 'deliveryId is required' });
+    }
+
+    const result = await webhookDelivery.replayWebhookDelivery(deliveryId);
+
+    if (result.success) {
+      res.json({ ok: true, message: 'Webhook replayed successfully' });
+    } else {
+      res.status(502).json({ ok: false, error: result.error });
+    }
+  } catch (error) {
+    console.error('Retry webhook error:', error);
+    res.status(500).json({ error: 'Failed to retry webhook' });
   }
 });
 

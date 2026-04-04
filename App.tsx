@@ -332,11 +332,11 @@ const App: React.FC = () => {
                 <ToastQueue />
                 <NotificationToastList />
                 {currentUser && (
-                    <div className="fixed top-4 right-4 z-40">
+                    <div className="fixed top-4 right-4 z-40 safe-area-top">
                         <NotificationCenter />
                     </div>
                 )}
-                <div className="fixed bottom-4 left-4 z-40">
+                <div className="fixed bottom-4 left-4 z-40 safe-area-bottom">
                     <ConnectionStatus variant="banner" />
                 </div>
             </div>

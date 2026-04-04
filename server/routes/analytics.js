@@ -6,8 +6,9 @@
 import express from 'express';
 const router = express.Router();
 import { connectToDatabase, COLLECTIONS } from '../db/mongoAtlas.js';
+import { authMiddleware } from '../middleware/auth.js';
 
-router.post('/insights', async (req, res) => {
+router.post('/insights', authMiddleware, async (req, res) => {
   try {
     const { studentData, type } = req.body;
     
@@ -47,7 +48,7 @@ router.post('/insights', async (req, res) => {
   }
 });
 
-router.get('/overview', async (req, res) => {
+router.get('/overview', authMiddleware, async (req, res) => {
   try {
     const db = await connectToDatabase();
     const { startDate, endDate, classId } = req.query;
@@ -110,7 +111,7 @@ router.get('/overview', async (req, res) => {
   }
 });
 
-router.get('/attendance-trends', async (req, res) => {
+router.get('/attendance-trends', authMiddleware, async (req, res) => {
   try {
     const db = await connectToDatabase();
     const { classId, studentId, days = '30' } = req.query;
@@ -150,7 +151,7 @@ router.get('/attendance-trends', async (req, res) => {
   }
 });
 
-router.get('/grade-distribution', async (req, res) => {
+router.get('/grade-distribution', authMiddleware, async (req, res) => {
   try {
     const db = await connectToDatabase();
     const { classId, subjectId } = req.query;
@@ -199,7 +200,7 @@ router.get('/grade-distribution', async (req, res) => {
   }
 });
 
-router.get('/performance-by-subject', async (req, res) => {
+router.get('/performance-by-subject', authMiddleware, async (req, res) => {
   try {
     const db = await connectToDatabase();
     const { classId } = req.query;
@@ -244,7 +245,7 @@ router.get('/performance-by-subject', async (req, res) => {
   }
 });
 
-router.get('/student-performance/:studentId', async (req, res) => {
+router.get('/student-performance/:studentId', authMiddleware, async (req, res) => {
   try {
     const db = await connectToDatabase();
     const { studentId } = req.params;
@@ -308,6 +309,54 @@ router.get('/student-performance/:studentId', async (req, res) => {
   } catch (error) {
     console.error('Student performance error:', error);
     res.status(500).json({ error: 'Failed to get student performance' });
+  }
+});
+
+router.get('/leaderboard', authMiddleware, async (req, res) => {
+  try {
+    const db = await connectToDatabase();
+    const { classId, limit = '20' } = req.query;
+    const limitNum = Math.min(100, Math.max(1, parseInt(limit, 10) || 20));
+
+    const filter = { role: 'student', active: true };
+    if (classId) filter.classId = classId;
+
+    const leaderboard = await db.collection(COLLECTIONS.USERS)
+      .find(filter)
+      .project({ 
+        name: 1, 
+        email: 1, 
+        xp: 1, 
+        level: 1, 
+        coins: 1, 
+        badges: 1,
+        classId: 1,
+        streak: 1 
+      })
+      .sort({ xp: -1, level: -1 })
+      .limit(limitNum)
+      .toArray();
+
+    const ranked = leaderboard.map((user, index) => ({
+      rank: index + 1,
+      id: user._id?.toString() || user.id,
+      name: user.name,
+      email: user.email,
+      xp: user.xp || 0,
+      level: user.level || 1,
+      coins: user.coins || 0,
+      badges: user.badges || [],
+      classId: user.classId,
+      streak: user.streak || 0,
+    }));
+
+    res.json({
+      leaderboard: ranked,
+      total: ranked.length,
+    });
+  } catch (error) {
+    console.error('Leaderboard error:', error);
+    res.status(500).json({ error: 'Failed to get leaderboard' });
   }
 });
 

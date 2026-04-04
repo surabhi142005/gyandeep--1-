@@ -17,11 +17,16 @@ import {
   REFRESH_COOKIE_NAME,
   COOKIE_OPTIONS,
 } from '../middleware/auth.js';
+import { 
+  sendVerificationCode, 
+  sendPasswordResetEmail,
+  testEmailConfiguration 
+} from '../services/emailService.js';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'gyandeep-secret-key';
 const JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET || process.env.JWT_SECRET + '_refresh';
-const JWT_EXPIRES_IN = '15m';
-const JWT_REFRESH_EXPIRES_IN = '7d';
+const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '15m';
+const JWT_REFRESH_EXPIRES_IN = process.env.JWT_REFRESH_EXPIRES_IN || '7d';
 
 function signAccessToken(user) {
   return jwt.sign(
@@ -243,6 +248,8 @@ router.post('/password/request', async (req, res) => {
 
     const db = await connectToDatabase();
     const user = await db.collection(COLLECTIONS.USERS).findOne({ email });
+    
+    // Always return success to prevent email enumeration
     if (!user) {
       return res.json({ ok: true, message: 'If the email exists, a reset code has been sent' });
     }
@@ -258,7 +265,12 @@ router.post('/password/request', async (req, res) => {
       createdAt: new Date(),
     });
 
-    console.log(`Password reset code for ${email}: ${code}`);
+    // Send actual email with verification code
+    try {
+      await sendVerificationCode(email, code, 'password-reset');
+    } catch (emailError) {
+      console.error('[Auth] Password reset email send failed:', emailError.message);
+    }
 
     res.json({ ok: true, message: 'If the email exists, a reset code has been sent' });
   } catch (error) {
@@ -349,8 +361,18 @@ router.post('/email/verify-send', async (req, res) => {
     }
 
     const db = await connectToDatabase();
+    
+    // Check if email already verified
+    const existingUser = await db.collection(COLLECTIONS.USERS).findOne({ email });
+    if (existingUser?.emailVerified) {
+      return res.status(400).json({ error: 'Email already verified' });
+    }
+
     const code = generateCode();
     const expiresAt = new Date(Date.now() + 60 * 60 * 1000);
+
+    // Delete any existing pending verifications
+    await db.collection(COLLECTIONS.EMAIL_VERIFICATIONS).deleteMany({ email });
 
     await db.collection(COLLECTIONS.EMAIL_VERIFICATIONS).insertOne({
       email,
@@ -360,7 +382,13 @@ router.post('/email/verify-send', async (req, res) => {
       createdAt: new Date(),
     });
 
-    console.log(`Email verification code for ${email}: ${code}`);
+    // Send actual email with verification code
+    try {
+      await sendVerificationCode(email, code, 'verification');
+    } catch (emailError) {
+      console.error('[Auth] Email verification send failed:', emailError.message);
+    }
+
     res.json({ ok: true, message: 'Verification code sent' });
   } catch (error) {
     console.error('Email verify send error:', error);
@@ -436,6 +464,16 @@ router.get('/me', async (req, res) => {
 router.get('/csrf-token', (req, res) => {
   const token = jwt.sign({ timestamp: Date.now() }, JWT_SECRET, { expiresIn: '1h' });
   res.json({ token });
+});
+
+router.get('/email-config', async (req, res) => {
+  try {
+    const config = await testEmailConfiguration();
+    res.json(config);
+  } catch (error) {
+    console.error('Email config error:', error);
+    res.status(500).json({ error: 'Failed to check email configuration' });
+  }
 });
 
 router.get('/socket-token', async (req, res) => {

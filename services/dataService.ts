@@ -7,6 +7,7 @@
 
 import { websocketService } from './websocketService';
 import { getStoredToken } from './authService';
+import { getCSRFHeaders } from './csrfService';
 
 const API_BASE = import.meta.env.VITE_API_URL || '';
 
@@ -25,13 +26,15 @@ const idempotencyKey = (prefix: string) => `gd-${prefix}-${uid()}`;
 
 async function apiRequest(path: string, init: RequestInit = {}) {
   const token = getStoredToken();
+  const csrfHeaders = await getCSRFHeaders();
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
+    ...csrfHeaders,
     ...(init.headers as Record<string, string> || {}),
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
   };
 
-  const res = await fetch(`${API_BASE}${path}`, { ...init, headers });
+  const res = await fetch(`${API_BASE}${path}`, { ...init, headers, credentials: 'include' });
   const body = await res.json().catch(() => ({}));
   if (!res.ok) {
     const msg = body.error || body.message || `Request failed (${res.status})`;
@@ -99,11 +102,12 @@ export const uploadClassNotes = async (params: { classId: string; subjectId: str
     formData.append('classId', params.classId);
     formData.append('subjectId', params.subjectId);
 
-    const token = getStoredToken();
+    const csrfHeaders = await getCSRFHeaders();
     const res = await fetch(`${API_BASE}/api/notes/upload`, {
       method: 'POST',
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      headers: csrfHeaders,
       body: formData,
+      credentials: 'include',
     });
     const body = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(body.error || `Upload failed (${res.status})`);
@@ -469,6 +473,16 @@ export const getAnalyticsInsights = async (studentData: any, type?: string) => {
   }
 };
 
+export const fetchPerformanceBySubject = async (classId?: string) => {
+  try {
+    const params = classId ? `?classId=${classId}` : '';
+    const data = await apiRequest(`/api/analytics/performance-by-subject${params}`, { method: 'GET' });
+    return Array.isArray(data) ? data : [];
+  } catch {
+    return [];
+  }
+};
+
 // ─── Admin Override ──────────────────────────────────────────────────────────
 
 export const adminOverride = async (adminId: string, userId: string, action: string, reason?: string) => {
@@ -632,4 +646,60 @@ export const fetchAttendanceStats = async (options?: { studentId?: string; class
 
   const queryString = params.toString();
   return apiRequest(`/api/attendance/stats${queryString ? `?${queryString}` : ''}`, { method: 'GET' });
+};
+
+export const fetchTeacherStats = async (teacherId: string) => {
+  const data = await apiRequest(`/api/teacher/stats?teacherId=${teacherId}`, { method: 'GET' });
+  return data || { quizzesTaken: 0, avgScore: 0, totalStudents: 0, attendanceRate: 0 };
+};
+
+export const fetchQuizStats = async (teacherId: string) => {
+  const data = await apiRequest(`/api/teacher/quiz-stats?teacherId=${teacherId}`, { method: 'GET' });
+  return data || { totalQuizzes: 0, avgScore: 0, totalAttempts: 0 };
+};
+
+export const fetchWeeklyAttendance = async (classId: string) => {
+  const data = await apiRequest(`/api/attendance/weekly?classId=${classId}`, { method: 'GET' });
+  return Array.isArray(data) ? data : [];
+};
+
+export const verifySessionCode = async (code: string) => {
+  return apiRequest(`/api/sessions/code/${code.toUpperCase()}/verify`, { method: 'GET' });
+};
+
+export const submitQuiz = async (sessionId: string, studentId: string, answers: Array<{ answer: string }>) => {
+  return apiRequest(`/api/sessions/${sessionId}/quiz/submit`, {
+    method: 'POST',
+    body: JSON.stringify({ studentId, answers }),
+  });
+};
+
+export const fetchLeaderboard = async (classId?: string, limit?: number) => {
+  const params = new URLSearchParams();
+  if (classId) params.set('classId', classId);
+  if (limit) params.set('limit', String(limit));
+  const queryString = params.toString();
+  return apiRequest(`/api/analytics/leaderboard${queryString ? `?${queryString}` : ''}`, { method: 'GET' });
+};
+
+export const importUsersBulk = async (users: Array<{ name: string; email: string; role?: string; classId?: string }>, defaultPassword?: string) => {
+  return apiRequest('/api/admin/import-users', {
+    method: 'POST',
+    body: JSON.stringify({ users, defaultPassword }),
+  });
+};
+
+export const importUsersCSV = async (csvData: string, defaultPassword?: string) => {
+  return apiRequest('/api/admin/import-users/csv', {
+    method: 'POST',
+    body: JSON.stringify({ csvData, defaultPassword }),
+  });
+};
+
+export const fetchStudentPerformance = async (studentId: string, startDate?: string, endDate?: string) => {
+  const params = new URLSearchParams();
+  if (startDate) params.set('startDate', startDate);
+  if (endDate) params.set('endDate', endDate);
+  const queryString = params.toString();
+  return apiRequest(`/api/analytics/student-performance/${studentId}${queryString ? `?${queryString}` : ''}`, { method: 'GET' });
 };

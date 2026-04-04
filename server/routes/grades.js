@@ -8,8 +8,9 @@ const router = express.Router();
 import { ObjectId } from 'mongodb';
 import { connectToDatabase, COLLECTIONS } from '../db/mongoAtlas.js';
 import { broadcastGradesUpdated } from '../services/broadcast.js';
+import { authMiddleware } from '../middleware/auth.js';
 
-router.get('/', async (req, res) => {
+router.get('/', authMiddleware, async (req, res) => {
   try {
     const db = await connectToDatabase();
     const { studentId, subjectId, page = '1', limit = '20', sortBy = 'gradedAt', sortOrder = 'desc' } = req.query;
@@ -50,7 +51,7 @@ router.get('/', async (req, res) => {
   }
 });
 
-router.post('/', async (req, res) => {
+router.post('/', authMiddleware, async (req, res) => {
   try {
     const { studentId, subjectId, score, maxScore, title, category, teacherId, quizAttemptId } = req.body;
     if (!studentId || !subjectId || score === undefined || !maxScore) {
@@ -88,7 +89,7 @@ router.post('/', async (req, res) => {
   }
 });
 
-router.post('/bulk', async (req, res) => {
+router.post('/bulk', authMiddleware, async (req, res) => {
   try {
     const { grades } = req.body;
     if (!Array.isArray(grades)) {
@@ -114,7 +115,7 @@ router.post('/bulk', async (req, res) => {
   }
 });
 
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', authMiddleware, async (req, res) => {
   try {
     const db = await connectToDatabase();
     const result = await db.collection(COLLECTIONS.GRADES).deleteOne(

@@ -7,8 +7,9 @@ import express from 'express';
 const router = express.Router();
 import { ObjectId } from 'mongodb';
 import { connectToDatabase, COLLECTIONS } from '../db/mongoAtlas.js';
+import { authMiddleware } from '../middleware/auth.js';
 
-router.get('/', async (req, res) => {
+router.get('/', authMiddleware, async (req, res) => {
   try {
     const db = await connectToDatabase();
     const { classId, subjectId } = req.query;
@@ -28,7 +29,7 @@ router.get('/', async (req, res) => {
   }
 });
 
-router.post('/upload', async (req, res) => {
+router.post('/upload', authMiddleware, async (req, res) => {
   try {
     const db = await connectToDatabase();
     const { classId, subjectId, content, url, extractedText } = req.body;
@@ -51,7 +52,7 @@ router.post('/upload', async (req, res) => {
   }
 });
 
-router.get('/centralized', async (req, res) => {
+router.get('/centralized', authMiddleware, async (req, res) => {
   try {
     const db = await connectToDatabase();
     const { subjectId, unitNumber, classId } = req.query;
@@ -71,7 +72,7 @@ router.get('/centralized', async (req, res) => {
   }
 });
 
-router.post('/centralized', async (req, res) => {
+router.post('/centralized', authMiddleware, async (req, res) => {
   try {
     const db = await connectToDatabase();
     const { classId, subjectId, unitNumber, unitName, title, content, noteType } = req.body;
@@ -95,7 +96,7 @@ router.post('/centralized', async (req, res) => {
   }
 });
 
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', authMiddleware, async (req, res) => {
   try {
     const db = await connectToDatabase();
     await db.collection(COLLECTIONS.SESSION_NOTES).updateOne(

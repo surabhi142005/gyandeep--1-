@@ -7,8 +7,9 @@ import express from 'express';
 const router = express.Router();
 import { ObjectId } from 'mongodb';
 import { connectToDatabase, COLLECTIONS } from '../db/mongoAtlas.js';
+import { authMiddleware } from '../middleware/auth.js';
 
-router.get('/', async (req, res) => {
+router.get('/', authMiddleware, async (req, res) => {
   try {
     const db = await connectToDatabase();
     const { classId, dayOfWeek } = req.query;
@@ -29,7 +30,7 @@ router.get('/', async (req, res) => {
   }
 });
 
-router.post('/', async (req, res) => {
+router.post('/', authMiddleware, async (req, res) => {
   try {
     const { entries } = req.body;
     if (!Array.isArray(entries)) {
@@ -63,7 +64,7 @@ router.post('/', async (req, res) => {
   }
 });
 
-router.post('/entry', async (req, res) => {
+router.post('/entry', authMiddleware, async (req, res) => {
   try {
     const db = await connectToDatabase();
     const now = new Date();
@@ -82,7 +83,7 @@ router.post('/entry', async (req, res) => {
   }
 });
 
-router.patch('/:id', async (req, res) => {
+router.patch('/:id', authMiddleware, async (req, res) => {
   try {
     const db = await connectToDatabase();
     await db.collection(COLLECTIONS.TIMETABLE).updateOne(
@@ -96,7 +97,7 @@ router.patch('/:id', async (req, res) => {
   }
 });
 
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', authMiddleware, async (req, res) => {
   try {
     const db = await connectToDatabase();
     const result = await db.collection(COLLECTIONS.TIMETABLE).deleteOne(

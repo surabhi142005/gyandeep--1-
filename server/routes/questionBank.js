@@ -7,8 +7,9 @@ import express from 'express';
 const router = express.Router();
 import { ObjectId } from 'mongodb';
 import { connectToDatabase, COLLECTIONS } from '../db/mongoAtlas.js';
+import { authMiddleware } from '../middleware/auth.js';
 
-router.get('/', async (req, res) => {
+router.get('/', authMiddleware, async (req, res) => {
   try {
     const db = await connectToDatabase();
     const { subject, difficulty, type } = req.query;
@@ -30,7 +31,7 @@ router.get('/', async (req, res) => {
   }
 });
 
-router.post('/add', async (req, res) => {
+router.post('/add', authMiddleware, async (req, res) => {
   try {
     const { questions } = req.body;
     if (!Array.isArray(questions)) {
@@ -54,7 +55,7 @@ router.post('/add', async (req, res) => {
   }
 });
 
-router.post('/upsert-quiz', async (req, res) => {
+router.post('/upsert-quiz', authMiddleware, async (req, res) => {
   try {
     const { quiz, subject } = req.body;
     if (!Array.isArray(quiz) || !subject) {
@@ -90,7 +91,7 @@ router.post('/upsert-quiz', async (req, res) => {
   }
 });
 
-router.post('/update', async (req, res) => {
+router.post('/update', authMiddleware, async (req, res) => {
   try {
     const { id, patch } = req.body;
     if (!id || !patch) {
@@ -109,7 +110,7 @@ router.post('/update', async (req, res) => {
   }
 });
 
-router.get('/:id', async (req, res) => {
+router.get('/:id', authMiddleware, async (req, res) => {
   try {
     const db = await connectToDatabase();
     const question = await db.collection(COLLECTIONS.QUESTION_BANK).findOne(
@@ -125,7 +126,7 @@ router.get('/:id', async (req, res) => {
   }
 });
 
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', authMiddleware, async (req, res) => {
   try {
     const db = await connectToDatabase();
     const result = await db.collection(COLLECTIONS.QUESTION_BANK).deleteOne(

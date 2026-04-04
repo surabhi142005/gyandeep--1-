@@ -1005,17 +1005,206 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     <p className="text-sm text-gray-500">Universal questions shared across all classes</p>
                  </div>
                  <div className="flex gap-2">
-                    <Button variant="secondary" size="sm" icon={<Download size={16} />}>Export</Button>
-                    <Button variant="primary" size="sm" icon={<Plus size={16} />}>Add New</Button>
+                    <Button variant="secondary" size="sm" icon={<Download size={16} />} onClick={() => {
+                      const csv = bank.map(q => `"${q.question}","${q.subject}","${q.difficulty || ''}","${q.type || ''}","${q.options?.join('|') || ''}","${q.correctAnswer || ''}"`).join('\n');
+                      const blob = new Blob([csv], { type: 'text/csv' });
+                      const url = URL.createObjectURL(blob);
+                      const a = document.createElement('a');
+                      a.href = url;
+                      a.download = 'question-bank.csv';
+                      a.click();
+                    }}>Export</Button>
+                    <Button variant="primary" size="sm" icon={<Plus size={16} />} onClick={() => setEditingBankItem({})}>Add New</Button>
                  </div>
               </div>
               
-              <div className="p-12 text-center opacity-40">
-                 <Database size={64} className="mx-auto mb-4" />
-                 <h3 className="text-lg font-bold">Question Library View Coming Soon</h3>
-                 <p className="text-sm">We are modernizing the bank with better search and AI integration.</p>
+              <div className="p-4 border-b border-gray-100 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-800/50">
+                <div className="flex flex-wrap gap-4">
+                  <div className="flex-1 min-w-[200px]">
+                    <Search size={16} className="inline mr-2 text-gray-400" />
+                    <input 
+                      type="text" 
+                      placeholder="Search questions..." 
+                      className="w-full px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-sm"
+                      value={bankTagFilter}
+                      onChange={(e) => setBankTagFilter(e.target.value)}
+                    />
+                  </div>
+                  <select 
+                    className="px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-sm"
+                    value={bankSubjectFilter}
+                    onChange={(e) => setBankSubjectFilter(e.target.value)}
+                  >
+                    <option value="">All Subjects</option>
+                    {allSubjects.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
+                  </select>
+                  <select 
+                    className="px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-sm"
+                    value={(bank.find(() => true) as any)?.difficulty || ''}
+                    onChange={(e) => {}}
+                  >
+                    <option value="">All Difficulties</option>
+                    <option value="easy">Easy</option>
+                    <option value="medium">Medium</option>
+                    <option value="hard">Hard</option>
+                  </select>
+                </div>
+              </div>
+              
+              <div className="divide-y divide-gray-100 dark:divide-gray-800 max-h-[500px] overflow-y-auto">
+                {bank.length === 0 ? (
+                  <div className="p-12 text-center">
+                    <Database size={48} className="mx-auto mb-4 text-gray-300" />
+                    <h3 className="text-lg font-bold text-gray-500">No questions found</h3>
+                    <p className="text-sm text-gray-400">Add questions to get started</p>
+                  </div>
+                ) : (
+                  bank
+                    .filter(q => !bankSubjectFilter || q.subject === bankSubjectFilter)
+                    .filter(q => !bankTagFilter || q.question?.toLowerCase().includes(bankTagFilter.toLowerCase()) || q.tags?.some((t: string) => t.toLowerCase().includes(bankTagFilter.toLowerCase())))
+                    .map((q, idx) => (
+                      <div key={q.id || idx} className="p-4 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
+                        <div className="flex justify-between items-start gap-4">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2 mb-2">
+                              <Badge variant="default" size="sm">{q.subject || 'No Subject'}</Badge>
+                              {q.difficulty && <Badge variant={q.difficulty === 'easy' ? 'success' : q.difficulty === 'hard' ? 'danger' : 'default'} size="sm">{q.difficulty}</Badge>}
+                              {q.type && <Badge variant="secondary" size="sm">{q.type}</Badge>}
+                            </div>
+                            <p className="text-sm font-medium mb-1">{q.question}</p>
+                            {q.options && Array.isArray(q.options) && (
+                              <div className="text-xs text-gray-500 space-y-1 mt-2">
+                                {q.options.map((opt: string, i: number) => (
+                                  <div key={i} className={opt === q.correctAnswer ? 'text-green-600 font-medium' : ''}>
+                                    {String.fromCharCode(65 + i)}. {opt} {opt === q.correctAnswer && <CheckCircle2 size={12} className="inline ml-1" />}
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                            {q.tags && q.tags.length > 0 && (
+                              <div className="flex gap-1 mt-2">
+                                {q.tags.map((tag: string, i: number) => <span key={i} className="text-xs px-2 py-0.5 bg-gray-100 dark:bg-gray-700 rounded">{tag}</span>)}
+                              </div>
+                            )}
+                          </div>
+                          <div className="flex gap-2">
+                            <Button variant="ghost" size="sm" icon={<Edit2 size={14} />} onClick={() => setEditingBankItem(q)} />
+                            <Button variant="ghost" size="sm" icon={<Trash2 size={14} />} onClick={async () => {
+                              if (confirm('Delete this question?')) {
+                                try {
+                                  await import('../services/dataService').then(m => m.deleteQuestionFromBank(q.id));
+                                  setBank(bank.filter(b => b.id !== q.id));
+                                } catch (err) { console.error('Delete failed:', err); }
+                              }
+                            }} />
+                          </div>
+                        </div>
+                      </div>
+                    ))
+                )}
+              </div>
+              
+              <div className="p-4 border-t border-gray-100 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-800/50">
+                <p className="text-sm text-gray-500">{bank.length} total questions</p>
               </div>
            </Card>
+           
+           {editingBankItem !== null && (
+             <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
+               <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="relative w-full max-w-lg bg-white dark:bg-gray-900 rounded-2xl shadow-xl">
+                 <div className="p-6 border-b border-gray-100 dark:border-gray-800">
+                   <h2 className="text-xl font-bold">{editingBankItem.id ? 'Edit Question' : 'Add New Question'}</h2>
+                 </div>
+                 <form onSubmit={async (e) => {
+                   e.preventDefault();
+                   const form = e.target as HTMLFormElement;
+                   const questionData = {
+                     question: (form.elements.namedItem('question') as HTMLInputElement).value,
+                     subject: (form.elements.namedItem('subject') as HTMLSelectElement).value,
+                     difficulty: (form.elements.namedItem('difficulty') as HTMLSelectElement).value,
+                     type: (form.elements.namedItem('type') as HTMLSelectElement).value,
+                     options: [
+                       (form.elements.namedItem('optionA') as HTMLInputElement).value,
+                       (form.elements.namedItem('optionB') as HTMLInputElement).value,
+                       (form.elements.namedItem('optionC') as HTMLInputElement).value,
+                       (form.elements.namedItem('optionD') as HTMLInputElement).value,
+                     ].filter(Boolean),
+                     correctAnswer: (form.elements.namedItem('correctAnswer') as HTMLSelectElement).value,
+                     tags: (form.elements.namedItem('tags') as HTMLInputElement).value.split(',').map(t => t.trim()).filter(Boolean),
+                   };
+                   try {
+                     if (editingBankItem.id) {
+                       await import('../services/dataService').then(m => m.updateQuestionInBank(editingBankItem.id, questionData));
+                       setBank(bank.map(q => q.id === editingBankItem.id ? { ...q, ...questionData } : q));
+                     } else {
+                       const res = await import('../services/dataService').then(m => m.addQuestionsToBank([questionData]));
+                       const newQ = { ...questionData, id: res.insertedId || Date.now().toString() };
+                       setBank([newQ, ...bank]);
+                     }
+                     setEditingBankItem(null);
+                   } catch (err) { console.error('Save failed:', err); }
+                 }} className="p-6 space-y-4">
+                   <div>
+                     <label className="block text-sm font-bold mb-1">Question</label>
+                     <textarea name="question" defaultValue={editingBankItem.question || ''} className="w-full px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-sm" rows={3} required />
+                   </div>
+                   <div className="grid grid-cols-3 gap-4">
+                     <div>
+                       <label className="block text-sm font-bold mb-1">Subject</label>
+                       <select name="subject" defaultValue={editingBankItem.subject || ''} className="w-full px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-sm" required>
+                         <option value="">Select...</option>
+                         {allSubjects.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
+                       </select>
+                     </div>
+                     <div>
+                       <label className="block text-sm font-bold mb-1">Difficulty</label>
+                       <select name="difficulty" defaultValue={editingBankItem.difficulty || ''} className="w-full px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-sm">
+                         <option value="">Select...</option>
+                         <option value="easy">Easy</option>
+                         <option value="medium">Medium</option>
+                         <option value="hard">Hard</option>
+                       </select>
+                     </div>
+                     <div>
+                       <label className="block text-sm font-bold mb-1">Type</label>
+                       <select name="type" defaultValue={editingBankItem.type || 'mcq'} className="w-full px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-sm">
+                         <option value="mcq">MCQ</option>
+                         <option value="short">Short Answer</option>
+                         <option value="long">Long Answer</option>
+                       </select>
+                     </div>
+                   </div>
+                   <div>
+                     <label className="block text-sm font-bold mb-1">Options (A, B, C, D)</label>
+                     <div className="grid grid-cols-2 gap-2">
+                       <div className="flex items-center gap-2"><span className="text-sm font-bold w-6">A.</span><input name="optionA" defaultValue={editingBankItem.options?.[0] || ''} className="flex-1 px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-sm" /></div>
+                       <div className="flex items-center gap-2"><span className="text-sm font-bold w-6">B.</span><input name="optionB" defaultValue={editingBankItem.options?.[1] || ''} className="flex-1 px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-sm" /></div>
+                       <div className="flex items-center gap-2"><span className="text-sm font-bold w-6">C.</span><input name="optionC" defaultValue={editingBankItem.options?.[2] || ''} className="flex-1 px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-sm" /></div>
+                       <div className="flex items-center gap-2"><span className="text-sm font-bold w-6">D.</span><input name="optionD" defaultValue={editingBankItem.options?.[3] || ''} className="flex-1 px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-sm" /></div>
+                     </div>
+                   </div>
+                   <div>
+                     <label className="block text-sm font-bold mb-1">Correct Answer</label>
+                     <select name="correctAnswer" defaultValue={editingBankItem.correctAnswer || ''} className="w-full px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-sm" required>
+                       <option value="">Select correct answer...</option>
+                       <option value="A">A</option>
+                       <option value="B">B</option>
+                       <option value="C">C</option>
+                       <option value="D">D</option>
+                     </select>
+                   </div>
+                   <div>
+                     <label className="block text-sm font-bold mb-1">Tags (comma separated)</label>
+                     <input name="tags" defaultValue={editingBankItem.tags?.join(', ') || ''} className="w-full px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-sm" placeholder="algebra, practice, exam" />
+                   </div>
+                   <div className="flex justify-end gap-3 pt-4">
+                     <Button variant="ghost" type="button" onClick={() => setEditingBankItem(null)}>Cancel</Button>
+                     <Button variant="primary" type="submit">Save Question</Button>
+                   </div>
+                 </form>
+               </motion.div>
+             </div>
+           )}
         </div>
       )}
 

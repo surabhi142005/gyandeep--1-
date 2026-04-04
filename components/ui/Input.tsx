@@ -88,7 +88,8 @@ const Input: React.FC<InputProps> = ({
           `}
           style={{
             ...getStyles(),
-            color: 'var(--color-text)'
+            color: 'var(--color-text)',
+            fontSize: '16px' /* Prevents iOS auto-zoom on focus */
           }}
           {...props}
         />

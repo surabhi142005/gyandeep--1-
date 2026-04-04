@@ -6,7 +6,7 @@
 
 import express from 'express';
 const router = express.Router();
-import { broadcast, getConnectedClientsCount } from '../services/broadcast.js';
+import { getConnectedClientsCount } from '../services/broadcast.js';
 
 let clientIdCounter = 0;
 const clientRooms = new Map();
@@ -306,7 +306,6 @@ router.get('/status', (req, res) => {
 
 export default router;
 export { 
-  broadcast, 
   broadcastToAll, 
   broadcastToRoom, 
   broadcastToUser, 

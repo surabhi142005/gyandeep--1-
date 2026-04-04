@@ -106,7 +106,11 @@ const Button: React.FC<ButtonProps> = ({
         ${fullWidth ? 'w-full' : ''}
         ${className}
       `}
-      style={getButtonStyles(variant)}
+      style={{
+        ...getButtonStyles(variant),
+        touchAction: 'manipulation',
+        WebkitTapHighlightColor: 'transparent'
+      }}
       disabled={disabled || loading}
       {...(props as any)}
     >

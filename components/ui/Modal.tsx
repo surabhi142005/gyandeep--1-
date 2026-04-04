@@ -44,7 +44,15 @@ const Modal: React.FC<ModalProps> = ({
   return (
     <AnimatePresence>
       {isOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div 
+          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          style={{
+            paddingTop: 'max(1rem, env(safe-area-inset-top))',
+            paddingBottom: 'max(1rem, env(safe-area-inset-bottom))',
+            paddingLeft: 'max(1rem, env(safe-area-inset-left))',
+            paddingRight: 'max(1rem, env(safe-area-inset-right))'
+          }}
+        >
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}

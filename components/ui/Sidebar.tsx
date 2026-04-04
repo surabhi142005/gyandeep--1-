@@ -58,7 +58,7 @@ const Sidebar: React.FC<SidebarProps> = ({
       </div>
 
       {/* Nav Items */}
-      <nav className="flex-1 py-6 px-3 space-y-2 overflow-y-auto custom-scrollbar">
+      <nav className="flex-1 py-6 px-3 space-y-2 overflow-y-auto custom-scrollbar ios-overflow-scroll" style={{ paddingBottom: 'max(1rem, env(safe-area-inset-bottom))' }}>
         {items.map((item) => {
           const isActive = activeItem === item.id;
           const Icon = item.icon;

@@ -7,6 +7,7 @@
  */
 
 import { calculateDistance } from './locationService';
+import { initCSRFToken, getCSRFHeaders } from './csrfService';
 import type { Coordinates } from '../types';
 
 const API_BASE = import.meta.env.VITE_API_URL || '';
@@ -142,10 +143,15 @@ export async function ensureValidToken(): Promise<boolean> {
 export async function register(email: string, password: string, name: string, role = 'student') {
   updateAuthState({ isLoading: true });
 
+  const csrfHeaders = await getCSRFHeaders();
+
   const res = await fetch(`${API_BASE}/api/auth/register`, {
     method: 'POST',
     credentials: 'include',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 
+      'Content-Type': 'application/json',
+      ...csrfHeaders,
+    },
     body: JSON.stringify({ email, password, name, role }),
   });
 
@@ -161,16 +167,22 @@ export async function register(email: string, password: string, name: string, ro
     isAuthenticated: true,
     isLoading: false,
   });
+  initCSRFToken();
   return data.user;
 }
 
 export async function login(email: string, password: string) {
   updateAuthState({ isLoading: true });
 
+  const csrfHeaders = await getCSRFHeaders();
+
   const res = await fetch(`${API_BASE}/api/auth/login`, {
     method: 'POST',
     credentials: 'include',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 
+      'Content-Type': 'application/json',
+      ...csrfHeaders,
+    },
     body: JSON.stringify({ email, password }),
   });
 
@@ -186,6 +198,7 @@ export async function login(email: string, password: string) {
     isAuthenticated: true,
     isLoading: false,
   });
+  initCSRFToken();
   return data.user;
 }
 
@@ -196,9 +209,14 @@ export async function loginWithGoogle() {
 
 export async function logout() {
   try {
+    const csrfHeaders = await getCSRFHeaders();
     await fetch(`${API_BASE}/api/auth/logout`, {
       method: 'POST',
       credentials: 'include',
+      headers: {
+        'Content-Type': 'application/json',
+        ...csrfHeaders,
+      },
     });
   } catch (err) {
     console.warn('Logout request failed', err);
@@ -251,16 +269,21 @@ export async function initAuth() {
       isAuthenticated: !!user,
       isLoading: false,
     });
+    initCSRFToken();
   } catch {
     updateAuthState({ isLoading: false });
   }
 }
 
 export async function requestPasswordReset(email: string) {
+  const csrfHeaders = await getCSRFHeaders();
   const res = await fetch(`${API_BASE}/api/auth/password/request`, {
     method: 'POST',
     credentials: 'include',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 
+      'Content-Type': 'application/json',
+      ...csrfHeaders,
+    },
     body: JSON.stringify({ email }),
   });
   return res.json();
@@ -284,13 +307,23 @@ export async function registerFace(userId: string, imageDataUrl: string): Promis
 
 export async function verifyFace(
   capturedImageDataUrl: string,
-  _storedImageDataUrl?: string | null,
+  userId?: string | null,
+  options?: { recordAttendance?: boolean; sessionId?: string; classId?: string; location?: { lat: number; lng: number } },
 ): Promise<{ authenticated: boolean; confidence?: number; method?: string }> {
+  const body: Record<string, any> = { faceImage: capturedImageDataUrl };
+  if (userId) body.userId = userId;
+  if (options?.recordAttendance) {
+    body.recordAttendance = true;
+    body.sessionId = options.sessionId;
+    body.classId = options.classId;
+    if (options.location) body.location = options.location;
+  }
+  
   const res = await fetch(`${API_BASE}/api/face/verify`, {
     method: 'POST',
     credentials: 'include',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ faceImage: capturedImageDataUrl }),
+    body: JSON.stringify(body),
   });
   if (!res.ok) {
     throw new Error('Face service unavailable. Please try again or use password login.');
