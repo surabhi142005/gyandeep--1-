@@ -239,6 +239,66 @@ router.post('/logout', async (req, res) => {
   res.json({ ok: true, message: 'Logged out successfully' });
 });
 
+router.post('/login-face', async (req, res) => {
+  try {
+    const { userId, faceImage } = req.body;
+    
+    if (!userId || !faceImage) {
+      return res.status(400).json({ error: 'userId and faceImage are required' });
+    }
+
+    const db = await connectToDatabase();
+    const user = await db.collection(COLLECTIONS.USERS).findOne(
+      { _id: new ObjectId(userId) },
+      { projection: { password: 0 } }
+    );
+
+    if (!user) {
+      return res.status(401).json({ error: 'User not found' });
+    }
+
+    if (!user.active) {
+      return res.status(403).json({ error: 'Account is deactivated' });
+    }
+
+    const faceRecord = await db.collection(COLLECTIONS.FACE_EMBEDDINGS).findOne({ userId });
+    if (!faceRecord) {
+      return res.status(401).json({ error: 'Face not registered. Please register your face first.' });
+    }
+
+    const { verifyFaceForAuth } = await import('../routes/face.js');
+    const verifyResult = await verifyFaceForAuth(userId, faceImage);
+    
+    if (!verifyResult.authenticated) {
+      return res.status(401).json({ 
+        error: 'Face not matched', 
+        details: verifyResult.error || 'Please try again'
+      });
+    }
+
+    const tokens = generateTokenPair(user);
+    setAuthCookies(res, tokens.accessToken, tokens.refreshToken);
+
+    const safeUser = {
+      id: user._id?.toString() || user.id,
+      name: user.name,
+      email: user.email,
+      role: user.role,
+      faceImage: user.faceImage,
+      classId: user.classId,
+      assignedSubjects: user.assignedSubjects,
+    };
+
+    res.json({
+      ...tokens,
+      user: safeUser,
+    });
+  } catch (error) {
+    console.error('Face login error:', error);
+    res.status(500).json({ error: 'Face login failed' });
+  }
+});
+
 router.post('/password/request', async (req, res) => {
   try {
     const { email } = req.body;

@@ -1,9 +1,10 @@
 import * as React from 'react';
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import type { User, UserRole } from '../types';
 import { UserRole as UserRoleEnum, ROLE_DISPLAY_NAMES } from '../types';
 import WebcamCapture from './WebcamCapture';
 import { verifyFace, passwordMatches, hashPassword, login as expressLogin, loginWithGoogle } from '../services/authService';
+import { preloadFaceApiModels } from '../services/faceApiLoader';
 import Spinner from './Spinner';
 import { t } from '../services/i18n';
 
@@ -135,7 +136,13 @@ const Login: React.FC<LoginProps> = ({ onLogin, users, theme, onPasswordReset })
     }
     setIsRequestingPermission(true);
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } });
+      // Pre-load face API models while requesting camera permission
+      const [stream] = await Promise.all([
+        navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } }),
+        preloadFaceApiModels().catch(() => {
+          // Models may already be loaded or failed - continue anyway
+        }),
+      ]);
       stream.getTracks().forEach(track => track.stop());
       setShowWebcam(true);
     } catch {

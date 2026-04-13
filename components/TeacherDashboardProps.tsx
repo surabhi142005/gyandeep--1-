@@ -16,4 +16,6 @@ export interface TeacherDashboardProps {
   allClasses: { id: string; name: string; }[];
   announcements?: Announcement[];
   onPostAnnouncement?: (text: string) => void;
+  onAttendanceUpdate?: (newAttendance: AttendanceRecord) => void;
+  onStudentsUpdate?: (students: Student[]) => void;
 }

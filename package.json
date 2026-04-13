@@ -54,6 +54,7 @@
     "isomorphic-dompurify": "^2.4.0",
     "jsdom": "^24.0.0",
     "jsonwebtoken": "^9.0.3",
+    "jwt-decode": "^4.0.0",
     "lucide-react": "^0.469.0",
     "mongodb": "^6.21.0",
     "multer": "^1.4.5-lts.1",

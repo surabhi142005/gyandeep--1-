@@ -507,4 +507,29 @@ router.post('/liveness/verify', authMiddleware, async (req, res) => {
   }
 });
 
+// Export verify function for use in auth routes
+export async function verifyFaceForAuth(userId, faceImage) {
+  const db = await connectToDatabase();
+  
+  const storedFace = await db.collection(COLLECTIONS.FACE_EMBEDDINGS).findOne({ userId });
+  if (!storedFace) {
+    return { authenticated: false, error: 'No registered face found for user' };
+  }
+  
+  const imageBuffer = decodeBase64Image(faceImage);
+  const embedding = await generateEmbedding(imageBuffer);
+  const similarity = await compareEmbeddings(storedFace.embedding, embedding);
+  
+  const liveness = await checkLiveness(imageBuffer);
+  
+  const threshold = 0.6;
+  const authenticated = similarity >= threshold && liveness.passed;
+  
+  return {
+    authenticated,
+    confidence: parseFloat(similarity.toFixed(2)),
+    livenessPassed: liveness.passed,
+  };
+}
+
 export default router;

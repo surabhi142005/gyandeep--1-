@@ -163,6 +163,31 @@ export function RealtimeProvider({ children, userId, userRole }: RealtimeProvide
       });
     });
 
+    const unsubQuizSubmission = realtimeClient.on('quiz_submission', (data) => {
+      addLocalNotification({
+        type: 'success',
+        title: 'Quiz Submitted!',
+        message: `Score: ${data.score}/${data.totalQuestions} ${data.xpAwarded > 0 ? `(+${data.xpAwarded} XP)` : ''}`,
+      });
+    });
+
+    const unsubXpUpdated = realtimeClient.on('xp_updated', (data) => {
+      addLocalNotification({
+        type: 'success',
+        title: 'XP Earned!',
+        message: `+${data.xpAwarded} XP${data.coinsAwarded > 0 ? ` +${data.coinsAwarded} coins` : ''}`,
+      });
+    });
+
+    const unsubServerNotification = realtimeClient.on('notification', (data) => {
+      console.log('[RealtimeProvider] Received notification:', data);
+      addLocalNotification({
+        type: data.type === 'attendance' ? 'info' : data.type === 'quiz' ? 'success' : 'info',
+        title: data.title || 'Notification',
+        message: data.message || '',
+      });
+    });
+
     const unsubUserJoined = realtimeClient.on('user_joined', (data) => {
       setPresence((prev) => {
         const next = new Map(prev);
@@ -217,6 +242,9 @@ export function RealtimeProvider({ children, userId, userRole }: RealtimeProvide
       unsubAttendanceUpdate();
       unsubAnnouncement();
       unsubTicketUpdate();
+      unsubQuizSubmission();
+      unsubXpUpdated();
+      unsubServerNotification();
       unsubUserJoined();
       unsubUserLeft();
       unsubTyping();

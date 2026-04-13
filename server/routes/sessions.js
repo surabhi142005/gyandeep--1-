@@ -9,6 +9,7 @@ import { ObjectId } from 'mongodb';
 import { connectToDatabase, COLLECTIONS } from '../db/mongoAtlas.js';
 import { broadcastToRoom, broadcastToAll } from './events.js';
 import { authMiddleware } from '../middleware/auth.js';
+import { checkAndAssignBadges } from '../services/gamification.js';
 
 router.get('/', authMiddleware, async (req, res) => {
   try {
@@ -30,6 +31,54 @@ router.get('/', authMiddleware, async (req, res) => {
   } catch (error) {
     console.error('Get sessions error:', error);
     res.status(500).json({ error: 'Failed to fetch sessions' });
+  }
+});
+
+router.get('/active', authMiddleware, async (req, res) => {
+  try {
+    const db = await connectToDatabase();
+    const { teacherId } = req.query;
+    
+    if (!teacherId) {
+      return res.status(400).json({ error: 'teacherId is required' });
+    }
+
+    // Find active session (waiting or active status)
+    const activeSession = await db.collection(COLLECTIONS.CLASS_SESSIONS).findOne({
+      teacherId,
+      sessionStatus: { $in: ['waiting', 'active'] },
+      expiry: { $gt: new Date() }, // Not expired
+    });
+
+    if (!activeSession) {
+      return res.json({ active: false, session: null });
+    }
+
+    // Calculate remaining time
+    const remainingTime = activeSession.expiry 
+      ? Math.max(0, new Date(activeSession.expiry).getTime() - Date.now())
+      : null;
+
+    res.json({
+      active: true,
+      session: {
+        id: activeSession._id.toString(),
+        teacherId: activeSession.teacherId,
+        classId: activeSession.classId,
+        subjectId: activeSession.subjectId,
+        code: activeSession.code,
+        sessionStatus: activeSession.sessionStatus,
+        expiry: activeSession.expiry,
+        remainingTime,
+        locationEnabled: activeSession.locationEnabled,
+        faceEnabled: activeSession.faceEnabled,
+        quizPublished: activeSession.quizPublished,
+        createdAt: activeSession.createdAt,
+      },
+    });
+  } catch (error) {
+    console.error('Get active session error:', error);
+    res.status(500).json({ error: 'Failed to fetch active session' });
   }
 });
 
@@ -141,6 +190,48 @@ router.patch('/:id/end', async (req, res) => {
   } catch (error) {
     console.error('End session error:', error);
     res.status(500).json({ error: 'Failed to end session' });
+  }
+});
+
+router.get('/:id/warning', authMiddleware, async (req, res) => {
+  try {
+    const db = await connectToDatabase();
+    const sessionId = req.params.id;
+
+    const session = await db.collection(COLLECTIONS.CLASS_SESSIONS).findOne(
+      { _id: new ObjectId(sessionId) }
+    );
+
+    if (!session) {
+      return res.status(404).json({ error: 'Session not found' });
+    }
+
+    const expiryTime = new Date(session.expiry).getTime();
+    const now = Date.now();
+    const timeRemaining = expiryTime - now;
+    const twoMinutes = 2 * 60 * 1000;
+
+    if (timeRemaining <= 0) {
+      return res.json({ warning: false, message: 'Session has expired' });
+    }
+
+    if (timeRemaining <= twoMinutes) {
+      broadcastToRoom(`session-${sessionId}`, 'session_warning', {
+        sessionId,
+        message: 'Session will expire in less than 2 minutes',
+        timeRemaining,
+      });
+      return res.json({
+        warning: true,
+        message: 'Session will expire soon',
+        timeRemaining,
+      });
+    }
+
+    res.json({ warning: false, timeRemaining });
+  } catch (error) {
+    console.error('Session warning error:', error);
+    res.status(500).json({ error: 'Failed to get session warning' });
   }
 });
 
@@ -339,10 +430,16 @@ router.post('/:id/quiz/submit', async (req, res) => {
     const db = await connectToDatabase();
     const sessionId = req.params.id;
     const { studentId, answers } = req.body;
+    const room = `session-${sessionId}`;
 
     if (!studentId || !answers) {
       return res.status(400).json({ error: 'studentId and answers are required' });
     }
+
+    // Get session to have access to teacherId
+    const session = await db.collection(COLLECTIONS.CLASS_SESSIONS).findOne(
+      { _id: new ObjectId(sessionId) }
+    );
 
     const quiz = await db.collection(COLLECTIONS.QUIZZES).findOne(
       { sessionId: new ObjectId(sessionId) },
@@ -406,6 +503,108 @@ router.post('/:id/quiz/submit', async (req, res) => {
           $set: { lastActive: new Date() }
         }
       );
+    }
+
+    // Broadcast XP and leaderboard update
+    if (xpAwarded > 0 || coinsAwarded > 0) {
+      const updatedUser = await db.collection(COLLECTIONS.USERS).findOne(
+        { _id: new ObjectId(studentId) },
+        { projection: { name: 1, email: 1, xp: 1, level: 1, coins: 1, badges: 1 } }
+      );
+
+      broadcastToUser(studentId, 'xp_updated', {
+        studentId,
+        xp: updatedUser?.xp || 0,
+        level: updatedUser?.level || 1,
+        coins: updatedUser?.coins || 0,
+        xpAwarded,
+        coinsAwarded,
+        totalXp: updatedUser?.xp || 0,
+      });
+
+      broadcastToAll('leaderboard_update', {
+        studentId,
+        name: updatedUser?.name,
+        xp: updatedUser?.xp || 0,
+        level: updatedUser?.level || 1,
+        coins: updatedUser?.coins || 0,
+      });
+
+      checkAndAssignBadges(studentId).catch(err => console.error('Badge check error:', err));
+    }
+
+    // Broadcast quiz submission events
+    broadcastToRoom(room, 'quiz_submission', {
+      sessionId,
+      studentId,
+      score,
+      totalQuestions,
+      correctCount,
+      xpAwarded,
+      coinsAwarded,
+      attemptId: attempt._id.toString(),
+    });
+    broadcastToUser(studentId, 'quiz_submission', {
+      sessionId,
+      score,
+      totalQuestions,
+      correctCount,
+      xpAwarded,
+      coinsAwarded,
+      attemptId: attempt._id.toString(),
+    });
+    broadcastToAll('quiz_submission', {
+      sessionId,
+      studentId,
+      score,
+      totalQuestions,
+      correctCount,
+      xpAwarded,
+      coinsAwarded,
+    });
+
+    // Send notification to teacher about quiz submission
+    if (session?.teacherId) {
+      const student = await db.collection(COLLECTIONS.USERS).findOne({ _id: new ObjectId(studentId) });
+      const studentName = student?.name || student?.email || 'A student';
+      
+      const notification = {
+        userId: session.teacherId,
+        title: 'Quiz Submitted',
+        message: `${studentName} submitted quiz with score: ${score}%`,
+        type: 'quiz',
+        relatedId: sessionId,
+        relatedType: 'session',
+        read: false,
+        _id: new ObjectId(),
+        createdAt: new Date(),
+      };
+      
+      await db.collection(COLLECTIONS.NOTIFICATIONS).insertOne(notification);
+      
+      broadcastToUser(session.teacherId, 'notification', {
+        id: notification._id.toString(),
+        title: notification.title,
+        message: notification.message,
+        type: notification.type,
+        relatedId: notification.relatedId,
+        timestamp: notification.createdAt.toISOString(),
+      });
+    }
+
+    // Broadcast XP update for leaderboard refresh
+    if (xpAwarded > 0) {
+      broadcastToUser(studentId, 'xp_updated', {
+        studentId,
+        xpAwarded,
+        coinsAwarded,
+        totalXp: 0, // Client will need to refetch
+      });
+      broadcastToAll('xp_updated', {
+        studentId,
+        xpAwarded,
+        coinsAwarded,
+      });
     }
 
     res.json({

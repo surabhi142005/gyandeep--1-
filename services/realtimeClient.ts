@@ -4,6 +4,7 @@
  */
 
 import { getRealtimeToken } from './authService';
+import { tokenManager } from './tokenManager';
 
 const API_BASE = import.meta.env.VITE_API_URL || '';
 const WS_URL = API_BASE.replace(/^http/, 'ws') + '/ws';
@@ -30,6 +31,7 @@ class RealtimeClient {
   private _status: 'connecting' | 'connected' | 'disconnected' | 'error' = 'disconnected';
   private userId: string | null = null;
   private userRole: string | null = null;
+  private tokenRefreshUnsub: (() => void) | null = null;
 
   get status() {
     return this._status;
@@ -47,6 +49,19 @@ class RealtimeClient {
     this.userRole = userRole;
     this.setStatus('connecting');
 
+    // Listen for token refresh to reconnect WebSocket
+    if (!this.tokenRefreshUnsub) {
+      this.tokenRefreshUnsub = tokenManager.onTokenRefresh(() => {
+        console.log('[WebSocket] Token refreshed, reconnecting...');
+        this.reconnectAttempts = 0;
+        this.doConnect();
+      });
+    }
+
+    this.doConnect();
+  }
+
+  private doConnect(): void {
     getRealtimeToken().then(token => {
       if (!token) {
         console.warn('Cannot connect WebSocket: no auth token');
@@ -239,10 +254,16 @@ class RealtimeClient {
       this.ws.close(1000, 'Client disconnect');
       this.ws = null;
     }
+    if (this.tokenRefreshUnsub) {
+      this.tokenRefreshUnsub();
+      this.tokenRefreshUnsub = null;
+    }
     this.setStatus('disconnected');
     this.reconnectAttempts = this.maxReconnectAttempts;
     this.messageQueue = [];
     this.listeners.clear();
+    this.userId = null;
+    this.userRole = null;
   }
 
   isConnected(): boolean {

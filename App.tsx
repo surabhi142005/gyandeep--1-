@@ -91,7 +91,7 @@ const App: React.FC = () => {
 
     const {
         classSession, attendance, historicalRecords, setHistoricalRecords,
-        handleUpdateSession, handleMarkAttendance, initTeacherSession, resetSession,
+        handleUpdateSession, handleMarkAttendance, handleAttendanceUpdate, initTeacherSession, resetSession,
     } = useClassSession({ allUsers, allSubjects, currentUserId: currentUser?.id });
 
     const { handleUpdatePerformance } = usePerformance({ setAllUsers });
@@ -209,6 +209,8 @@ const App: React.FC = () => {
                         allClasses={allClasses}
                         announcements={announcements}
                         onPostAnnouncement={handlePostAnnouncement}
+                        onAttendanceUpdate={handleAttendanceUpdate}
+                        onStudentsUpdate={setAllUsers}
                     />
                 )}
                 {currentUser.role === UserRoleEnum.STUDENT && (() => {
@@ -275,6 +277,7 @@ const App: React.FC = () => {
                         onClose={() => setNotification(null)}
                     />
                 )}
+                <NotificationToastList />
                 {currentUser && (
                     <>
                         <Header

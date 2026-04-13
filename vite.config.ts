@@ -5,15 +5,16 @@ import { VitePWA } from 'vite-plugin-pwa';
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '');
+  const apiUrl = env.VITE_API_URL || 'http://localhost:3001';
   
   return {
     server: {
       port: 5173,
       host: '0.0.0.0',
       proxy: {
-        '/api':     { target: 'http://localhost:3001', changeOrigin: true },
-        '/storage': { target: 'http://localhost:3001', changeOrigin: true },
-        '/auth':    { target: 'http://localhost:3001', changeOrigin: true },
+        '/api':     { target: apiUrl, changeOrigin: true },
+        '/storage': { target: apiUrl, changeOrigin: true },
+        '/auth':    { target: apiUrl, changeOrigin: true },
       },
     },
     plugins: [

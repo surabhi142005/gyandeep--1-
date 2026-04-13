@@ -129,7 +129,7 @@ Be friendly, encouraging, and educational in your responses.`;
   }
 });
 
-router.post('/quiz', async (req, res) => {
+router.post('/quiz/generate', async (req, res) => {
   try {
     const { notesText, subject, enableThinkingMode } = req.body;
     

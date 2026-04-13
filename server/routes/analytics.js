@@ -360,4 +360,95 @@ router.get('/leaderboard', authMiddleware, async (req, res) => {
   }
 });
 
+router.get('/teacher/:classId', authMiddleware, async (req, res) => {
+  try {
+    const db = await connectToDatabase();
+    const { classId } = req.params;
+    const { startDate, endDate } = req.query;
+
+    const dateMatch = {};
+    if (startDate || endDate) {
+      dateMatch.timestamp = {};
+      if (startDate) dateMatch.timestamp.$gte = new Date(startDate);
+      if (endDate) dateMatch.timestamp.$lte = new Date(endDate);
+    }
+
+    const classStudents = await db.collection(COLLECTIONS.USERS)
+      .find({ classId, role: 'student', active: true })
+      .project({ _id: 1, name: 1, email: 1 })
+      .toArray();
+
+    const studentIds = classStudents.map(s => s._id.toString());
+
+    const [attendanceStats, gradeStats, quizStats] = await Promise.all([
+      db.collection(COLLECTIONS.ATTENDANCE).aggregate([
+        { $match: { studentId: { $in: studentIds }, ...dateMatch } },
+        {
+          $group: {
+            _id: null,
+            total: { $sum: 1 },
+            present: { $sum: { $cond: [{ $eq: ['$status', 'Present'] }, 1, 0] } },
+            absent: { $sum: { $cond: [{ $eq: ['$status', 'Absent'] }, 1, 0] } },
+            late: { $sum: { $cond: [{ $eq: ['$status', 'Late'] }, 1, 0] } },
+          }
+        }
+      ]).toArray(),
+      db.collection(COLLECTIONS.GRADES).aggregate([
+        { $match: { studentId: { $in: studentIds }, ...dateMatch } },
+        {
+          $group: {
+            _id: null,
+            totalGrades: { $sum: 1 },
+            averageScore: { $avg: { $divide: ['$score', '$maxScore'] } },
+          }
+        }
+      ]).toArray(),
+      db.collection(COLLECTIONS.QUIZ_ATTEMPTS).aggregate([
+        { $match: { studentId: { $in: studentIds }, ...dateMatch } },
+        {
+          $group: {
+            _id: null,
+            totalAttempts: { $sum: 1 },
+            averageScore: { $avg: '$score' },
+            passedCount: { $sum: { $cond: [{ $gte: ['$score', 60] }, 1, 0] } },
+          }
+        }
+      ]).toArray(),
+    ]);
+
+    const att = attendanceStats[0] || { total: 0, present: 0, late: 0 };
+    const grd = gradeStats[0] || { totalGrades: 0, averageScore: 0 };
+    const quiz = quizStats[0] || { totalAttempts: 0, averageScore: 0, passedCount: 0 };
+
+    res.json({
+      classId,
+      totalStudents: classStudents.length,
+      attendance: {
+        total: att.total,
+        present: att.present,
+        absent: att.absent,
+        late: att.late,
+        rate: att.total > 0 ? ((att.present + att.late) / att.total * 100).toFixed(1) : 0,
+      },
+      grades: {
+        totalGrades: grd.totalGrades,
+        averageScore: grd.averageScore ? (grd.averageScore * 100).toFixed(1) : 0,
+      },
+      quizzes: {
+        totalAttempts: quiz.totalAttempts,
+        averageScore: quiz.averageScore ? quiz.averageScore.toFixed(1) : 0,
+        passRate: quiz.totalAttempts > 0 ? ((quiz.passedCount / quiz.totalAttempts) * 100).toFixed(1) : 0,
+      },
+      studentList: classStudents.map(s => ({
+        id: s._id?.toString(),
+        name: s.name,
+        email: s.email,
+      })),
+    });
+  } catch (error) {
+    console.error('Teacher analytics error:', error);
+    res.status(500).json({ error: 'Failed to get teacher analytics' });
+  }
+});
+
 export default router;

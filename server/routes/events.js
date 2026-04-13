@@ -1,12 +1,13 @@
 /**
  * server/routes/events.js
  * Server-Sent Events (SSE) endpoint for real-time updates
- * Integrated with broadcast service for unified real-time events
+ * Integrated with WebSocket and broadcast service for unified real-time events
  */
 
 import express from 'express';
 const router = express.Router();
-import { getConnectedClientsCount } from '../services/broadcast.js';
+import { getConnectedClientsCount, broadcastClients } from '../services/broadcast.js';
+import { broadcast as wsBroadcast, broadcastToUserById } from '../websocket.js';
 
 let clientIdCounter = 0;
 const clientRooms = new Map();
@@ -14,6 +15,7 @@ const clientRooms = new Map();
 function broadcastToRoom(room, event, data) {
   const message = `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
   
+  // SSE broadcast
   for (const [clientId, clientData] of clientRooms) {
     if (clientData.rooms && clientData.rooms.has(room)) {
       try {
@@ -24,11 +26,19 @@ function broadcastToRoom(room, event, data) {
       }
     }
   }
+  
+  // WebSocket broadcast
+  try {
+    wsBroadcast(event, { ...data, room }, room);
+  } catch (err) {
+    console.warn('WebSocket broadcast failed:', err.message);
+  }
 }
 
 function broadcastToUser(userId, event, data) {
   const message = `event: ${event}\ndata: ${JSON.stringify({ ...data, userId })}\n\n`;
   
+  // SSE broadcast
   for (const [clientId, clientData] of clientRooms) {
     if (clientData.userId === userId) {
       try {
@@ -39,10 +49,33 @@ function broadcastToUser(userId, event, data) {
       }
     }
   }
+  
+  // WebSocket broadcast to user
+  try {
+    broadcastToUserById(userId, event, data);
+  } catch (err) {
+    console.warn('WebSocket user broadcast failed:', err.message);
+  }
 }
 
 function broadcastToAll(event, data) {
-  broadcast(event, data);
+  const message = `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
+  
+  // SSE broadcast to all
+  broadcastClients.forEach((client) => {
+    try {
+      client.write(message);
+    } catch (err) {
+      console.error('Failed to broadcast to client:', err);
+    }
+  });
+  
+  // WebSocket broadcast to all
+  try {
+    wsBroadcast(event, data);
+  } catch (err) {
+    console.warn('WebSocket all broadcast failed:', err.message);
+  }
 }
 
 function addClient(res, userId = null, rooms = new Set()) {

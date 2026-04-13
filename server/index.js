@@ -13,7 +13,7 @@ import { standardRateLimiter, authRateLimiter, strictRateLimiter } from './middl
 import { securityHeaders, sanitizeInput, requestSizeLimit, csrfProtection } from './middleware/security.js';
 import { setupWebSocket } from './websocket.js';
 import { initRedis, isRedisConnected, healthCheck as redisHealthCheck } from './services/cache.js';
-import { initSentry, setupSentryErrorHandlers, captureException, addBreadcrumb } from './services/sentry.js';
+import { errorHandler } from './middleware/errorHandler.js';
 
 import authRouter from './routes/auth.js';
 import usersRouter from './routes/users.js';
@@ -53,9 +53,23 @@ app.use(securityHeaders);
 // Cookie parser for httpOnly cookies
 app.use(cookieParser());
 
-// CORS configuration
+// CORS configuration - support both ALLOWED_ORIGINS and FRONTEND_URL
+const getCorsOrigins = () => {
+  const origins = [];
+  
+  if (process.env.FRONTEND_URL) {
+    origins.push(process.env.FRONTEND_URL);
+  }
+  
+  if (process.env.ALLOWED_ORIGINS) {
+    origins.push(...process.env.ALLOWED_ORIGINS.split(',').map(o => o.trim()).filter(Boolean));
+  }
+  
+  return origins.length > 0 ? origins : '*';
+};
+
 app.use(cors({
-  origin: process.env.ALLOWED_ORIGINS?.split(',') || '*',
+  origin: getCorsOrigins(),
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-CSRF-Token', 'X-Session-Secret'],
@@ -179,12 +193,22 @@ app.use('/api/teacher', csrfProtection, teacherStatsRouter);
 const server = createServer(app);
 setupWebSocket(server);
 
+import { initSentry, setupSentryErrorHandlers } from './services/sentry.js';
+
 // Initialize Redis (optional - will gracefully degrade if not available)
 initRedis();
 
 // Initialize Sentry error tracking (optional)
 initSentry();
 setupSentryErrorHandlers(app);
+
+// Global error handler
+app.use(errorHandler);
+
+// 404 handler
+app.use((req, res) => {
+  res.status(404).json({ error: 'Not found' });
+});
 
 // Start server
 server.listen(PORT, () => {

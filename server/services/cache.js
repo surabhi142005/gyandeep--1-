@@ -12,6 +12,7 @@ const RATE_LIMIT_PREFIX = 'ratelimit:';
 
 let redis = null;
 let isConnected = false;
+let initErrorLogged = false;
 
 export function initRedis() {
   try {
@@ -28,17 +29,26 @@ export function initRedis() {
     });
 
     redis.on('error', (error) => {
-      console.error('Redis error:', error.message);
+      if (!initErrorLogged) {
+        console.error('Redis error:', error.message);
+        initErrorLogged = true;
+      }
       isConnected = false;
     });
 
     redis.on('close', () => {
-      console.log('Redis connection closed');
+      if (!initErrorLogged) {
+        console.log('Redis connection closed');
+        initErrorLogged = true;
+      }
       isConnected = false;
     });
 
     redis.connect().catch((error) => {
-      console.warn('Redis connection failed:', error.message);
+      if (!initErrorLogged) {
+        console.warn('Redis connection failed:', error.message);
+        initErrorLogged = true;
+      }
       isConnected = false;
     });
 

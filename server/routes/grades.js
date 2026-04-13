@@ -1,6 +1,6 @@
 /**
  * server/routes/grades.js
- * Grade management routes
+ * Grade management routes with input validation
  */
 
 import express from 'express';
@@ -9,19 +9,42 @@ import { ObjectId } from 'mongodb';
 import { connectToDatabase, COLLECTIONS } from '../db/mongoAtlas.js';
 import { broadcastGradesUpdated } from '../services/broadcast.js';
 import { authMiddleware } from '../middleware/auth.js';
+import { validateBody } from '../middleware/validate.js';
+import { gradeSchemas } from '../utils/validationSchemas.js';
+import { validators } from '../utils/validators.js';
 
-router.get('/', authMiddleware, async (req, res) => {
+const parsePagination = (query) => {
+  const pageNum = Math.max(1, parseInt(query.page, 10) || 1);
+  const limitNum = Math.min(100, Math.max(1, parseInt(query.limit, 10) || 20));
+  return { pageNum, limitNum, skip: (pageNum - 1) * limitNum };
+};
+
+const validatePaginationParams = (req, res, next) => {
+  const { pageNum, limitNum } = parsePagination(req.query);
+  req.pagination = { page: pageNum, limit: limitNum };
+  next();
+};
+
+router.get('/', authMiddleware, validatePaginationParams, async (req, res) => {
   try {
     const db = await connectToDatabase();
-    const { studentId, subjectId, page = '1', limit = '20', sortBy = 'gradedAt', sortOrder = 'desc' } = req.query;
+    const { studentId, subjectId, sortBy = 'gradedAt', sortOrder = 'desc' } = req.query;
+    const { pageNum, limitNum, skip } = req.pagination;
     
     const filter = {};
-    if (studentId) filter.studentId = studentId;
-    if (subjectId) filter.subjectId = subjectId;
+    if (studentId) {
+      if (!validators.isMongoId(studentId).isValid()) {
+        return res.status(400).json({ error: 'Invalid studentId format' });
+      }
+      filter.studentId = studentId;
+    }
+    if (subjectId) {
+      if (!validators.isMongoId(subjectId).isValid()) {
+        return res.status(400).json({ error: 'Invalid subjectId format' });
+      }
+      filter.subjectId = subjectId;
+    }
 
-    const pageNum = Math.max(1, parseInt(page, 10) || 1);
-    const limitNum = Math.min(100, Math.max(1, parseInt(limit, 10) || 20));
-    const skip = (pageNum - 1) * limitNum;
     const sortOptions = { [sortBy]: sortOrder === 'asc' ? 1 : -1 };
 
     const [grades, totalCount] = await Promise.all([
@@ -51,11 +74,22 @@ router.get('/', authMiddleware, async (req, res) => {
   }
 });
 
-router.post('/', authMiddleware, async (req, res) => {
+router.post('/', authMiddleware, validateBody(gradeSchemas.create), async (req, res) => {
   try {
     const { studentId, subjectId, score, maxScore, title, category, teacherId, quizAttemptId } = req.body;
-    if (!studentId || !subjectId || score === undefined || !maxScore) {
-      return res.status(400).json({ error: 'Missing required fields' });
+
+    const scoreValidation = validators.isNumber(score, 'score', { min: 0 });
+    if (!scoreValidation.isValid()) {
+      return res.status(400).json({ error: scoreValidation.errors[0].message });
+    }
+
+    const maxScoreValidation = validators.isNumber(maxScore, 'maxScore', { min: 1 });
+    if (!maxScoreValidation.isValid()) {
+      return res.status(400).json({ error: maxScoreValidation.errors[0].message });
+    }
+
+    if (Number(score) > Number(maxScore)) {
+      return res.status(400).json({ error: 'Score cannot exceed maxScore' });
     }
 
     const db = await connectToDatabase();
@@ -89,19 +123,28 @@ router.post('/', authMiddleware, async (req, res) => {
   }
 });
 
-router.post('/bulk', authMiddleware, async (req, res) => {
+router.post('/bulk', authMiddleware, validateBody(gradeSchemas.bulk), async (req, res) => {
   try {
     const { grades } = req.body;
-    if (!Array.isArray(grades)) {
-      return res.status(400).json({ error: 'Expected array of grades' });
+
+    for (const grade of grades) {
+      if (!grade.studentId || !grade.subjectId || grade.score === undefined || !grade.maxScore) {
+        return res.status(400).json({ error: 'Each grade must have studentId, subjectId, score, and maxScore' });
+      }
+      if (grade.score > grade.maxScore) {
+        return res.status(400).json({ error: 'Score cannot exceed maxScore in bulk grades' });
+      }
     }
 
     const db = await connectToDatabase();
     const now = new Date();
     const docs = grades.map(g => ({
-      ...g,
+      studentId: g.studentId,
+      subjectId: g.subjectId,
       score: Number(g.score),
       maxScore: Number(g.maxScore),
+      title: g.title || 'Assignment',
+      category: g.category || 'General',
       gradedAt: g.date || now,
       _id: new ObjectId(),
       createdAt: now,
@@ -117,6 +160,11 @@ router.post('/bulk', authMiddleware, async (req, res) => {
 
 router.delete('/:id', authMiddleware, async (req, res) => {
   try {
+    const idValidation = validators.isMongoId(req.params.id, 'id');
+    if (!idValidation.isValid()) {
+      return res.status(400).json({ error: 'Invalid grade ID format' });
+    }
+
     const db = await connectToDatabase();
     const result = await db.collection(COLLECTIONS.GRADES).deleteOne(
       { _id: new ObjectId(req.params.id) }

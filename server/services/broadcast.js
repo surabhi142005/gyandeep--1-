@@ -1,9 +1,12 @@
 /**
  * server/services/broadcast.js
  * Centralized broadcast service for real-time events
+ * Supports both SSE and WebSocket clients
  */
 
-let broadcastClients = [];
+import { broadcast as wsBroadcast, broadcastToUserById } from '../websocket.js';
+
+export let broadcastClients = [];
 
 export function addBroadcastClient(client) {
   broadcastClients.push(client);
@@ -15,6 +18,8 @@ export function removeBroadcastClient(client) {
 
 export function broadcastToAll(event, data) {
   const message = JSON.stringify({ event, payload: data });
+  
+  // SSE broadcast
   broadcastClients.forEach((client) => {
     try {
       client.write(`data: ${message}\n\n`);
@@ -22,10 +27,19 @@ export function broadcastToAll(event, data) {
       console.error('Failed to broadcast to client:', err);
     }
   });
+  
+  // WebSocket broadcast
+  try {
+    wsBroadcast(event, data);
+  } catch (err) {
+    console.warn('WebSocket broadcast failed:', err.message);
+  }
 }
 
 export function broadcastToUser(userId, event, data) {
   const message = JSON.stringify({ event, payload: { ...data, userId } });
+  
+  // SSE broadcast
   broadcastClients.forEach((client) => {
     if (client.userId === userId) {
       try {
@@ -35,10 +49,19 @@ export function broadcastToUser(userId, event, data) {
       }
     }
   });
+  
+  // WebSocket broadcast
+  try {
+    broadcastToUserById(userId, event, data);
+  } catch (err) {
+    console.warn('WebSocket user broadcast failed:', err.message);
+  }
 }
 
 export function broadcastToRoom(room, event, data) {
   const message = JSON.stringify({ event, payload: { ...data, room } });
+  
+  // SSE broadcast
   broadcastClients.forEach((client) => {
     if (client.rooms && client.rooms.has(room)) {
       try {
@@ -48,6 +71,13 @@ export function broadcastToRoom(room, event, data) {
       }
     }
   });
+  
+  // WebSocket broadcast
+  try {
+    wsBroadcast(event, { ...data, room }, room);
+  } catch (err) {
+    console.warn('WebSocket room broadcast failed:', err.message);
+  }
 }
 
 export function broadcastGradesUpdated(studentId, gradeData) {

@@ -15,13 +15,13 @@ import {
   RefreshCw,
   Zap
 } from 'lucide-react';
-import type { User } from '../types';
+import type { User, AttendanceRecord } from '../types';
 import { getCurrentPosition } from '../services/locationService';
 import Spinner from './Spinner';
 import PerformanceChart from './PerformanceChart';
 import AttendanceChart from './AttendanceChart';
 import WebcamCapture from './WebcamCapture';
-import { uploadClassNotes, fetchTagPresets, fetchCentralizedNotesCombined } from '../services/dataService';
+import { uploadClassNotes, fetchTagPresets, fetchCentralizedNotesCombined, fetchUsers } from '../services/dataService';
 import { TeacherDashboardProps } from './TeacherDashboardProps';
 import GradeBook from './GradeBook';
 import TicketPanel from './TicketPanel';
@@ -29,6 +29,7 @@ import { useTeacherSession } from '../hooks/useTeacherSession';
 import { useQuizWorker } from '../hooks/useQuizWorker';
 import { DashboardLayout, Card, Button, Badge, Input } from './ui';
 import { fetchTeacherStats, fetchQuizStats, fetchWeeklyAttendance, fetchPerformanceBySubject } from '../services/dataService';
+import { realtimeClient } from '../services/realtimeClient';
 
 const SIDEBAR_ITEMS = [
   { id: 'session', label: 'Session Control', icon: Play },
@@ -44,7 +45,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
   teacher, students, attendance, classSession, onUpdateSession, 
   onLogout, theme, onUpdateFaceImage, historicalRecords, 
   onUpdateHistoricalRecords, allSubjects, allClasses, 
-  announcements = [], onPostAnnouncement 
+  announcements = [], onPostAnnouncement, onAttendanceUpdate, onStudentsUpdate 
 }) => {
   const [activeTab, setActiveTab] = useState('session');
   const [error, setError] = useState<string | null>(null);
@@ -142,6 +143,57 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
   
   useEffect(() => { fetchTagPresets().then(setTagPresets).catch((err) => { console.error('Failed to load tag presets:', err); }) }, []);
   useEffect(() => setNotesText(classSession.notes || ''), [classSession.notes]);
+  
+  // Real-time attendance updates
+  useEffect(() => {
+    if (!classSession.id || !onAttendanceUpdate) return;
+    
+    const handleAttendanceChange = (data: any) => {
+      console.log('Attendance changed:', data);
+      // Create a new attendance record from the event data
+      const newAttendance: AttendanceRecord = {
+        studentId: data.studentId,
+        studentName: data.studentName || 'Student',
+        timestamp: new Date(),
+        status: data.status === 'present' || data.status === 'Present' ? 'Present' : 'Absent',
+      };
+      onAttendanceUpdate(newAttendance);
+    };
+    
+    const unsubscribe = realtimeClient.on('attendance-changed', handleAttendanceChange);
+    
+    // Also subscribe to quiz submissions to update quiz stats
+    const handleQuizSubmission = (data: any) => {
+      console.log('Quiz submission:', data);
+      // Refresh quiz stats
+      fetchQuizStats(teacher.id).then(setQuizStats).catch(console.error);
+    };
+    
+    const unsubQuiz = realtimeClient.on('quiz_submission', handleQuizSubmission);
+    
+    // Subscribe to XP updates to refresh students list (for leaderboard)
+    const handleXpUpdate = (data: any) => {
+      console.log('XP updated:', data);
+      if (onStudentsUpdate) {
+        // Trigger a students refresh if needed
+        fetchUsers()
+          .then((users) => {
+            const studentsOnly = users.filter((u: any) => u.role === 'student');
+            onStudentsUpdate(studentsOnly);
+          })
+          .catch(console.error);
+      }
+    };
+    
+    const unsubXp = realtimeClient.on('xp_updated', handleXpUpdate);
+    
+    return () => {
+      unsubscribe();
+      unsubQuiz();
+      unsubXp();
+    };
+  }, [classSession.id, onAttendanceUpdate, onStudentsUpdate, teacher.id]);
+  
   useEffect(() => {
     if (notesTab === 'centralized' && classSession.classId && classSession.subject) {
       fetchCentralizedNotesCombined({ subjectId: classSession.subject, classId: classSession.classId })

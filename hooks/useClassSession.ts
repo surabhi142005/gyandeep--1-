@@ -90,6 +90,31 @@ export function useClassSession({ allUsers, allSubjects, currentUserId }: UseCla
     ));
   };
 
+  const handleAttendanceUpdate = (newRecord: AttendanceRecord) => {
+    setAttendance(prev => {
+      // Check if this student already has a record
+      const existingIndex = prev.findIndex(rec => rec.studentId === newRecord.studentId);
+      if (existingIndex >= 0) {
+        // Update existing record
+        const updated = [...prev];
+        updated[existingIndex] = {
+          ...updated[existingIndex],
+          status: newRecord.status,
+          timestamp: new Date(),
+        };
+        return updated;
+      } else {
+        // Add new record
+        return [...prev, {
+          studentId: newRecord.studentId,
+          studentName: newRecord.studentName || 'Student',
+          status: newRecord.status,
+          timestamp: new Date(),
+        }];
+      }
+    });
+  };
+
   const resetSession = () => {
     setClassSession({
       id: '',
@@ -108,6 +133,7 @@ export function useClassSession({ allUsers, allSubjects, currentUserId }: UseCla
     setHistoricalRecords,
     handleUpdateSession,
     handleMarkAttendance,
+    handleAttendanceUpdate,
     initTeacherSession,
     resetSession,
   };
