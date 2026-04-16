@@ -32,7 +32,9 @@
       "Bash(git add:*)",
       "Bash(git commit:*)",
       "Bash(npm run:*)",
-      "Bash(taskkill:*)"
+      "Bash(taskkill:*)",
+      "Bash(netstat:*)",
+      "Bash(xargs -r kill -9)"
     ]
   }
 }
