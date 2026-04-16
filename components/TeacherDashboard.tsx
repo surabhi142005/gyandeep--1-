@@ -21,7 +21,7 @@ import Spinner from './Spinner';
 import PerformanceChart from './PerformanceChart';
 import AttendanceChart from './AttendanceChart';
 import WebcamCapture from './WebcamCapture';
-import { uploadClassNotes, fetchTagPresets, fetchCentralizedNotesCombined, fetchUsers } from '../services/dataService';
+import { uploadClassNotes, fetchTagPresets, fetchCentralizedNotesCombined, fetchUsers, fetchActiveSession, fetchSessionAttendance } from '../services/dataService';
 import { TeacherDashboardProps } from './TeacherDashboardProps';
 import GradeBook from './GradeBook';
 import TicketPanel from './TicketPanel';
@@ -80,9 +80,11 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
   const [quizStats, setQuizStats] = useState({ totalQuizzes: 0, avgScore: 0, totalAttempts: 0 });
   const [weeklyAttendanceData, setWeeklyAttendanceData] = useState<{ date: string; present: number }[]>([]);
   const [performanceData, setPerformanceData] = useState<{ subject: string; avgScore: number }[]>([]);
+  const [liveAttendance, setLiveAttendance] = useState<Map<string, AttendanceRecord>>(new Map());
   
+  // RT-1 & RT-6: Enhanced analytics loading with polling during active session
   useEffect(() => {
-    const loadTeacherStats = async () => {
+    const loadAnalytics = async () => {
       try {
         const [stats, quiz] = await Promise.all([
           fetchTeacherStats(teacher.id),
@@ -92,8 +94,14 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
         setQuizStats(quiz || { totalQuizzes: 0, avgScore: 0, totalAttempts: 0 });
       } catch (err) { console.error('Failed to load teacher stats:', err); }
     };
-    loadTeacherStats();
-  }, [teacher.id]);
+    loadAnalytics();
+    
+    // Poll during active session
+    if (classSession.isActive) {
+      const pollInterval = setInterval(loadAnalytics, 8000);
+      return () => clearInterval(pollInterval);
+    }
+  }, [teacher.id, classSession.isActive]);
   
   useEffect(() => {
     if (classSession.classId) {
@@ -113,50 +121,96 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
   const [selectedQuizClass, setSelectedQuizClass] = useState<string>('');
   const [expiryWarning, setExpiryWarning] = useState<string | null>(null);
   const [timeRemaining, setTimeRemaining] = useState<string>('--:--');
+  const [serverExpiryTime, setServerExpiryTime] = useState<number | null>(null);
+  
+  // RT-1: Sync session with server every 10 seconds for accurate timer
+  useEffect(() => {
+    if (!classSession.isActive || !classSession.id || !teacher.id) return;
+    
+    const syncWithServer = async () => {
+      try {
+        const data = await fetchActiveSession(teacher.id);
+        if (data.active && data.session) {
+          if (data.session.expiry) {
+            setServerExpiryTime(new Date(data.session.expiry).getTime());
+          }
+          if (data.session.remainingTime !== undefined) {
+            setServerExpiryTime(Date.now() + data.session.remainingTime);
+          }
+        }
+      } catch (err) {
+        console.warn('Failed to sync session with server:', err);
+      }
+    };
+    
+    syncWithServer();
+    const syncInterval = setInterval(syncWithServer, 10000);
+    return () => clearInterval(syncInterval);
+  }, [classSession.isActive, classSession.id, teacher.id]);
   
   useEffect(() => {
-    if (!classSession.isActive || !classSession.expiry) {
+    if (!classSession.isActive || !classSession.id) {
       setTimeRemaining('--:--');
       return;
     }
     
     const updateTimer = () => {
       const now = Date.now();
-      const remaining = classSession.expiry! - now;
-      if (remaining <= 0) {
-        setTimeRemaining('00:00');
+      const expiryTime = serverExpiryTime || (classSession.expiry ? classSession.expiry : null);
+      if (!expiryTime) {
+        setTimeRemaining('--:--');
         return;
       }
+      
+      const remaining = expiryTime - now;
+      if (remaining <= 0) {
+        setTimeRemaining('00:00');
+        setExpiryWarning('Session has expired!');
+        return;
+      }
+      
       const minutes = Math.floor(remaining / 60000);
       const seconds = Math.floor((remaining % 60000) / 1000);
       setTimeRemaining(`${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`);
       
-      if (remaining < 300000 && remaining > 294000) {
+      // RT-1: Red warning at 2 minutes
+      if (remaining <= 120000 && remaining > 114000) {
+        setExpiryWarning('⚠️ Session expires in 2 minutes!');
+      } else if (remaining < 300000 && remaining > 294000) {
         setExpiryWarning('Session expires in 5 minutes!');
+      } else if (remaining > 120000) {
+        setExpiryWarning(null);
       }
     };
     
     updateTimer();
     const interval = setInterval(updateTimer, 1000);
     return () => clearInterval(interval);
-  }, [classSession.isActive, classSession.expiry]);
+  }, [classSession.isActive, classSession.id, classSession.expiry, serverExpiryTime]);
   
   useEffect(() => { fetchTagPresets().then(setTagPresets).catch((err) => { console.error('Failed to load tag presets:', err); }) }, []);
   useEffect(() => setNotesText(classSession.notes || ''), [classSession.notes]);
   
-  // Real-time attendance updates
+  // RT-2: Real-time attendance updates with live table
   useEffect(() => {
     if (!classSession.id || !onAttendanceUpdate) return;
     
     const handleAttendanceChange = (data: any) => {
       console.log('Attendance changed:', data);
-      // Create a new attendance record from the event data
       const newAttendance: AttendanceRecord = {
         studentId: data.studentId,
         studentName: data.studentName || 'Student',
         timestamp: new Date(),
         status: data.status === 'present' || data.status === 'Present' ? 'Present' : 'Absent',
       };
+      
+      // RT-2: Update live attendance map
+      setLiveAttendance(prev => {
+        const next = new Map(prev);
+        next.set(data.studentId, newAttendance);
+        return next;
+      });
+      
       onAttendanceUpdate(newAttendance);
     };
     
@@ -193,6 +247,35 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
       unsubXp();
     };
   }, [classSession.id, onAttendanceUpdate, onStudentsUpdate, teacher.id]);
+  
+  // Polling fallback for attendance updates (if SSE/WebSocket fails)
+  useEffect(() => {
+    if (!classSession.id || !onAttendanceUpdate) return;
+    
+    const pollAttendance = async () => {
+      try {
+        const data = await fetchSessionAttendance(classSession.id);
+        if (Array.isArray(data)) {
+          data.forEach((record: any) => {
+            const newAttendance: AttendanceRecord = {
+              studentId: record.studentId || record.student?._id,
+              studentName: record.student?.name || 'Student',
+              timestamp: new Date(record.markedAt),
+              status: record.status === 'present' || record.status === 'Present' ? 'Present' : 'Absent',
+            };
+            onAttendanceUpdate(newAttendance);
+          });
+        }
+      } catch (err) {
+        console.warn('Failed to poll attendance:', err);
+      }
+    };
+    
+    // Poll every 5 seconds
+    pollAttendance();
+    const pollInterval = setInterval(pollAttendance, 5000);
+    return () => clearInterval(pollInterval);
+  }, [classSession.id, onAttendanceUpdate]);
   
   useEffect(() => {
     if (notesTab === 'centralized' && classSession.classId && classSession.subject) {

@@ -1,6 +1,6 @@
 import { NextRequest } from 'next/server';
 import { prisma } from '../../lib/db';
-import { json, auth } from '../../lib/auth';
+import { json, requireAuth } from '../../lib/auth';
 
 /**
  * api/notes/index.ts
@@ -9,7 +9,7 @@ import { json, auth } from '../../lib/auth';
 
 export async function GET(request: NextRequest) {
   try {
-    const user = await auth();
+    const user = requireAuth(request);
     if (!user) return json({ error: 'Unauthorized' }, 401);
 
     const { searchParams } = new URL(request.url);

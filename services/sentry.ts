@@ -4,13 +4,7 @@
  */
 
 import * as SentryModule from '@sentry/browser';
-
-let browserProfilingIntegration: any = null;
-try {
-  browserProfilingIntegration = require('@sentry/profiling-web').browserProfilingIntegration;
-} catch {
-  console.warn('Sentry profiling module not available');
-}
+import { browserProfilingIntegration } from '@sentry/browser';
 
 const Sentry = SentryModule;
 

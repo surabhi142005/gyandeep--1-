@@ -35,6 +35,7 @@ import AnnouncementBoard from './AnnouncementBoard';
 import TicketPanel from './TicketPanel';
 import type { Announcement } from './AnnouncementBoard';
 import { fetchCentralizedNotesCombined } from '../services/dataService';
+import { realtimeClient } from '../services/realtimeClient';
 const Dashboard3D = React.lazy(() => import('./Dashboard3D'));
 import StudentLearningTwin from './StudentLearningTwin';
 import { DashboardLayout, Card, Button, Badge, Input } from './ui';
@@ -101,6 +102,24 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({
   useEffect(() => {
     setQuizTaken(false);
   }, [classSession.code]);
+
+  // RT-4: Subscribe to XP updates in real-time
+  useEffect(() => {
+    if (!student?.id) return;
+    
+    const unsubXp = realtimeClient.on('xp_updated', (data) => {
+      if (data.studentId === student.id) {
+        onShowNotification(`+${data.xpAwarded || 0} XP earned!`, 'success');
+        if (data.coinsAwarded > 0) {
+          onShowNotification(`+${data.coinsAwarded} coins earned!`, 'success');
+        }
+      }
+    });
+
+    return () => {
+      unsubXp();
+    };
+  }, [student?.id]);
 
   const handleAttendance = async (imageDataUrl: string) => {
     setIsVerifying(true);
@@ -309,15 +328,17 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({
                       <Button variant="secondary" className="mt-8" onClick={() => setQuizTaken(false)}>Review Answers</Button>
                    </div>
                  ) : (
-                   <QuizView 
-                     quiz={classSession.quiz || []}
-                     subject={classSession.subject || 'General'}
-                     onSubmit={(score) => {
-                       onUpdatePerformance(student.id, classSession.subject || 'General', score);
-                       setQuizTaken(true);
-                     }}
-                     theme={theme}
-                   />
+                    <QuizView 
+                      quiz={classSession.quiz || []}
+                      subject={classSession.subject || 'General'}
+                      sessionId={classSession.id}
+                      studentId={student.id}
+                      onSubmit={(score) => {
+                        onUpdatePerformance(student.id, classSession.subject || 'General', score);
+                        setQuizTaken(true);
+                      }}
+                      theme={theme}
+                    />
                  )}
               </Card>
            </div>

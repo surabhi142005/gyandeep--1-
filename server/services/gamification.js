@@ -61,7 +61,7 @@ export async function checkAndAssignBadges(userId) {
         { $push: { badges: { $each: badgeNames } } }
       );
 
-      broadcastToUser(userId, 'badges_earned', {
+      broadcastToUser(userId, 'badge_earned', {
         newBadges: newBadges.map(b => ({ name: b.name, icon: b.icon, description: b.description })),
         totalBadges: currentBadges.length + newBadges.length,
       });

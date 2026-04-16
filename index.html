@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/png" href="/logo.png" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, viewport-fit=cover" />
     <meta name="description" content="Gyandeep - AI-Powered Smart Classroom System" />
     <title>Gyandeep - AI Smart Classroom</title>
     
@@ -29,21 +29,25 @@
     <style>
       body {
         margin: 0;
+        padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
         background-color: var(--color-bg);
         color: var(--color-text);
         transition: background-color 300ms ease;
-        /* Prevent horizontal overflow on mobile */
         overflow-x: hidden;
-        /* Smooth scrolling */
         -webkit-overflow-scrolling: touch;
       }
       #root {
         min-height: 100vh;
-        min-height: 100dvh; /* Dynamic viewport height */
+        min-height: 100dvh;
       }
-      /* Prevent pull-to-refresh on mobile while allowing scroll */
       html {
         overscroll-behavior-y: contain;
+      }
+      .safe-area-top {
+        padding-top: env(safe-area-inset-top);
+      }
+      .safe-area-bottom {
+        padding-bottom: env(safe-area-inset-bottom);
       }
     </style>
   </head>

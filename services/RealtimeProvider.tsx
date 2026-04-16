@@ -1,6 +1,5 @@
 import React, { createContext, useContext, useEffect, useState, useCallback, useRef, ReactNode } from 'react';
 import { realtimeClient } from './realtimeClient';
-import { websocketService } from './websocketService';
 
 export type ConnectionStatus = 'connecting' | 'connected' | 'disconnected' | 'error';
 
@@ -99,7 +98,6 @@ export function RealtimeProvider({ children, userId, userRole }: RealtimeProvide
   useEffect(() => {
     if (!currentUserRef.current.id || !currentUserRef.current.role) {
       realtimeClient.disconnect();
-      websocketService.disconnect();
       setStatus('disconnected');
       return;
     }
@@ -129,9 +127,7 @@ export function RealtimeProvider({ children, userId, userRole }: RealtimeProvide
 
     realtimeClient.connect(currentUserRef.current.id!, currentUserRef.current.role!);
 
-    websocketService.connect(currentUserRef.current.id!, currentUserRef.current.role!);
-
-    const unsubGradeUpdate = websocketService.on('grades-changed', (data) => {
+    const unsubGradeUpdate = realtimeClient.on('grades-changed', (data) => {
       addLocalNotification({
         type: 'info',
         title: 'Grade Updated',
@@ -139,7 +135,7 @@ export function RealtimeProvider({ children, userId, userRole }: RealtimeProvide
       });
     });
 
-    const unsubAttendanceUpdate = websocketService.on('attendance-changed', () => {
+    const unsubAttendanceUpdate = realtimeClient.on('attendance-changed', () => {
       addLocalNotification({
         type: 'info',
         title: 'Attendance Updated',
@@ -147,7 +143,7 @@ export function RealtimeProvider({ children, userId, userRole }: RealtimeProvide
       });
     });
 
-    const unsubAnnouncement = websocketService.on('announcement', (data) => {
+    const unsubAnnouncement = realtimeClient.on('announcement', (data) => {
       addLocalNotification({
         type: 'info',
         title: 'New Announcement',
@@ -155,7 +151,7 @@ export function RealtimeProvider({ children, userId, userRole }: RealtimeProvide
       });
     });
 
-    const unsubTicketUpdate = websocketService.on('ticket-update', (data) => {
+    const unsubTicketUpdate = realtimeClient.on('ticket-update', (data) => {
       addLocalNotification({
         type: data.status === 'resolved' ? 'success' : 'info',
         title: `Ticket ${data.status === 'resolved' ? 'Resolved' : 'Updated'}`,
@@ -263,20 +259,14 @@ export function RealtimeProvider({ children, userId, userRole }: RealtimeProvide
 
   const disconnect = useCallback(() => {
     realtimeClient.disconnect();
-    websocketService.disconnect();
   }, []);
 
   const subscribe = useCallback((event: string, callback: (data: any) => void) => {
-    const unsubRealtime = realtimeClient.on(event, callback);
-    const unsubWS = websocketService.on(event, callback);
-    return () => {
-      unsubRealtime();
-      unsubWS();
-    };
+    return realtimeClient.on(event, callback);
   }, []);
 
   const emit = useCallback((event: string, data: any) => {
-    websocketService.emit(event, data);
+    realtimeClient.send({ type: 'emit', event, data });
   }, []);
 
   const updatePresence = useCallback((room: string, userStatus: PresenceUser['status']) => {

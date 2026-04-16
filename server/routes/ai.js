@@ -144,7 +144,7 @@ router.post('/quiz/generate', async (req, res) => {
       });
     }
 
-    const quizPrompt = `Generate 10 multiple choice quiz questions based on the following content about ${subject || 'the topic'}:
+    const quizPrompt = `Generate 5 multiple choice quiz questions based on the following content about ${subject || 'the topic'}:
 
 ${notesText.slice(0, 3000)}
 
@@ -164,7 +164,13 @@ Format as JSON array:
     try {
       const jsonMatch = response.match(/\[[\s\S]*\]/);
       if (jsonMatch) {
-        const quiz = JSON.parse(jsonMatch[0]);
+        let quiz = JSON.parse(jsonMatch[0]);
+        if (!Array.isArray(quiz)) {
+          quiz = [];
+        }
+        if (quiz.length > 5) {
+          quiz = quiz.slice(0, 5);
+        }
         return res.json({ quiz, subject });
       }
     } catch (parseError) {

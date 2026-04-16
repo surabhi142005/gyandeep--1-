@@ -219,4 +219,86 @@ router.post('/import-users/csv', authMiddleware, async (req, res) => {
   }
 });
 
+/**
+ * POST /api/admin/class/create
+ * Create a new class
+ */
+router.post('/class/create', authMiddleware, async (req, res) => {
+  try {
+    const db = await connectToDatabase();
+    const { name, description, subjectIds } = req.body;
+
+    if (!name || typeof name !== 'string' || name.trim().length === 0) {
+      return res.status(400).json({ error: 'Class name is required' });
+    }
+
+    const existingClass = await db.collection(COLLECTIONS.CLASSES).findOne({ 
+      name: { $regex: new RegExp(`^${name.trim()}$`, 'i') } 
+    });
+    
+    if (existingClass) {
+      return res.status(409).json({ error: 'A class with this name already exists' });
+    }
+
+    const result = await db.collection(COLLECTIONS.CLASSES).insertOne({
+      name: name.trim(),
+      description: description || '',
+      subjectIds: subjectIds || [],
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      _id: new ObjectId(),
+    });
+
+    res.status(201).json({ 
+      ok: true, 
+      id: result.insertedId.toString(),
+      name: name.trim() 
+    });
+  } catch (error) {
+    console.error('Create class error:', error);
+    res.status(500).json({ error: 'Failed to create class' });
+  }
+});
+
+/**
+ * POST /api/admin/subject/create
+ * Create a new subject
+ */
+router.post('/subject/create', authMiddleware, async (req, res) => {
+  try {
+    const db = await connectToDatabase();
+    const { name, description, color } = req.body;
+
+    if (!name || typeof name !== 'string' || name.trim().length === 0) {
+      return res.status(400).json({ error: 'Subject name is required' });
+    }
+
+    const existingSubject = await db.collection(COLLECTIONS.SUBJECTS).findOne({ 
+      name: { $regex: new RegExp(`^${name.trim()}$`, 'i') } 
+    });
+    
+    if (existingSubject) {
+      return res.status(409).json({ error: 'A subject with this name already exists' });
+    }
+
+    const result = await db.collection(COLLECTIONS.SUBJECTS).insertOne({
+      name: name.trim(),
+      description: description || '',
+      color: color || '#4f46e5',
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      _id: new ObjectId(),
+    });
+
+    res.status(201).json({ 
+      ok: true, 
+      id: result.insertedId.toString(),
+      name: name.trim() 
+    });
+  } catch (error) {
+    console.error('Create subject error:', error);
+    res.status(500).json({ error: 'Failed to create subject' });
+  }
+});
+
 export default router;

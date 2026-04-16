@@ -32,14 +32,26 @@ router.get('/', authMiddleware, async (req, res) => {
 router.post('/upload', authMiddleware, async (req, res) => {
   try {
     const db = await connectToDatabase();
-    const { classId, subjectId, content, url, extractedText } = req.body;
+    const { classId, subjectId, content, url, extractedText, fileName, fileType } = req.body;
+
+    // Validate file type - only PDF allowed
+    const allowedTypes = ['application/pdf', 'text/pdf'];
+    if (fileType && !allowedTypes.includes(fileType.toLowerCase())) {
+      return res.status(400).json({ error: 'Only PDF files are allowed' });
+    }
+
+    // Validate file extension if provided
+    if (fileName && !fileName.toLowerCase().endsWith('.pdf')) {
+      return res.status(400).json({ error: 'Only PDF files are allowed' });
+    }
 
     const result = await db.collection(COLLECTIONS.SESSION_NOTES).insertOne({
       classId,
       subjectId,
       content: content || extractedText || '',
       url: url || null,
-      fileName: req.body.fileName || null,
+      fileName: fileName || null,
+      fileType: fileType || 'application/pdf',
       deletedAt: null,
       _id: new ObjectId(),
       createdAt: new Date(),

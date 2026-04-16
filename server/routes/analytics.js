@@ -245,7 +245,7 @@ router.get('/performance-by-subject', authMiddleware, async (req, res) => {
   }
 });
 
-router.get('/student-performance/:studentId', authMiddleware, async (req, res) => {
+router.get('/student/:studentId/performance', authMiddleware, async (req, res) => {
   try {
     const db = await connectToDatabase();
     const { studentId } = req.params;

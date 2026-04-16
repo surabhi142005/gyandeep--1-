@@ -1,9 +1,9 @@
 import * as React from 'react';
-import { useState, useMemo, useEffect } from 'react';
-import type { User, UserRole } from '../types';
-import { UserRole as UserRoleEnum, ROLE_DISPLAY_NAMES } from '../types';
+import { useState, useMemo } from 'react';
+import type { User } from '../types';
+import { ROLE_DISPLAY_NAMES } from '../types';
 import WebcamCapture from './WebcamCapture';
-import { verifyFace, passwordMatches, hashPassword, login as expressLogin, loginWithGoogle } from '../services/authService';
+import { verifyFace, passwordMatches, hashPassword, login as expressLogin } from '../services/authService';
 import { preloadFaceApiModels } from '../services/faceApiLoader';
 import Spinner from './Spinner';
 import { t } from '../services/i18n';
@@ -158,8 +158,12 @@ const Login: React.FC<LoginProps> = ({ onLogin, users, theme, onPasswordReset })
     setError(null);
     try {
       const userToLogin = users.find(u => u.id === selectedUserId);
-      const result = await verifyFace(imageDataUrl, userToLogin?.faceImage);
-      if (result.authenticated && userToLogin) {
+      if (!userToLogin) {
+        setError('Please select a user first');
+        return;
+      }
+      const result = await verifyFace(imageDataUrl, userToLogin.id);
+      if (result.authenticated) {
         onLogin(userToLogin);
       } else {
         setError('Face not recognized. Make sure you are in good lighting and try again.');

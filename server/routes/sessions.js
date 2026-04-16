@@ -10,6 +10,35 @@ import { connectToDatabase, COLLECTIONS } from '../db/mongoAtlas.js';
 import { broadcastToRoom, broadcastToAll } from './events.js';
 import { authMiddleware } from '../middleware/auth.js';
 import { checkAndAssignBadges } from '../services/gamification.js';
+import { RateLimiter } from '../middleware/rateLimiter.js';
+
+// Rate limiter for quiz submissions: 3 attempts per 5 minutes per student
+const quizSubmitRateLimiter = new RateLimiter({
+  windowMs: 5 * 60 * 1000, // 5 minutes
+  max: 3,
+  message: { error: 'Too many quiz submissions. Please wait 5 minutes before trying again.' },
+  keyGenerator: (req) => {
+
+// Calculate distance between two GPS coordinates (Haversine formula)
+function calculateDistance(lat1, lon1, lat2, lon2) {
+  const R = 6371e3; // Earth's radius in meters
+  const φ1 = (lat1 * Math.PI) / 180;
+  const φ2 = (lat2 * Math.PI) / 180;
+  const Δφ = ((lat2 - lat1) * Math.PI) / 180;
+  const Δλ = ((lon2 - lon1) * Math.PI) / 180;
+
+  const a =
+    Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
+    Math.cos(φ1) * Math.cos(φ2) * Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
+  return R * c; // Distance in meters
+}
+    const ip = req.ip || req.connection.remoteAddress || 'unknown';
+    const studentId = req.body?.studentId || '';
+    return `quiz:${ip}:${studentId}`;
+  },
+});
 
 router.get('/', authMiddleware, async (req, res) => {
   try {
@@ -309,6 +338,50 @@ router.post('/:id/quiz/start', async (req, res) => {
   }
 });
 
+/**
+ * PUT /api/sessions/:id/quiz/edit
+ * Edit existing quiz questions (teacher only)
+ */
+router.put('/:id/quiz/edit', authMiddleware, async (req, res) => {
+  try {
+    const db = await connectToDatabase();
+    const sessionId = req.params.id;
+    const { quizId, questions, title } = req.body;
+    const teacherId = req.user?.id;
+
+    if (!quizId) {
+      return res.status(400).json({ error: 'quizId is required' });
+    }
+
+    const session = await db.collection(COLLECTIONS.CLASS_SESSIONS).findOne({ _id: new ObjectId(sessionId) });
+    if (!session) {
+      return res.status(404).json({ error: 'Session not found' });
+    }
+
+    // Verify teacher owns this session
+    if (session.teacherId !== teacherId) {
+      return res.status(403).json({ error: 'Not authorized to edit this quiz' });
+    }
+
+    const updateData = {};
+    if (questions) updateData.questions = questions;
+    if (title) updateData.title = title;
+    updateData.updatedAt = new Date();
+
+    await db.collection(COLLECTIONS.QUIZZES).updateOne(
+      { _id: new ObjectId(quizId) },
+      { $set: updateData }
+    );
+
+    const updatedQuiz = await db.collection(COLLECTIONS.QUIZZES).findOne({ _id: new ObjectId(quizId) });
+
+    res.json({ ok: true, quiz: { ...updatedQuiz, id: updatedQuiz._id.toString() } });
+  } catch (error) {
+    console.error('Edit quiz error:', error);
+    res.status(500).json({ error: 'Failed to edit quiz' });
+  }
+});
+
 router.post('/:id/quiz/next', async (req, res) => {
   try {
     const db = await connectToDatabase();
@@ -359,14 +432,48 @@ router.post('/:id/attendance', async (req, res) => {
   try {
     const db = await connectToDatabase();
     const sessionId = req.params.id;
-    const { studentId, status } = req.body;
+    const { studentId, status, location } = req.body;
     const room = `session-${sessionId}`;
+
+    // Get session to check location settings
+    const session = await db.collection(COLLECTIONS.CLASS_SESSIONS).findOne({
+      _id: new ObjectId(sessionId)
+    });
+
+    // Validate location if required
+    if (session?.locationEnabled && session?.locationAnchor) {
+      if (!location || !location.latitude || !location.longitude) {
+        return res.status(400).json({ 
+          error: 'Location is required for this session',
+          locationRequired: true,
+        });
+      }
+
+      const distance = calculateDistance(
+        location.latitude,
+        location.longitude,
+        session.locationAnchor.lat,
+        session.locationAnchor.lng
+      );
+
+      if (distance > (session.locationRadius || 100)) {
+        return res.status(403).json({
+          error: 'You are too far from the class location',
+          distance,
+          maxDistance: session.locationRadius,
+          locationRequired: true,
+        });
+      }
+    }
 
     const attendance = {
       sessionId: new ObjectId(sessionId),
       studentId,
-      status: status || 'present',
+      classId: session?.classId || null,
+      teacherId: session?.teacherId || null,
+      status: status || 'Present',
       markedAt: new Date(),
+      locationVerified: session?.locationEnabled ? true : undefined,
       _id: new ObjectId(),
       createdAt: new Date(),
     };
@@ -425,32 +532,49 @@ router.get('/code/:code/verify', async (req, res) => {
   }
 });
 
-router.post('/:id/quiz/submit', async (req, res) => {
-  try {
-    const db = await connectToDatabase();
-    const sessionId = req.params.id;
-    const { studentId, answers } = req.body;
-    const room = `session-${sessionId}`;
+router.post('/:id/quiz/submit', 
+  authMiddleware, 
+  quizSubmitRateLimiter.middleware(),
+  async (req, res) => {
+    try {
+      const db = await connectToDatabase();
+      const sessionId = req.params.id;
+      const { studentId, answers } = req.body;
+      const room = `session-${sessionId}`;
 
-    if (!studentId || !answers) {
-      return res.status(400).json({ error: 'studentId and answers are required' });
-    }
+      if (!studentId || !answers) {
+        return res.status(400).json({ error: 'studentId and answers are required' });
+      }
 
-    // Get session to have access to teacherId
-    const session = await db.collection(COLLECTIONS.CLASS_SESSIONS).findOne(
-      { _id: new ObjectId(sessionId) }
-    );
+      // Check for duplicate submission
+      const existingAttempt = await db.collection(COLLECTIONS.QUIZ_ATTEMPTS).findOne({
+        sessionId: new ObjectId(sessionId),
+        studentId,
+      });
+      
+      if (existingAttempt) {
+        return res.status(409).json({ 
+          error: 'You have already submitted this quiz',
+          existingAttemptId: existingAttempt._id.toString(),
+          originalScore: existingAttempt.score,
+        });
+      }
 
-    const quiz = await db.collection(COLLECTIONS.QUIZZES).findOne(
-      { sessionId: new ObjectId(sessionId) },
-      { sort: { createdAt: -1 } }
-    );
+      // Get session to have access to teacherId
+      const session = await db.collection(COLLECTIONS.CLASS_SESSIONS).findOne(
+        { _id: new ObjectId(sessionId) }
+      );
 
-    if (!quiz) {
-      return res.status(404).json({ error: 'No quiz found for this session' });
-    }
+      const quiz = await db.collection(COLLECTIONS.QUIZZES).findOne(
+        { sessionId: new ObjectId(sessionId) },
+        { sort: { createdAt: -1 } }
+      );
 
-    let correctCount = 0;
+      if (!quiz) {
+        return res.status(404).json({ error: 'No quiz found for this session' });
+      }
+
+      let correctCount = 0;
     const results = quiz.questions.map((question, index) => {
       const studentAnswer = answers[index]?.answer || '';
       const isCorrect = studentAnswer.toUpperCase().trim() === question.correctAnswer?.toUpperCase().trim();
@@ -594,16 +718,13 @@ router.post('/:id/quiz/submit', async (req, res) => {
 
     // Broadcast XP update for leaderboard refresh
     if (xpAwarded > 0) {
-      broadcastToUser(studentId, 'xp_updated', {
-        studentId,
-        xpAwarded,
-        coinsAwarded,
-        totalXp: 0, // Client will need to refetch
-      });
       broadcastToAll('xp_updated', {
         studentId,
+        xp: updatedUser?.xp || 0,
+        coins: updatedUser?.coins || 0,
         xpAwarded,
         coinsAwarded,
+        totalXp: updatedUser?.xp || 0,
       });
     }
 

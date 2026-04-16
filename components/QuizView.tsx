@@ -1,11 +1,14 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import type { QuizQuestion } from '../types';
+import { submitQuiz } from '../services/dataService';
 
 interface QuizViewProps {
   quiz: QuizQuestion[];
   subject: string;
-  onSubmit: (score: number) => void;
+  sessionId?: string;
+  studentId?: string;
+  onSubmit: (score: number, result?: any) => void;
   theme: string;
 }
 
@@ -101,7 +104,7 @@ const BADGE_ICONS: Record<string, string> = {
   'High Achiever': '🏆',
 };
 
-const QuizView: React.FC<QuizViewProps> = ({ quiz, subject, onSubmit, theme }) => {
+const QuizView: React.FC<QuizViewProps> = ({ quiz, subject, sessionId, studentId, onSubmit, theme }) => {
   const [currentQuestion, setCurrentQuestion] = useState(0);
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [submitted, setSubmitted] = useState(false);
@@ -153,7 +156,7 @@ const QuizView: React.FC<QuizViewProps> = ({ quiz, subject, onSubmit, theme }) =
     }, 500);
   }, [answers, quiz, currentQuestion, bestStreak]);
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     try {
       if (!Array.isArray(quiz) || quiz.length === 0) {
         throw new Error('No quiz available.');
@@ -173,12 +176,30 @@ const QuizView: React.FC<QuizViewProps> = ({ quiz, subject, onSubmit, theme }) =
       }
       const finalScore = Math.round((correctAnswers / quiz.length) * 100);
 
-      // Calculate gamification rewards
+      // RT-3: Call backend API and get server response with XP
+      let serverResult: any = null;
+      if (sessionId && studentId) {
+        try {
+          serverResult = await submitQuiz(
+            sessionId,
+            studentId,
+            quiz.map((q, index) => ({ answer: answers[q.id] || '' }))
+          );
+          if (serverResult) {
+            setXpEarned(serverResult.xpAwarded || 0);
+            setCoinsEarned(serverResult.coinsAwarded || 0);
+          }
+        } catch (err) {
+          console.warn('Failed to submit quiz to server:', err);
+        }
+      }
+
+      // Calculate local gamification rewards if server call failed
       const baseXp = Math.max(1, Math.round(finalScore));
       const streakBonus = maxStreak >= 3 ? maxStreak * 5 : 0;
       const timeBonus = timeLeft > 0 ? Math.round(timeLeft / totalTime * 20) : 0;
-      const totalXp = baseXp + streakBonus + timeBonus;
-      const coins = Math.floor(correctAnswers * 2) + (finalScore === 100 ? 10 : 0);
+      const totalXp = serverResult?.xpAwarded || (baseXp + streakBonus + timeBonus);
+      const coins = serverResult?.coinsAwarded || (Math.floor(correctAnswers * 2) + (finalScore === 100 ? 10 : 0));
 
       // Determine earned badges
       const badges: string[] = [];
@@ -189,14 +210,16 @@ const QuizView: React.FC<QuizViewProps> = ({ quiz, subject, onSubmit, theme }) =
       if (finalScore >= 80) badges.push('High Achiever');
 
       setBestStreak(maxStreak);
-      setXpEarned(totalXp);
-      setCoinsEarned(coins);
+      if (!serverResult) {
+        setXpEarned(totalXp);
+        setCoinsEarned(coins);
+      }
       setEarnedBadges(badges);
       setScore(finalScore);
       setSubmitted(true);
       setShowConfetti(true);
       setShowXpFly(true);
-      onSubmit(finalScore);
+      onSubmit(finalScore, serverResult);
 
       setTimeout(() => setShowConfetti(false), 3000);
       setTimeout(() => setShowXpFly(false), 2000);

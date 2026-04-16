@@ -125,14 +125,15 @@ async function verifyFaceWithApi(userId, faceImage, sessionId, classId) {
     await db.collection(COLLECTIONS.AUDIT_FACE_VERIFY).insertOne({
       userId,
       similarity: parseFloat(similarity.toFixed(4)),
-      livenessScore: 1.0,
-      livenessPassed: true,
+      livenessScore: faceApi ? 1.0 : null,
+      livenessPassed: faceApi ? true : false,
       authenticated: similarity >= 0.6,
       timestamp: new Date(),
       location: null,
+      fallbackUsed: !faceApi,
     });
     
-    return { authenticated: similarity >= 0.6, confidence: parseFloat(similarity.toFixed(2)) };
+    return { authenticated: similarity >= 0.6, confidence: parseFloat(similarity.toFixed(2)), fallbackUsed: !faceApi };
   } catch (error) {
     console.error('Face verify error:', error);
     return { authenticated: false, error: error.message };
@@ -252,6 +253,7 @@ router.post('/', authMiddleware, validateBody(attendanceSchemas.create), async (
         studentId,
         classId: classId || null,
         sessionId: sessionId || null,
+        teacherId: session?.teacherId || null,
         status,
         notes: notes || null,
         timestamp: new Date(),
@@ -330,8 +332,10 @@ router.post('/', authMiddleware, validateBody(attendanceSchemas.create), async (
     }
 
     const isPresent = status === 'Present' || status === 'present';
+    let xpAwarded = 0;
     if (isPresent && sessionId) {
       const XP_ATTENDANCE = 20;
+      xpAwarded = XP_ATTENDANCE;
       await db.collection(COLLECTIONS.USERS).updateOne(
         { _id: new ObjectId(studentId) },
         { 
@@ -358,7 +362,7 @@ router.post('/', authMiddleware, validateBody(attendanceSchemas.create), async (
     res.status(201).json({
       ok: true,
       record: { id: recordId, studentId, classId, sessionId, status },
-      xpAwarded: isPresent && sessionId ? XP_ATTENDANCE : 0,
+      xpAwarded: isPresent && sessionId ? xpAwarded : 0,
       alreadyMarked: !isNewRecord,
     });
   } catch (error) {

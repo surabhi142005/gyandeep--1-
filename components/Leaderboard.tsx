@@ -1,5 +1,6 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import type { Student } from '../types';
+import { realtimeClient } from '../services/realtimeClient';
 
 interface LeaderboardProps {
   students: Student[];
@@ -18,12 +19,37 @@ const RANK_ICONS = ['🥇', '🥈', '🥉'];
 
 const Leaderboard: React.FC<LeaderboardProps> = ({ students, currentStudentId, theme }) => {
   const colors = useMemo(() => THEME_COLORS[theme] || THEME_COLORS.indigo, [theme]);
+  
+  // RT-5: Live students state for real-time updates
+  const [liveStudents, setLiveStudents] = useState(students);
+  
+  useEffect(() => {
+    setLiveStudents(students);
+  }, [students]);
+  
+  // RT-5: Subscribe to XP updates
+  useEffect(() => {
+    const unsubXp = realtimeClient.on('xp_updated', (data) => {
+      setLiveStudents(prev => prev.map(s => {
+        if (s.id === data.studentId) {
+          return { 
+            ...s, 
+            xp: data.totalXp ?? data.xp ?? s.xp,
+            coins: data.totalCoins ?? data.coins ?? s.coins,
+          };
+        }
+        return s;
+      }));
+    });
+
+    return () => unsubXp();
+  }, []);
 
   const ranked = useMemo(() => {
-    return [...students]
+    return [...liveStudents]
       .sort((a, b) => (b.xp || 0) - (a.xp || 0))
       .slice(0, 10);
-  }, [students]);
+  }, [liveStudents]);
 
   if (ranked.length === 0) {
     return (

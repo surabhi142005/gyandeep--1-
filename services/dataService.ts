@@ -6,7 +6,6 @@
  */
 
 import { websocketService } from './websocketService';
-import { getStoredToken } from './authService';
 import { getCSRFHeaders } from './csrfService';
 
 const API_BASE = import.meta.env.VITE_API_URL || '';
@@ -25,13 +24,11 @@ const uid = () => {
 const idempotencyKey = (prefix: string) => `gd-${prefix}-${uid()}`;
 
 async function apiRequest(path: string, init: RequestInit = {}) {
-  const token = getStoredToken();
   const csrfHeaders = await getCSRFHeaders();
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
     ...csrfHeaders,
     ...(init.headers as Record<string, string> || {}),
-    ...(token ? { Authorization: `Bearer ${token}` } : {}),
   };
 
   const res = await fetch(`${API_BASE}${path}`, { ...init, headers, credentials: 'include' });
@@ -663,8 +660,21 @@ export const fetchWeeklyAttendance = async (classId: string) => {
   return Array.isArray(data) ? data : [];
 };
 
+export const fetchSessionAttendance = async (sessionId: string) => {
+  const data = await apiRequest(`/api/attendance?sessionId=${sessionId}`, { method: 'GET' });
+  return Array.isArray(data) ? data : (data?.items || []);
+};
+
 export const verifySessionCode = async (code: string) => {
   return apiRequest(`/api/sessions/code/${code.toUpperCase()}/verify`, { method: 'GET' });
+};
+
+export const fetchActiveSession = async (teacherId: string) => {
+  return apiRequest(`/api/sessions/active?teacherId=${teacherId}`, { method: 'GET' });
+};
+
+export const fetchSessionById = async (sessionId: string) => {
+  return apiRequest(`/api/sessions/${sessionId}`, { method: 'GET' });
 };
 
 export const submitQuiz = async (sessionId: string, studentId: string, answers: Array<{ answer: string }>) => {
@@ -701,5 +711,5 @@ export const fetchStudentPerformance = async (studentId: string, startDate?: str
   if (startDate) params.set('startDate', startDate);
   if (endDate) params.set('endDate', endDate);
   const queryString = params.toString();
-  return apiRequest(`/api/analytics/student-performance/${studentId}${queryString ? `?${queryString}` : ''}`, { method: 'GET' });
+  return apiRequest(`/api/analytics/student/${studentId}/performance${queryString ? `?${queryString}` : ''}`, { method: 'GET' });
 };

@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server';
-import { json, auth } from '../../../lib/auth';
+import { json, requireAuth } from '../../../lib/auth';
 
 /**
  * api/integrations/drive/upload.ts
@@ -8,7 +8,7 @@ import { json, auth } from '../../../lib/auth';
 
 export async function POST(request: NextRequest) {
   try {
-    const user = await auth();
+    const user = requireAuth(request);
     if (!user) return json({ error: 'Unauthorized' }, 401);
 
     const { name, url } = await request.json();

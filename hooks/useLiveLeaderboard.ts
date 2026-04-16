@@ -89,8 +89,8 @@ export function useLiveLeaderboard({ currentUserId, classId }: UseLiveLeaderboar
           if (entry.id === data.studentId) {
             return {
               ...entry,
-              xp: entry.xp + (data.xpAwarded || 0),
-              coins: entry.coins + (data.coinsAwarded || 0),
+              xp: data.totalXp ?? data.xp ?? entry.xp,
+              coins: data.coins ?? entry.coins,
             };
           }
           return entry;

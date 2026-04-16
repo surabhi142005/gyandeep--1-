@@ -1,6 +1,6 @@
 import { NextRequest } from 'next/server';
 import { prisma } from '../../../lib/db';
-import { json, auth } from '../../../lib/auth';
+import { json, requireAuth } from '../../../lib/auth';
 
 /**
  * api/sessions/[id]/index.ts
@@ -9,7 +9,7 @@ import { json, auth } from '../../../lib/auth';
 
 export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
   try {
-    const user = await auth();
+    const user = requireAuth(request);
     if (!user) return json({ error: 'Unauthorized' }, 401);
 
     const sessionId = params.id;
@@ -39,7 +39,7 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
  */
 export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
   try {
-    const user = await auth();
+    const user = requireAuth(request);
     if (!user) return json({ error: 'Unauthorized' }, 401);
     if (!['teacher', 'admin'].includes(user.role)) return json({ error: 'Forbidden' }, 403);
 
