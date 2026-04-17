@@ -4,7 +4,7 @@
  */
 
 import * as Sentry from '@sentry/node';
-import { nodeProfilingIntegration } from '@sentry/profiling-node';
+import { ProfilingIntegration } from '@sentry/profiling-node';
 
 const SENTRY_DSN = process.env.SENTRY_DSN;
 const NODE_ENV = process.env.NODE_ENV || 'development';
@@ -24,7 +24,7 @@ export function initSentry() {
       environment: NODE_ENV,
       release: RELEASE,
       integrations: [
-        nodeProfilingIntegration(),
+        new ProfilingIntegration(),
         new Sentry.Integrations.Http({ tracing: true }),
         new Sentry.Integrations.Express(),
         new Sentry.Integrations.Mongo(),
