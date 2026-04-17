@@ -122,6 +122,7 @@ export default defineConfig(({ mode }) => {
     ],
     resolve: {
       alias: { '@': path.resolve(__dirname, '.') },
+      dedupe: ['react', 'react-dom'],
     },
     build: {
       target: 'es2020',
@@ -144,6 +145,7 @@ export default defineConfig(({ mode }) => {
       __VITE_WS_URL__: JSON.stringify(env.VITE_WS_URL || ''),
     },
     optimizeDeps: {
+      include: ['react', 'react-dom'],
       exclude: ['@sentry/browser', '@sentry/profiling-web'],
     },
   };

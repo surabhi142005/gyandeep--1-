@@ -5,7 +5,7 @@
   "framework": "vite",
   "rewrites": [
     { "source": "/api/:path*", "destination": "/api/index.ts" },
-    { "source": "/((?!api|assets|icons|styles|_next).*)", "destination": "/index.html" }
+    { "source": "/((?!api|assets|icons|styles|_next|.*\\..*).*)", "destination": "/index.html" }
   ],
   "headers": [
     {

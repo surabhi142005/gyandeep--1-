@@ -4,6 +4,7 @@
  */
 
 import 'dotenv/config';
+import path from 'path';
 import express from 'express';
 import { createServer } from 'http';
 import cors from 'cors';
@@ -189,9 +190,11 @@ app.use('/api/admin/audit-logs', csrfProtection, auditLogsRouter);
 // Teacher stats routes with CSRF protection
 app.use('/api/teacher', csrfProtection, teacherStatsRouter);
 
-// Create HTTP server and attach WebSocket
+// Create HTTP server and attach WebSocket (only if not on Vercel)
 const server = createServer(app);
-setupWebSocket(server);
+if (!process.env.VERCEL) {
+  setupWebSocket(server);
+}
 
 import { initSentry, setupSentryErrorHandlers } from './services/sentry.js';
 
@@ -205,10 +208,30 @@ setupSentryErrorHandlers(app);
 // Global error handler
 app.use(errorHandler);
 
-// 404 handler
-app.use((req, res) => {
-  res.status(404).json({ error: 'Not found' });
-});
+// Serve static files from dist folder in production
+if (process.env.NODE_ENV === 'production') {
+  app.use(express.static(path.join(process.cwd(), 'dist'), {
+    setHeaders: (res, filePath) => {
+      if (filePath.endsWith('.webmanifest')) {
+        res.setHeader('Content-Type', 'application/manifest+json');
+      }
+    }
+  }));
+
+  // SPA fallback - serve index.html for non-API routes
+  app.get('*', (req, res) => {
+    if (!req.path.startsWith('/api/') && !req.path.startsWith('/auth/') && !req.path.startsWith('/storage/')) {
+      res.sendFile(path.join(process.cwd(), 'dist', 'index.html'));
+    } else {
+      res.status(404).json({ error: 'Not found' });
+    }
+  });
+} else {
+  // 404 handler for development
+  app.use((req, res) => {
+    res.status(404).json({ error: 'Not found' });
+  });
+}
 
 // Start server only if not running on Vercel
 if (process.env.NODE_ENV !== 'production' || !process.env.VERCEL) {

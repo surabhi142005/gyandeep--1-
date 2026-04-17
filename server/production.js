@@ -10,6 +10,7 @@ const { connectToDatabase } = require('./db/mongoAtlas');
 const { standardRateLimiter, authRateLimiter } = require('./middleware/rateLimiter');
 const { securityHeaders, csrfProtection } = require('./middleware/security');
 
+const path = require('path');
 const app = express();
 const PORT = process.env.PORT || 3001;
 const isProduction = process.env.NODE_ENV === 'production';
@@ -17,6 +18,15 @@ const BODY_SIZE_LIMIT = process.env.BODY_SIZE_LIMIT || '10mb';
 
 // Security headers
 app.use(securityHeaders);
+
+// Serve static files from dist folder (frontend build)
+app.use(express.static(path.join(__dirname, '../dist'), {
+  setHeaders: (res, filePath) => {
+    if (filePath.endsWith('.webmanifest')) {
+      res.setHeader('Content-Type', 'application/manifest+json');
+    }
+  }
+}));
 
 // Cookie parser
 app.use(cookieParser());
@@ -119,6 +129,15 @@ app.use('/api/teacher', csrfProtection, teacherStatsRouter);
 app.use('/api', csrfProtection, aiRouter);
 app.use('/api', csrfProtection, emailRouter);
 app.use('/api/admin/audit-logs', csrfProtection, auditLogsRouter);
+
+// SPA fallback - serve index.html for non-API routes (client-side routing)
+app.get('*', (req, res) => {
+  if (!req.path.startsWith('/api/') && !req.path.startsWith('/auth/') && !req.path.startsWith('/storage/')) {
+    res.sendFile(path.join(__dirname, '../dist/index.html'));
+  } else {
+    res.status(404).json({ error: 'Not found' });
+  }
+});
 
 // Graceful shutdown
 process.on('SIGTERM', async () => {

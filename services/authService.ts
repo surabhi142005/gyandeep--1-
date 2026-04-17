@@ -203,7 +203,7 @@ export async function login(email: string, password: string) {
 }
 
 export async function loginWithGoogle() {
-  window.location.href = `${API_BASE}/auth/google`;
+  window.location.href = `${API_BASE}/api/google/auth/google`;
   return null;
 }
 

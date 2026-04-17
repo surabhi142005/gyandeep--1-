@@ -1,17 +1,16 @@
 /**
- * lib/faceRecognition.ts
- * Face-api.js configuration and utilities
+ * @vladmandic/face-api configuration and utilities
  */
 
 let modelsLoaded = false;
 
 export async function loadFaceModels(): Promise<void> {
   if (modelsLoaded) return;
-  
+
   try {
-    const faceapi = await import('face-api.js');
+    const faceapi = await import('@vladmandic/face-api');
     const MODEL_URL = '/models';
-    
+
     await Promise.all([
       faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL),
       faceapi.nets.faceLandmark68TinyNet.loadFromUri(MODEL_URL),
@@ -34,7 +33,7 @@ export async function isModelLoaded(): Promise<boolean> {
 export async function detectFace(
   image: HTMLVideoElement | HTMLImageElement | HTMLCanvasElement
 ): Promise<any[]> {
-  const faceapi: any = await import('face-api.js');
+  const faceapi: any = await import('@vladmandic/face-api');
   await isModelLoaded();
   
   const detections = await faceapi.detectAllFaces(
@@ -75,7 +74,7 @@ export async function captureFaceFromVideo(video: HTMLVideoElement): Promise<str
 export async function computeDescriptor(
   image: HTMLVideoElement | HTMLImageElement | HTMLCanvasElement
 ): Promise<Float32Array> {
-  await import('face-api.js');
+  await import('@vladmandic/face-api');
   await isModelLoaded();
   
   const detections = await detectFace(image);
@@ -95,7 +94,7 @@ export async function compareDescriptors(
   descriptor1: Float32Array,
   descriptor2: Float32Array
 ): Promise<{ match: boolean; distance: number; confidence: number }> {
-  const faceapi = await import('face-api.js');
+  const faceapi = await import('@vladmandic/face-api');
   
   const distance = faceapi.euclideanDistance(descriptor1, descriptor2);
   const matchThreshold = 0.6;
