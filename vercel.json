@@ -22,12 +22,6 @@
       ]
     },
     {
-      "source": "/icons/(.*)",
-      "headers": [
-        { "key": "Cache-Control", "value": "public, max-age=86400" }
-      ]
-    },
-    {
       "source": "/api/(.*)",
       "headers": [
         { "key": "X-Content-Type-Options", "value": "nosniff" },
@@ -35,19 +29,5 @@
         { "key": "X-XSS-Protection", "value": "1; mode=block" }
       ]
     }
-  ],
-  "env": {
-    "MONGODB_URI": "@gyandeep-mongodb-uri",
-    "MONGODB_DB": "@gyandeep-mongodb-db",
-    "JWT_SECRET": "@gyandeep-jwt-secret",
-    "JWT_REFRESH_SECRET": "@gyandeep-jwt-refresh-secret",
-    "GEMINI_API_KEY": "@gyandeep-gemini-api-key",
-    "RESEND_API_KEY": "@gyandeep-resend-api-key",
-    "R2_ACCOUNT_ID": "@gyandeep-r2-account-id",
-    "R2_ACCESS_KEY_ID": "@gyandeep-r2-access-key-id",
-    "R2_SECRET_ACCESS_KEY": "@gyandeep-r2-secret-access-key",
-    "R2_BUCKET_NAME": "@gyandeep-r2-bucket-name",
-    "R2_PUBLIC_URL": "@gyandeep-r2-public-url",
-    "ALLOWED_ORIGINS": "@gyandeep-allowed-origins"
-  }
+  ]
 }
