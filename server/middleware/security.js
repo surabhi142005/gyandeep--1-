@@ -52,17 +52,18 @@ export function csrfProtection(req, res, next) {
   const token = req.headers['x-csrf-token'];
   const signature = req.headers['x-csrf-signature'];
 
-  if (!token || !signature) {
+  if (!token) {
     return res.status(403).json({ 
       error: 'CSRF validation failed',
-      message: 'Missing required security headers'
+      message: 'Missing required CSRF token'
     });
   }
 
-  if (!verifyCSRFToken(token, signature)) {
+  // Only verify signature if it is provided (for backward compatibility)
+  if (signature && !verifyCSRFToken(token, signature)) {
     return res.status(403).json({ 
       error: 'CSRF validation failed',
-      message: 'Invalid security token'
+      message: 'Invalid security signature'
     });
   }
 

@@ -10,10 +10,6 @@ import { getCSRFHeaders } from './csrfService';
 
 const API_BASE = import.meta.env.VITE_API_URL || '';
 
-if (!API_BASE) {
-  console.error('[dataService] VITE_API_URL not configured. Set in .env file');
-}
-
 const uid = () => {
   try {
     if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') return crypto.randomUUID();
