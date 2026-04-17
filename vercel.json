@@ -3,15 +3,8 @@
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
   "framework": "vite",
-  "functions": {
-    "api/**/*.ts": {
-      "runtime": "nodejs18.x",
-      "memory": 1024,
-      "maxDuration": 30
-    }
-  },
   "rewrites": [
-    { "source": "/api/:path*", "destination": "/api/:path*" },
+    { "source": "/api/:path*", "destination": "/api/index.ts" },
     { "source": "/((?!api|assets|icons|styles|_next).*)", "destination": "/index.html" }
   ],
   "headers": [

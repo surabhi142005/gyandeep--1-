@@ -210,12 +210,14 @@ app.use((req, res) => {
   res.status(404).json({ error: 'Not found' });
 });
 
-// Start server
-server.listen(PORT, () => {
-  console.log(`🚀 Server running on http://localhost:${PORT}`);
-  console.log(`📊 Health check: http://localhost:${PORT}/api/health`);
-  console.log(`🔌 WebSocket: ws://localhost:${PORT}/ws`);
-});
+// Start server only if not running on Vercel
+if (process.env.NODE_ENV !== 'production' || !process.env.VERCEL) {
+  server.listen(PORT, () => {
+    console.log(`🚀 Server running on http://localhost:${PORT}`);
+    console.log(`📊 Health check: http://localhost:${PORT}/api/health`);
+    console.log(`🔌 WebSocket: ws://localhost:${PORT}/ws`);
+  });
+}
 
 export default app;
 export { server };
