@@ -63,14 +63,27 @@ const getCorsOrigins = () => {
   }
   
   if (process.env.ALLOWED_ORIGINS) {
+    if (process.env.ALLOWED_ORIGINS === '*') return '*';
     origins.push(...process.env.ALLOWED_ORIGINS.split(',').map(o => o.trim()).filter(Boolean));
   }
   
   return origins.length > 0 ? origins : '*';
 };
 
+const allowedOrigins = getCorsOrigins();
+
 app.use(cors({
-  origin: getCorsOrigins(),
+  origin: (origin, callback) => {
+    // Allow requests with no origin (like mobile apps or curl requests)
+    if (!origin) return callback(null, true);
+    
+    if (allowedOrigins === '*' || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      console.warn(`[CORS] Origin ${origin} not allowed`);
+      callback(null, false); // Don't throw error, just disallow
+    }
+  },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-CSRF-Token', 'X-CSRF-Signature', 'X-Session-Secret'],
