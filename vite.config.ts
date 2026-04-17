@@ -32,8 +32,8 @@ export default defineConfig(({ mode }) => {
           start_url: '/',
           categories: ['education'],
           icons: [
-            { src: '/icons/icon-192x192.png', sizes: '192x192', type: 'image/png' },
-            { src: '/icons/icon-512x512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
+            { src: '/icons/icon-192x192.svg', sizes: '192x192', type: 'image/svg+xml' },
+            { src: '/icons/icon-192x192.svg', sizes: '512x512', type: 'image/svg+xml', purpose: 'maskable' },
           ],
           shortcuts: [
             {
@@ -41,14 +41,14 @@ export default defineConfig(({ mode }) => {
               short_name: 'Dashboard',
               description: 'View your dashboard',
               url: '/dashboard',
-              icons: [{ src: '/icons/icon-192x192.png', sizes: '192x192' }],
+              icons: [{ src: '/icons/icon-192x192.svg', sizes: '192x192' }],
             },
             {
               name: 'Attendance',
               short_name: 'Attendance',
               description: 'Mark your attendance',
               url: '/attendance',
-              icons: [{ src: '/icons/icon-192x192.png', sizes: '192x192' }],
+              icons: [{ src: '/icons/icon-192x192.svg', sizes: '192x192' }],
             },
           ],
         },
@@ -78,14 +78,6 @@ export default defineConfig(({ mode }) => {
               options: {
                 cacheName: 'image-cache',
                 expiration: { maxEntries: 50, maxAgeSeconds: 86400 },
-              },
-            },
-            {
-              urlPattern: /\/_next\/static\/.*/i,
-              handler: 'CacheFirst',
-              options: {
-                cacheName: 'static-cache',
-                expiration: { maxEntries: 100, maxAgeSeconds: 604800 },
               },
             },
             {
@@ -125,17 +117,11 @@ export default defineConfig(({ mode }) => {
       dedupe: ['react', 'react-dom'],
     },
     build: {
-      target: 'es2020',
-      chunkSizeWarningLimit: 600,
+      target: 'esnext',
+      chunkSizeWarningLimit: 1000,
       rollupOptions: {
         output: {
-          manualChunks(id) {
-            if (!id.includes('node_modules')) return;
-            if (id.includes('react') || id.includes('react-dom')) return 'vendor-react';
-            if (id.includes('framer-motion'))                      return 'vendor-motion';
-            if (id.includes('recharts') || id.includes('chart.js') || id.includes('react-chartjs')) return 'vendor-charts';
-            return 'vendor';
-          },
+          // Simplified output to prevent React Children error
         },
       },
       sourcemap: mode !== 'production',
