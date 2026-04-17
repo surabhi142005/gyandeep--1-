@@ -4,7 +4,6 @@
  */
 
 import express from 'express';
-import fetch from 'node-fetch';
 const router = express.Router();
 
 const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models';
