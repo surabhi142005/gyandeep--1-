@@ -162,52 +162,62 @@ export async function healthCheck() {
   }
 }
 
+async function tryCreateIndex(collection, index, options = {}) {
+  try {
+    await collection.createIndex(index, options);
+  } catch (e) {
+    if (!e.message.includes('Index already exists')) {
+      console.warn(`[MongoDB] Index warning: ${e.message}`);
+    }
+  }
+}
+
 export async function createIndexes() {
   const db = await connectToDatabase();
   
   try {
-    await db.collection(COLLECTIONS.USERS).createIndex({ email: 1 }, { unique: true });
-    await db.collection(COLLECTIONS.USERS).createIndex({ role: 1 });
-    await db.collection(COLLECTIONS.USERS).createIndex({ classId: 1 });
-    await db.collection(COLLECTIONS.USERS).createIndex({ createdAt: -1 });
+    await tryCreateIndex(db.collection(COLLECTIONS.USERS), { email: 1 }, { unique: true });
+    await tryCreateIndex(db.collection(COLLECTIONS.USERS), { role: 1 });
+    await tryCreateIndex(db.collection(COLLECTIONS.USERS), { classId: 1 });
+    await tryCreateIndex(db.collection(COLLECTIONS.USERS), { createdAt: -1 });
     
-    await db.collection(COLLECTIONS.ATTENDANCE).createIndex({ studentId: 1, timestamp: -1 });
-    await db.collection(COLLECTIONS.ATTENDANCE).createIndex({ classId: 1, timestamp: -1 });
-    await db.collection(COLLECTIONS.ATTENDANCE).createIndex({ sessionId: 1 });
+    await tryCreateIndex(db.collection(COLLECTIONS.ATTENDANCE), { studentId: 1, timestamp: -1 });
+    await tryCreateIndex(db.collection(COLLECTIONS.ATTENDANCE), { classId: 1, timestamp: -1 });
+    await tryCreateIndex(db.collection(COLLECTIONS.ATTENDANCE), { sessionId: 1 });
     
-    await db.collection(COLLECTIONS.GRADES).createIndex({ studentId: 1, subjectId: 1 });
-    await db.collection(COLLECTIONS.GRADES).createIndex({ studentId: 1, gradedAt: -1 });
-    await db.collection(COLLECTIONS.GRADES).createIndex({ subjectId: 1 });
+    await tryCreateIndex(db.collection(COLLECTIONS.GRADES), { studentId: 1, subjectId: 1 });
+    await tryCreateIndex(db.collection(COLLECTIONS.GRADES), { studentId: 1, gradedAt: -1 });
+    await tryCreateIndex(db.collection(COLLECTIONS.GRADES), { subjectId: 1 });
     
-    await db.collection(COLLECTIONS.FACE_EMBEDDINGS).createIndex({ userId: 1 }, { unique: true });
+    await tryCreateIndex(db.collection(COLLECTIONS.FACE_EMBEDDINGS), { userId: 1 }, { unique: true });
     
-    await db.collection(COLLECTIONS.PASSWORD_RESETS).createIndex({ email: 1, code: 1 });
-    await db.collection(COLLECTIONS.PASSWORD_RESETS).createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0 });
+    await tryCreateIndex(db.collection(COLLECTIONS.PASSWORD_RESETS), { email: 1, code: 1 });
+    await tryCreateIndex(db.collection(COLLECTIONS.PASSWORD_RESETS), { expiresAt: 1 }, { expireAfterSeconds: 0 });
     
-    await db.collection(COLLECTIONS.EMAIL_VERIFICATIONS).createIndex({ email: 1 });
-    await db.collection(COLLECTIONS.EMAIL_VERIFICATIONS).createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0 });
+    await tryCreateIndex(db.collection(COLLECTIONS.EMAIL_VERIFICATIONS), { email: 1 });
+    await tryCreateIndex(db.collection(COLLECTIONS.EMAIL_VERIFICATIONS), { expiresAt: 1 }, { expireAfterSeconds: 0 });
     
-    await db.collection(COLLECTIONS.TICKETS).createIndex({ status: 1, createdAt: -1 });
-    await db.collection(COLLECTIONS.TICKETS).createIndex({ assignedToId: 1 });
+    await tryCreateIndex(db.collection(COLLECTIONS.TICKETS), { status: 1, createdAt: -1 });
+    await tryCreateIndex(db.collection(COLLECTIONS.TICKETS), { assignedToId: 1 });
     
-    await db.collection(COLLECTIONS.TICKET_REPLIES).createIndex({ ticketId: 1, createdAt: 1 });
+    await tryCreateIndex(db.collection(COLLECTIONS.TICKET_REPLIES), { ticketId: 1, createdAt: 1 });
     
-    await db.collection(COLLECTIONS.CLASS_SESSIONS).createIndex({ classId: 1, startTime: 1 });
+    await tryCreateIndex(db.collection(COLLECTIONS.CLASS_SESSIONS), { classId: 1, startTime: 1 });
     
-    await db.collection(COLLECTIONS.TIMETABLE).createIndex({ classId: 1, dayOfWeek: 1 });
+    await tryCreateIndex(db.collection(COLLECTIONS.TIMETABLE), { classId: 1, dayOfWeek: 1 });
     
-    await db.collection(COLLECTIONS.NOTIFICATIONS).createIndex({ userId: 1, read: 1 });
-    await db.collection(COLLECTIONS.NOTIFICATIONS).createIndex({ createdAt: -1 });
+    await tryCreateIndex(db.collection(COLLECTIONS.NOTIFICATIONS), { userId: 1, read: 1 });
+    await tryCreateIndex(db.collection(COLLECTIONS.NOTIFICATIONS), { createdAt: -1 });
     
-    await db.collection(COLLECTIONS.ACTIVITY_LOGS).createIndex({ userId: 1, createdAt: -1 });
+    await tryCreateIndex(db.collection(COLLECTIONS.ACTIVITY_LOGS), { userId: 1, createdAt: -1 });
     
-    await db.collection(COLLECTIONS.AUDIT_LOGS).createIndex({ userId: 1, createdAt: -1 });
-    await db.collection(COLLECTIONS.AUDIT_LOGS).createIndex({ action: 1, createdAt: -1 });
+    await tryCreateIndex(db.collection(COLLECTIONS.AUDIT_LOGS), { userId: 1, createdAt: -1 });
+    await tryCreateIndex(db.collection(COLLECTIONS.AUDIT_LOGS), { action: 1, createdAt: -1 });
     
-    await db.collection(COLLECTIONS.AUDIT_FACE_VERIFY).createIndex({ userId: 1, timestamp: -1 });
+    await tryCreateIndex(db.collection(COLLECTIONS.AUDIT_FACE_VERIFY), { userId: 1, timestamp: -1 });
     
-    console.log('[MongoDB] All indexes created successfully');
+    console.log('[MongoDB] Indexes ready');
   } catch (error) {
-    console.error('[MongoDB] Error creating indexes:', error.message);
+    console.error('[MongoDB] Index error:', error.message);
   }
 }
