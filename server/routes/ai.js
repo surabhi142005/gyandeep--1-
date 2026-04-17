@@ -9,7 +9,7 @@ const router = express.Router();
 const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models';
 const GEMINI_MODEL = 'gemini-2.0-flash';
 
-async function callGemini(prompt, history = [], apiKey) {
+async function callGemini(prompt, history = [], apiKey, retries = 2) {
   const contents = [
     ...history.map(m => ({
       role: m.role === 'user' ? 'user' : 'model',
@@ -18,30 +18,44 @@ async function callGemini(prompt, history = [], apiKey) {
     { role: 'user', parts: [{ text: prompt }] },
   ];
 
-  const response = await fetch(
-    `${GEMINI_API_URL}/${GEMINI_MODEL}:generateContent?key=${apiKey}`,
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents,
-        generationConfig: {
-          temperature: 0.7,
-          maxOutputTokens: 2048,
-          topP: 0.95,
-          topK: 40,
-        },
-      }),
+  for (let i = 0; i <= retries; i++) {
+    try {
+      const response = await fetch(
+        `${GEMINI_API_URL}/${GEMINI_MODEL}:generateContent?key=${apiKey}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents,
+            generationConfig: {
+              temperature: 0.7,
+              maxOutputTokens: 2048,
+              topP: 0.95,
+              topK: 40,
+            },
+          }),
+        }
+      );
+
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({}));
+        // If it's a 503 or 500 and we have retries left, wait and try again
+        if ((response.status === 503 || response.status === 500) && i < retries) {
+          console.warn(`[AI] Google service busy (503). Retry ${i + 1}/${retries}...`);
+          await new Promise(resolve => setTimeout(resolve, 1500 * (i + 1)));
+          continue;
+        }
+        throw new Error(error.error?.message || `API error: ${response.status}`);
+      }
+
+      const data = await response.json();
+      return data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+    } catch (err) {
+      if (i === retries) throw err;
+      console.warn(`[AI] Request failed. Retry ${i + 1}/${retries}...`, err.message);
+      await new Promise(resolve => setTimeout(resolve, 1500 * (i + 1)));
     }
-  );
-
-  if (!response.ok) {
-    const error = await response.json().catch(() => ({}));
-    throw new Error(error.error?.message || `API error: ${response.status}`);
   }
-
-  const data = await response.json();
-  return data.candidates?.[0]?.content?.parts?.[0]?.text || '';
 }
 
 router.post('/ai-email', async (req, res) => {

@@ -1,11 +1,17 @@
 /**
  * services/apiClient.ts
- * Configured axios/fetch client with token refresh
+ * Configured axios/fetch client with token refresh and CSRF protection
  */
 
 import { tokenManager } from './tokenManager';
+import { getCSRFToken, getCSRFHeaders, initCSRFToken } from './csrfService';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_URL || 'http://localhost:3001';
+
+// Eagerly fetch CSRF token so it's ready before the first mutating request
+initCSRFToken();
+
+const MUTATING_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 
 interface FetchOptions extends RequestInit {
   _retry?: boolean;
@@ -16,6 +22,7 @@ class ApiClient {
 
   async fetch(url: string, options: FetchOptions = {}): Promise<Response> {
     const fullUrl = url.startsWith('http') ? url : `${API_BASE}${url}`;
+    const method = (options.method || 'GET').toUpperCase();
 
     // Ensure we have a valid token
     let token = tokenManager.getAccessToken();
@@ -45,6 +52,14 @@ class ApiClient {
 
     if (token) {
       headers.Authorization = `Bearer ${token}`;
+    }
+
+    // Attach CSRF token for all state-mutating requests
+    if (MUTATING_METHODS.has(method)) {
+      // Ensure token is fresh (fetches if missing/expired)
+      await getCSRFToken();
+      const csrfHeaders = getCSRFHeaders();
+      Object.assign(headers, csrfHeaders);
     }
 
     try {
@@ -100,6 +115,14 @@ class ApiClient {
     });
   }
 
+  put(url: string, body: any, options?: FetchOptions): Promise<Response> {
+    return this.fetch(url, {
+      ...options,
+      method: 'PUT',
+      body: JSON.stringify(body),
+    });
+  }
+
   delete(url: string, options?: FetchOptions): Promise<Response> {
     return this.fetch(url, { ...options, method: 'DELETE' });
   }
@@ -114,6 +137,9 @@ export const axiosLike = {
     apiClient.post(url, data, config).then(r => r.json()),
   patch: (url: string, data?: any, config?: any) =>
     apiClient.patch(url, data, config).then(r => r.json()),
+  put: (url: string, data?: any, config?: any) =>
+    apiClient.put(url, data, config).then(r => r.json()),
   delete: (url: string, config?: any) =>
     apiClient.delete(url, config).then(r => r.json()),
 };
+
