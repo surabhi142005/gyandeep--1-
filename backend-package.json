@@ -1,0 +1,40 @@
+{
+  "name": "gyandeep-backend",
+  "version": "1.0.0",
+  "type": "module",
+  "main": "server/index.js",
+  "scripts": {
+    "start": "node server/index.js",
+    "dev": "node server/index.js"
+  },
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.1008.0",
+    "@aws-sdk/s3-request-presigner": "^3.1008.0",
+    "@upstash/redis": "^1.28.0",
+    "@sentry/node": "^7.100.0",
+    "@types/bcryptjs": "^2.4.6",
+    "@types/jsonwebtoken": "^9.0.10",
+    "@vladmandic/face-api": "^1.7.15",
+    "bcryptjs": "^3.0.3",
+    "chart.js": "^4.4.1",
+    "cookie-parser": "^1.4.6",
+    "cors": "^2.8.5",
+    "dompurify": "^3.0.8",
+    "dotenv": "^17.3.1",
+    "express": "^4.21.0",
+    "ioredis": "^5.3.2",
+    "isomorphic-dompurify": "^2.4.0",
+    "jsdom": "^24.0.0",
+    "jsonwebtoken": "^9.0.3",
+    "jwt-decode": "^4.0.0",
+    "mongodb": "^6.21.0",
+    "multer": "^1.4.5-lts.1",
+    "nodemailer": "^8.0.4",
+    "prom-client": "^15.1.0",
+    "resend": "^6.9.4",
+    "ws": "^8.16.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
