@@ -143,7 +143,8 @@ export async function ensureValidToken(): Promise<boolean> {
 export async function register(email: string, password: string, name: string, role = 'student') {
   updateAuthState({ isLoading: true });
 
-  const csrfHeaders = await getCSRFHeaders();
+  await getCSRFToken();
+  const csrfHeaders = getCSRFHeaders();
 
   const res = await fetch(`${API_BASE}/api/auth/register`, {
     method: 'POST',
@@ -211,7 +212,8 @@ export async function loginWithGoogle() {
 
 export async function logout() {
   try {
-    const csrfHeaders = await getCSRFHeaders();
+    await getCSRFToken();
+    const csrfHeaders = getCSRFHeaders();
     await fetch(`${API_BASE}/api/auth/logout`, {
       method: 'POST',
       credentials: 'include',
@@ -278,7 +280,8 @@ export async function initAuth() {
 }
 
 export async function requestPasswordReset(email: string) {
-  const csrfHeaders = await getCSRFHeaders();
+  await getCSRFToken();
+  const csrfHeaders = getCSRFHeaders();
   const res = await fetch(`${API_BASE}/api/auth/password/request`, {
     method: 'POST',
     credentials: 'include',

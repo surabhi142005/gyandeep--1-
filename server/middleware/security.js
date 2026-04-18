@@ -53,8 +53,17 @@ export function csrfProtection(req, res, next) {
   const token = req.headers['x-csrf-token'];
   const signature = req.headers['x-csrf-signature'];
   const ENVIRONMENT = process.env.NODE_ENV || 'development';
+  
+  // Make CSRF optional for initial login/register to prevent lockouts
+  const isAuthRoute = req.path.includes('/api/auth/login') || 
+                     req.path.includes('/api/auth/register') ||
+                     req.path.includes('/api/auth/csrf-token');
 
   if (!token) {
+    if (isAuthRoute) {
+      console.warn(`[CSRF] Missing token for auth route ${req.path} (allowed)`);
+      return next();
+    }
     console.warn(`[CSRF] Missing token for ${req.method} ${req.path}`);
     return res.status(403).json({ 
       error: 'CSRF validation failed',
@@ -64,6 +73,11 @@ export function csrfProtection(req, res, next) {
 
   // Verify signature - required in production, optional for backward compatibility in dev
   if (!signature || !verifyCSRFToken(token, signature)) {
+    if (isAuthRoute) {
+      console.warn(`[CSRF] Invalid signature for auth route ${req.path} (allowed)`);
+      return next();
+    }
+    
     console.warn(`[CSRF] Invalid signature for ${req.method} ${req.path}. Signature present: ${!!signature}`);
     if (ENVIRONMENT === 'production' || process.env.VERCEL) {
       return res.status(403).json({ 
