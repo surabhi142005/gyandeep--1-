@@ -1,6 +1,11 @@
 import { PrismaClient } from '@prisma/client';
+import bcrypt from 'bcryptjs';
 
 const prisma = new PrismaClient();
+
+async function hashPassword(password: string): Promise<string> {
+  return bcrypt.hash(password, 10);
+}
 
 function generateOdId(): string {
   return Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
@@ -82,10 +87,12 @@ async function main() {
   });
 
   console.log('Creating admin user...');
+  const hashedPassword = await hashPassword('admin123');
   const admin = await prisma.user.create({
     data: {
       odId: 'USER-ADMIN-001',
       email: 'admin@gyandeep.edu',
+      password: hashedPassword,
       name: 'System Administrator',
       role: 'admin',
       emailVerified: true,
@@ -102,6 +109,7 @@ async function main() {
     data: {
       odId: 'USER-TCHR-001',
       email: 'john.smith@gyandeep.edu',
+      password: await hashPassword('teacher123'),
       name: 'John Smith',
       role: 'teacher',
       emailVerified: true,
@@ -117,6 +125,7 @@ async function main() {
     data: {
       odId: 'USER-TCHR-002',
       email: 'sarah.johnson@gyandeep.edu',
+      password: await hashPassword('teacher123'),
       name: 'Sarah Johnson',
       role: 'teacher',
       emailVerified: true,
@@ -132,6 +141,7 @@ async function main() {
     data: {
       odId: 'USER-TCHR-003',
       email: 'mike.wilson@gyandeep.edu',
+      password: await hashPassword('teacher123'),
       name: 'Mike Wilson',
       role: 'teacher',
       emailVerified: true,
@@ -144,11 +154,13 @@ async function main() {
   });
 
   console.log('Creating students...');
+  const studentPassword = await hashPassword('student123');
   const students = await Promise.all([
     prisma.user.create({
       data: {
         odId: 'USER-STDT-001',
         email: 'alice.brown@student.gyandeep.edu',
+        password: studentPassword,
         name: 'Alice Brown',
         role: 'student',
         classId: class9A.id,
@@ -164,6 +176,7 @@ async function main() {
       data: {
         odId: 'USER-STDT-002',
         email: 'bob.jones@student.gyandeep.edu',
+        password: studentPassword,
         name: 'Bob Jones',
         role: 'student',
         classId: class9A.id,
@@ -179,6 +192,7 @@ async function main() {
       data: {
         odId: 'USER-STDT-003',
         email: 'carol.white@student.gyandeep.edu',
+        password: studentPassword,
         name: 'Carol White',
         role: 'student',
         classId: class9A.id,
@@ -194,6 +208,7 @@ async function main() {
       data: {
         odId: 'USER-STDT-004',
         email: 'david.lee@student.gyandeep.edu',
+        password: studentPassword,
         name: 'David Lee',
         role: 'student',
         classId: class10A.id,
@@ -209,6 +224,7 @@ async function main() {
       data: {
         odId: 'USER-STDT-005',
         email: 'emma.davis@student.gyandeep.edu',
+        password: studentPassword,
         name: 'Emma Davis',
         role: 'student',
         classId: class10A.id,
@@ -224,6 +240,7 @@ async function main() {
       data: {
         odId: 'USER-STDT-006',
         email: 'frank.miller@student.gyandeep.edu',
+        password: studentPassword,
         name: 'Frank Miller',
         role: 'student',
         classId: class11Science.id,
@@ -239,6 +256,7 @@ async function main() {
       data: {
         odId: 'USER-STDT-007',
         email: 'grace.taylor@student.gyandeep.edu',
+        password: studentPassword,
         name: 'Grace Taylor',
         role: 'student',
         classId: class11Science.id,
@@ -254,6 +272,7 @@ async function main() {
       data: {
         odId: 'USER-STDT-008',
         email: 'henry.wilson@student.gyandeep.edu',
+        password: studentPassword,
         name: 'Henry Wilson',
         role: 'student',
         classId: class11Science.id,
