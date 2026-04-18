@@ -39,7 +39,8 @@ router.get('/auth/google', (req, res) => {
 
   const state = Math.random().toString(36).substring(7);
   const scope = encodeURIComponent('email profile');
-  const redirectUri = `${process.env.API_URL || 'http://localhost:3001'}/api/google/callback`;
+  const origin = process.env.API_URL || (process.env.NODE_ENV === 'production' ? `${req.protocol}://${req.get('host')}` : 'http://localhost:3001');
+  const redirectUri = `${origin}/api/google/callback`;
   
   const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?` +
     `client_id=${GOOGLE_CLIENT_ID}&` +
@@ -65,7 +66,8 @@ router.post('/callback', async (req, res) => {
       return res.status(501).json({ error: 'Google OAuth not configured' });
     }
 
-    const redirectUri = `${process.env.API_URL || 'http://localhost:3001'}/api/google/callback`;
+    const origin = process.env.API_URL || (process.env.NODE_ENV === 'production' ? `${req.protocol}://${req.get('host')}` : 'http://localhost:3001');
+    const redirectUri = `${origin}/api/google/callback`;
 
     const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
       method: 'POST',
@@ -161,7 +163,8 @@ router.post('/link', async (req, res) => {
       return res.status(400).json({ error: 'Code and userId required' });
     }
 
-    const redirectUri = `${process.env.API_URL || 'http://localhost:3001'}/api/google/callback`;
+    const origin = process.env.API_URL || (process.env.NODE_ENV === 'production' ? `${req.protocol}://${req.get('host')}` : 'http://localhost:3001');
+    const redirectUri = `${origin}/api/google/callback`;
 
     const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
       method: 'POST',

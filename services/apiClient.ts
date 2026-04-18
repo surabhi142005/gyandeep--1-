@@ -6,7 +6,7 @@
 import { tokenManager } from './tokenManager';
 import { getCSRFToken, getCSRFHeaders, initCSRFToken } from './csrfService';
 
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+const API_BASE = import.meta.env.VITE_API_URL || '';
 
 // Eagerly fetch CSRF token so it's ready before the first mutating request
 initCSRFToken();

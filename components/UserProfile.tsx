@@ -24,7 +24,8 @@ const UserProfile: React.FC<UserProfileProps> = ({ user, onUpdateUser, onClose, 
                 preferences
             };
 
-            const response = await fetch('http://localhost:3001/api/users/profile', {
+            const API_BASE = import.meta.env.VITE_API_URL || '';
+            const response = await fetch(`${API_BASE}/api/users/profile`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ userId: user.id, updates })
