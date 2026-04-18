@@ -22,7 +22,7 @@
         { "key": "X-Content-Type-Options", "value": "nosniff" },
         { "key": "X-Frame-Options", "value": "DENY" },
         { "key": "X-XSS-Protection", "value": "1; mode=block" },
-        { "key": "Access-Control-Allow-Origin", "value": "https://gyandeep-1.vercel.app" },
+        { "key": "Access-Control-Allow-Origin", "value": "$ALLOWED_ORIGIN" },
         { "key": "Access-Control-Allow-Methods", "value": "GET, POST, PUT, PATCH, DELETE, OPTIONS" },
         { "key": "Access-Control-Allow-Headers", "value": "Content-Type, Authorization, X-CSRF-Token, X-CSRF-Signature" },
         { "key": "Access-Control-Allow-Credentials", "value": "true" }
@@ -34,5 +34,8 @@
         { "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }
       ]
     }
-  ]
+  ],
+  "env": {
+    "ALLOWED_ORIGIN": "@vercel-deployment-url"
+  }
 }

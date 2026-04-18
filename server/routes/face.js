@@ -18,6 +18,13 @@ let modelsLoaded = false;
 async function loadFaceApi() {
   if (faceApi || modelsLoaded) return faceApi;
   
+  const isVercel = process.env.VERCEL === '1' || process.env.VERCEL === 'true';
+  if (isVercel) {
+    console.warn('[FaceAPI] Disabled on Vercel serverless - using fallback embeddings');
+    modelsLoaded = true;
+    return null;
+  }
+  
   try {
     const MODELS_PATH = path.join(process.cwd(), 'public', 'models');
     

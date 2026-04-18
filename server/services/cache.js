@@ -1,11 +1,12 @@
 /**
  * server/services/cache.js
  * Redis caching service for session management and data caching
+ * Supports both standard Redis and Upstash (Vercel KV)
  */
 
 import Redis from 'ioredis';
 
-const REDIS_URL = process.env.REDIS_URL || 'redis://localhost:6379';
+const REDIS_URL = process.env.REDIS_URL || process.env.UPSTASH_REDIS_REST_URL || 'redis://localhost:6379';
 const SESSION_PREFIX = 'session:';
 const CACHE_PREFIX = 'cache:';
 const RATE_LIMIT_PREFIX = 'ratelimit:';
@@ -16,6 +17,12 @@ let initErrorLogged = false;
 
 export function initRedis() {
   try {
+    const isUpstash = REDIS_URL.includes('upstash.io') || process.env.UPSTASH_REDIS_REST_URL;
+    
+    if (isUpstash) {
+      return initUpstash();
+    }
+    
     redis = new Redis(REDIS_URL, {
       maxRetriesPerRequest: 3,
       retryDelayOnFailover: 100,
@@ -57,6 +64,83 @@ export function initRedis() {
     console.warn('Redis initialization failed:', error.message);
     return null;
   }
+}
+
+function initUpstash() {
+  const UPSTASH_URL = process.env.UPSTASH_REDIS_REST_URL;
+  const UPSTASH_TOKEN = process.env.UPSTASH_REDIS_REST_TOKEN;
+  
+  if (!UPSTASH_URL || !UPSTASH_TOKEN) {
+    console.warn('Upstash not configured - caching disabled');
+    return null;
+  }
+  
+  const { Redis } = require('@upstash/redis');
+  
+  redis = new Redis({
+    url: UPSTASH_URL,
+    token: UPSTASH_TOKEN,
+  });
+  
+  isConnected = true;
+  console.log('Upstash Redis initialized');
+  
+  return {
+    async get(key) {
+      return await redis.get(key);
+    },
+    async set(key, value, ex) {
+      return await redis.set(key, value, { ex });
+    },
+    async setex(key, seconds, value) {
+      return await redis.set(key, value, { ex: seconds });
+    },
+    async del(key) {
+      return await redis.del(key);
+    },
+    async hset(key, field, value) {
+      return await redis.hset(key, field, value);
+    },
+    async hget(key, field) {
+      return await redis.hget(key, field);
+    },
+    async hgetall(key) {
+      return await redis.hgetall(key);
+    },
+    async exists(key) {
+      return await redis.exists(key);
+    },
+    async expire(key, seconds) {
+      return await redis.expire(key, seconds);
+    },
+    async keys(pattern) {
+      return await redis.keys(pattern);
+    },
+    async zadd(key, score, member) {
+      return await redis.zadd(key, { score, member });
+    },
+    async zremrangebyscore(key, min, max) {
+      return await redis.zremrangebyscore(key, min, max);
+    },
+    async zcard(key) {
+      return await redis.zcard(key);
+    },
+    async zrange(key, start, stop, withScores) {
+      return await redis.zrange(key, start, stop, { withScores });
+    },
+    async publish(channel, message) {
+      return await redis.publish(channel, message);
+    },
+    async ping() {
+      return await redis.ping();
+    },
+    async info(section) {
+      return await redis.info(section);
+    },
+    async dbsize() {
+      return await redis.dbsize();
+    },
+  };
 }
 
 export function getRedis() {
