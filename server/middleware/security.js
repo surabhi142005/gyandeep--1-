@@ -51,6 +51,7 @@ export function csrfProtection(req, res, next) {
 
   const token = req.headers['x-csrf-token'];
   const signature = req.headers['x-csrf-signature'];
+  const ENVIRONMENT = process.env.NODE_ENV || 'development';
 
   if (!token) {
     return res.status(403).json({ 
@@ -59,12 +60,16 @@ export function csrfProtection(req, res, next) {
     });
   }
 
-  // Only verify signature if it is provided (for backward compatibility)
-  if (signature && !verifyCSRFToken(token, signature)) {
-    return res.status(403).json({ 
-      error: 'CSRF validation failed',
-      message: 'Invalid security signature'
-    });
+  // Verify signature - required in production, optional for backward compatibility in dev
+  if (!signature || !verifyCSRFToken(token, signature)) {
+    if (ENVIRONMENT === 'production') {
+      return res.status(403).json({ 
+        error: 'CSRF validation failed',
+        message: 'Invalid security signature'
+      });
+    }
+    // In development, just log but allow through for easier testing
+    console.warn('[CSRF] Signature verification failed in development mode');
   }
 
   next();
