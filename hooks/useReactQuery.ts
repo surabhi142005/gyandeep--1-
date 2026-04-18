@@ -15,8 +15,8 @@ async function fetchAPI(endpoint: string, options: RequestInit = {}) {
   
   // For non-GET requests, ensure we have a CSRF token
   let csrfHeaders = {};
-  if (options.method && options.method !== 'GET' && options.method !== 'HEAD') {
-    await getCSRFToken();
+  if (options.method && options.method !== 'GET' && options.method !== 'HEAD' && options.method !== 'OPTIONS') {
+    await getCSRFToken(); // Ensure token is loaded
     csrfHeaders = getCSRFHeaders();
   }
 

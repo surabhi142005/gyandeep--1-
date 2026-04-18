@@ -4,6 +4,10 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
 import ErrorBoundary from './components/ErrorBoundary';
+import { initCSRFToken } from './services/csrfService';
+
+// Initialize CSRF token
+initCSRFToken();
 
 const rootElement = document.getElementById('root');
 if (!rootElement) {

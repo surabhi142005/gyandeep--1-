@@ -6,7 +6,7 @@
  */
 
 import { websocketService } from './websocketService';
-import { getCSRFHeaders } from './csrfService';
+import { getCSRFHeaders, getCSRFToken } from './csrfService';
 
 const API_BASE = import.meta.env.VITE_API_URL || '';
 
@@ -20,7 +20,13 @@ const uid = () => {
 const idempotencyKey = (prefix: string) => `gd-${prefix}-${uid()}`;
 
 async function apiRequest(path: string, init: RequestInit = {}) {
-  const csrfHeaders = await getCSRFHeaders();
+  // For non-GET requests, ensure we have a CSRF token
+  let csrfHeaders = {};
+  if (init.method && init.method !== 'GET' && init.method !== 'HEAD' && init.method !== 'OPTIONS') {
+    await getCSRFToken();
+    csrfHeaders = getCSRFHeaders();
+  }
+
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
     ...csrfHeaders,
@@ -95,7 +101,8 @@ export const uploadClassNotes = async (params: { classId: string; subjectId: str
     formData.append('classId', params.classId);
     formData.append('subjectId', params.subjectId);
 
-    const csrfHeaders = await getCSRFHeaders();
+    await getCSRFToken();
+    const csrfHeaders = getCSRFHeaders();
     const res = await fetch(`${API_BASE}/api/notes/upload`, {
       method: 'POST',
       headers: csrfHeaders,
