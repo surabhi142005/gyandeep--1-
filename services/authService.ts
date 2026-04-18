@@ -7,7 +7,7 @@
  */
 
 import { calculateDistance } from './locationService';
-import { initCSRFToken, getCSRFHeaders } from './csrfService';
+import { initCSRFToken, getCSRFHeaders, getCSRFToken } from './csrfService';
 import type { Coordinates } from '../types';
 
 const API_BASE = import.meta.env.VITE_API_URL || '';
@@ -174,7 +174,9 @@ export async function register(email: string, password: string, name: string, ro
 export async function login(email: string, password: string) {
   updateAuthState({ isLoading: true });
 
-  const csrfHeaders = await getCSRFHeaders();
+  // Ensure we have a valid CSRF token before making the request
+  await getCSRFToken();
+  const csrfHeaders = getCSRFHeaders();
 
   const res = await fetch(`${API_BASE}/api/auth/login`, {
     method: 'POST',
