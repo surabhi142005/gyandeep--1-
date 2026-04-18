@@ -11,6 +11,10 @@ if (!process.env.JWT_SECRET && process.env.NODE_ENV === 'production') {
   throw new Error('JWT_SECRET environment variable is required in production');
 }
 
+if (!process.env.JWT_SECRET && process.env.NODE_ENV !== 'production') {
+  console.warn('WARNING: JWT_SECRET not set, using dev fallback');
+}
+
 const JWT_SECRET = process.env.JWT_SECRET || 'dev-only-secret-do-not-use-in-production';
 const JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET || process.env.JWT_SECRET + '_refresh';
 
