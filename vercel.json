@@ -36,6 +36,6 @@
     }
   ],
   "env": {
-    "ALLOWED_ORIGIN": "@vercel-deployment-url"
+    "ALLOWED_ORIGIN": "https://gyandeep-1-4mn1oud25-surabhi142005s-projects.vercel.app"
   }
 }
