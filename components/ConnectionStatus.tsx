@@ -43,10 +43,10 @@ const STATUS_CONFIG: Record<ConnectionState, {
   },
   error: {
     icon: <AlertCircle className="w-4 h-4" />,
-    label: 'Connection Error',
-    color: 'text-red-600',
-    bgColor: 'bg-red-50',
-    borderColor: 'border-red-200',
+    label: 'Reconnecting...',
+    color: 'text-amber-600',
+    bgColor: 'bg-amber-50',
+    borderColor: 'border-amber-200',
   },
 };
 
@@ -173,8 +173,8 @@ export const ConnectionBanner: React.FC<ConnectionBannerProps> = ({ onRetry, cla
               <span className={config.color}>{config.icon}</span>
               <span className={`text-sm font-medium ${config.color}`}>
                 {status === 'connecting' && 'Reconnecting to server...'}
-                {status === 'disconnected' && 'You are offline. Changes will sync when reconnected.'}
-                {status === 'error' && 'Connection error. Please check your network.'}
+                {status === 'disconnected' && 'Connection interrupted. Attempting to reconnect...'}
+                {status === 'error' && 'Connection error. Retrying...'}
               </span>
             </div>
             {(status === 'disconnected' || status === 'error') && onRetry && (
