@@ -11,17 +11,10 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { connectToDatabase, COLLECTIONS } from '../db/mongoAtlas.js';
 import {
-  setAuthCookies,
-  clearAuthCookies,
-  TOKEN_COOKIE_NAME,
-  REFRESH_COOKIE_NAME,
-  COOKIE_OPTIONS,
-} from '../middleware/auth.js';
-import { 
-  sendVerificationCode, 
-  sendPasswordResetEmail,
-  testEmailConfiguration 
+  sendWelcomeEmail
 } from '../services/emailService.js';
+
+import { setAuthCookies, clearAuthCookies } from '../middleware/auth.js';
 
 const JWT_SECRET = process.env.JWT_SECRET;
 if (!JWT_SECRET) {
@@ -221,6 +214,11 @@ router.post('/register', async (req, res) => {
     const user = { _id: result.insertedId, email, role, name };
     const tokens = generateTokenPair(user);
     setAuthCookies(res, tokens.accessToken, tokens.refreshToken);
+
+    // Send welcome email (non-blocking)
+    sendWelcomeEmail(email, name, role).catch(err => {
+      console.error('Failed to send welcome email:', err.message);
+    });
 
     res.status(201).json({
       ...tokens,
