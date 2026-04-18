@@ -114,24 +114,28 @@ export default defineConfig(({ mode }) => {
     ],
     resolve: {
       alias: { '@': path.resolve(__dirname, '.') },
-      dedupe: ['react', 'react-dom'],
+      dedupe: ['react', 'react-dom', '@vladmandic/face-api'],
     },
     build: {
+      outDir: 'dist',
       target: 'esnext',
       chunkSizeWarningLimit: 1000,
+      sourcemap: mode !== 'production',
       rollupOptions: {
         output: {
-          // Simplified output to prevent React Children error
+          manualChunks: {
+            vendor: ['react', 'react-dom', 'react-router-dom'],
+            faceapi: ['@vladmandic/face-api'],
+          },
         },
       },
-      sourcemap: mode !== 'production',
     },
     define: {
       __VITE_API_URL__: JSON.stringify(env.VITE_API_URL || ''),
       __VITE_WS_URL__: JSON.stringify(env.VITE_WS_URL || ''),
     },
     optimizeDeps: {
-      include: ['react', 'react-dom'],
+      include: ['react', 'react-dom', '@vladmandic/face-api'],
       exclude: ['@sentry/browser', '@sentry/profiling-web'],
     },
   };

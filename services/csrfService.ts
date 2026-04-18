@@ -3,7 +3,7 @@
  * CSRF token management for API requests
  */
 
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+const API_BASE = import.meta.env.VITE_API_URL || '';
 
 let csrfToken: string | null = null;
 let csrfSignature: string | null = null;

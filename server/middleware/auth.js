@@ -23,8 +23,8 @@ export const REFRESH_COOKIE_NAME = 'gyandeep_refresh_token';
 
 export const COOKIE_OPTIONS = {
   httpOnly: true,
-  secure: process.env.NODE_ENV === 'production',
-  sameSite: 'lax',
+  secure: true, // Always secure for cross-site cookies
+  sameSite: 'none', // Required for cross-site (Vercel -> Render)
   path: '/',
 };
 

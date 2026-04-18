@@ -9,8 +9,9 @@ import { ObjectId } from 'mongodb';
 import bcrypt from 'bcryptjs';
 import { connectToDatabase, COLLECTIONS } from '../db/mongoAtlas.js';
 import { authMiddleware } from '../middleware/auth.js';
+import { csrfProtection } from '../middleware/security.js';
 
-router.get('/', async (req, res) => {
+router.get('/', authMiddleware, async (req, res) => {
   try {
     const db = await connectToDatabase();
     const users = await db.collection(COLLECTIONS.USERS)

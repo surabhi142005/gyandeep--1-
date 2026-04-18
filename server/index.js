@@ -84,6 +84,9 @@ const getCorsOrigins = () => {
 
 const allowedOrigins = getCorsOrigins();
 
+// CORS preflight handler - must be before cors() middleware
+app.options('*', cors());
+
 app.use(cors({
   origin: (origin, callback) => {
     // Allow requests with no origin (like mobile apps or curl requests)
@@ -143,8 +146,9 @@ app.get('/api/health', async (req, res) => {
   }
 });
 
-// Auth routes with stricter rate limiting and CSRF protection
-app.use('/api/auth', authRateLimiter.middleware(), csrfProtection, authRouter);
+// Auth routes with stricter rate limiting - NO CSRF on public auth endpoints
+// CSRF is for authenticated users only; login/register are public
+app.use('/api/auth', authRateLimiter.middleware(), authRouter);
 
 // User routes with CSRF protection for mutating operations
 app.use('/api/users', csrfProtection, usersRouter);

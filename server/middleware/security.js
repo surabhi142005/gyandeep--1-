@@ -45,6 +45,7 @@ export function verifyCSRFToken(token, signature) {
 }
 
 export function csrfProtection(req, res, next) {
+  // Skip CSRF for safe methods
   if (['GET', 'HEAD', 'OPTIONS'].includes(req.method)) {
     return next();
   }
@@ -54,6 +55,7 @@ export function csrfProtection(req, res, next) {
   const ENVIRONMENT = process.env.NODE_ENV || 'development';
 
   if (!token) {
+    console.warn(`[CSRF] Missing token for ${req.method} ${req.path}`);
     return res.status(403).json({ 
       error: 'CSRF validation failed',
       message: 'Missing required CSRF token'
@@ -62,14 +64,15 @@ export function csrfProtection(req, res, next) {
 
   // Verify signature - required in production, optional for backward compatibility in dev
   if (!signature || !verifyCSRFToken(token, signature)) {
-    if (ENVIRONMENT === 'production') {
+    console.warn(`[CSRF] Invalid signature for ${req.method} ${req.path}. Signature present: ${!!signature}`);
+    if (ENVIRONMENT === 'production' || process.env.VERCEL) {
       return res.status(403).json({ 
         error: 'CSRF validation failed',
         message: 'Invalid security signature'
       });
     }
     // In development, just log but allow through for easier testing
-    console.warn('[CSRF] Signature verification failed in development mode');
+    console.warn('[CSRF] Signature verification failed (allowed in non-production)');
   }
 
   next();
@@ -77,6 +80,23 @@ export function csrfProtection(req, res, next) {
 
 export function securityHeaders(req, res, next) {
   const isProduction = ENVIRONMENT === 'production';
+  const origin = req.headers.origin;
+  const allowedOriginsRaw = process.env.ALLOWED_ORIGINS?.split(',').map(o => o.trim()) || [];
+  if (process.env.ALLOWED_ORIGIN) allowedOriginsRaw.push(process.env.ALLOWED_ORIGIN);
+  if (process.env.FRONTEND_URL) allowedOriginsRaw.push(process.env.FRONTEND_URL);
+  
+  const allowedOrigins = allowedOriginsRaw.map(o => o.replace(/\/$/, '').toLowerCase());
+  const normalizedOrigin = origin?.replace(/\/$/, '').toLowerCase();
+
+  // If origin is allowed, set the header (though cors middleware also does this)
+  if (normalizedOrigin && (
+      allowedOrigins.includes(normalizedOrigin) || 
+      normalizedOrigin.endsWith('.vercel.app') ||
+      (process.env.VERCEL && normalizedOrigin.includes('vercel.app'))
+  )) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+    res.setHeader('Access-Control-Allow-Credentials', 'true');
+  }
 
   // Basic security headers
   res.setHeader('X-XSS-Protection', '1; mode=block');
