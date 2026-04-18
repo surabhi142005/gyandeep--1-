@@ -54,20 +54,32 @@ app.use(securityHeaders);
 // Cookie parser for httpOnly cookies
 app.use(cookieParser());
 
-// CORS configuration - support both ALLOWED_ORIGINS and FRONTEND_URL
+// CORS configuration - support both ALLOWED_ORIGINS, ALLOWED_ORIGIN, FRONTEND_URL and VERCEL_URL
 const getCorsOrigins = () => {
   const origins = [];
   
   if (process.env.FRONTEND_URL) {
     origins.push(process.env.FRONTEND_URL);
   }
+
+  if (process.env.ALLOWED_ORIGIN) {
+    origins.push(process.env.ALLOWED_ORIGIN);
+  }
   
   if (process.env.ALLOWED_ORIGINS) {
     if (process.env.ALLOWED_ORIGINS === '*') return '*';
     origins.push(...process.env.ALLOWED_ORIGINS.split(',').map(o => o.trim()).filter(Boolean));
   }
+
+  // Vercel deployment URLs
+  if (process.env.VERCEL_URL) origins.push(`https://${process.env.VERCEL_URL}`);
+  if (process.env.VERCEL_PROJECT_PRODUCTION_URL) origins.push(`https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`);
+  if (process.env.VERCEL_BRANCH_URL) origins.push(`https://${process.env.VERCEL_BRANCH_URL}`);
   
-  return origins.length > 0 ? origins : '*';
+  // Return unique, normalized origins or *
+  return origins.length > 0 
+    ? [...new Set(origins.map(o => o.replace(/\/$/, '').toLowerCase()))] 
+    : '*';
 };
 
 const allowedOrigins = getCorsOrigins();
@@ -77,16 +89,25 @@ app.use(cors({
     // Allow requests with no origin (like mobile apps or curl requests)
     if (!origin) return callback(null, true);
     
-    if (allowedOrigins === '*' || allowedOrigins.includes(origin)) {
+    const normalizedOrigin = origin.replace(/\/$/, '').toLowerCase();
+    
+    // Check if origin is allowed
+    const isAllowed = allowedOrigins === '*' || 
+                     allowedOrigins.includes(normalizedOrigin) ||
+                     normalizedOrigin.endsWith('.vercel.app') ||
+                     (process.env.VERCEL && normalizedOrigin.includes('vercel.app'));
+
+    if (isAllowed) {
       callback(null, true);
     } else {
-      console.warn(`[CORS] Origin ${origin} not allowed`);
-      callback(null, false); // Don't throw error, just disallow
+      console.warn(`[CORS] Origin ${origin} not allowed. Allowed: ${JSON.stringify(allowedOrigins)}`);
+      callback(null, false);
     }
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-CSRF-Token', 'X-CSRF-Signature', 'X-Session-Secret'],
+  exposedHeaders: ['Content-Range', 'X-Content-Range'],
 }));
 
 // Body parsing with size limit

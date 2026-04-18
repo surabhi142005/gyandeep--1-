@@ -6,6 +6,7 @@
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3001';
 
 let csrfToken: string | null = null;
+let csrfSignature: string | null = null;
 let csrfTokenExpiry: number = 0;
 
 const CSRF_TOKEN_REFRESH_INTERVAL = 50 * 60 * 1000; // 50 minutes (tokens expire in 1 hour)
@@ -19,6 +20,7 @@ export async function fetchCSRFToken(): Promise<string | null> {
     const data = await res.json();
     if (data.token) {
       csrfToken = data.token;
+      csrfSignature = data.signature || null;
       csrfTokenExpiry = Date.now() + CSRF_TOKEN_REFRESH_INTERVAL;
       return csrfToken;
     }
@@ -41,11 +43,13 @@ export function getCSRFHeaders(): Record<string, string> {
   }
   return {
     'X-CSRF-Token': csrfToken || '',
+    'X-CSRF-Signature': csrfSignature || '',
   };
 }
 
 export function clearCSRFToken(): void {
   csrfToken = null;
+  csrfSignature = null;
   csrfTokenExpiry = 0;
 }
 

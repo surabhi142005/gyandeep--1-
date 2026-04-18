@@ -109,7 +109,7 @@ export default defineConfig(({ mode }) => {
           enabled: true,
           type: 'module',
         },
-        injectRegister: 'auto',
+        injectRegister: null,
       }),
     ],
     resolve: {

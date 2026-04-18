@@ -64,6 +64,13 @@ const App: React.FC = () => {
     const [showProfile, setShowProfile] = useState(false);
     const [showLanding, setShowLanding] = useState(true);
     const [notification, setNotification] = useState<{ message: string; type: ToastType } | null>(null);
+    const [showLiquid, setShowLiquid] = useState(false);
+
+    // Delay LiquidChrome to improve LCP
+    useEffect(() => {
+        const timer = setTimeout(() => setShowLiquid(true), 500);
+        return () => clearTimeout(timer);
+    }, []);
 
     // ── App data (from backend API) ───────────────────────────────────────────
     const [allUsers, setAllUsers] = useState<AnyUser[]>([]);
@@ -265,10 +272,12 @@ const App: React.FC = () => {
     return (
         <ErrorBoundary>
             <RealtimeProvider userId={currentUser?.id} userRole={currentUser?.role}>
-            <LiquidChrome
-                color={currentUser ? [0.62, 0.62, 0.62] : [0.56, 0.56, 0.56]}
-                mouseReact amplitude={currentUser ? 0.15 : 0.1} speed={currentUser ? 1.2 : 1}
-            />
+            {showLiquid && (
+                <LiquidChrome
+                    color={currentUser ? [0.62, 0.62, 0.62] : [0.56, 0.56, 0.56]}
+                    mouseReact amplitude={currentUser ? 0.15 : 0.1} speed={currentUser ? 1.2 : 1}
+                />
+            )}
             <div id="main-content" className="relative z-10" role="main">
                 {notification && (
                     <ToastNotification

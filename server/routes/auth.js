@@ -15,6 +15,7 @@ import {
 } from '../services/emailService.js';
 
 import { setAuthCookies, clearAuthCookies } from '../middleware/auth.js';
+import { createCSRFTokenPair } from '../middleware/security.js';
 
 const JWT_SECRET = process.env.JWT_SECRET;
 if (!JWT_SECRET) {
@@ -523,8 +524,8 @@ router.get('/me', async (req, res) => {
 });
 
 router.get('/csrf-token', (req, res) => {
-  const token = jwt.sign({ timestamp: Date.now() }, JWT_SECRET, { expiresIn: '1h' });
-  res.json({ token });
+  const { token, signature } = createCSRFTokenPair();
+  res.json({ token, signature });
 });
 
 router.get('/email-config', async (req, res) => {

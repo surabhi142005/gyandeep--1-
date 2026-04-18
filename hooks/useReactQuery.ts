@@ -6,13 +6,23 @@
 import { useMutation, useQuery, useQueryClient, type QueryKey } from '@tanstack/react-query';
 import { getStoredToken } from '../services/authService';
 import { toast } from '../services/toastService';
+import { getCSRFHeaders, getCSRFToken } from '../services/csrfService';
 
 const API_BASE = import.meta.env.VITE_API_URL || '';
 
 async function fetchAPI(endpoint: string, options: RequestInit = {}) {
   const token = getStoredToken();
+  
+  // For non-GET requests, ensure we have a CSRF token
+  let csrfHeaders = {};
+  if (options.method && options.method !== 'GET' && options.method !== 'HEAD') {
+    await getCSRFToken();
+    csrfHeaders = getCSRFHeaders();
+  }
+
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
+    ...csrfHeaders,
     ...(options.headers as Record<string, string> || {}),
   };
 
@@ -23,6 +33,7 @@ async function fetchAPI(endpoint: string, options: RequestInit = {}) {
   const response = await fetch(`${API_BASE}${endpoint}`, {
     ...options,
     headers,
+    credentials: 'include',
   });
 
   if (!response.ok) {

@@ -19,4 +19,15 @@ root.render(
   </React.StrictMode>
 );
 
-// Service worker is auto-registered by vite-plugin-pwa
+// Manually register service worker with a delay to avoid blocking initial render
+if ('serviceWorker' in navigator && import.meta.env.PROD) {
+  window.addEventListener('load', () => {
+    setTimeout(() => {
+      navigator.serviceWorker.register('/sw.js').then(registration => {
+        console.log('SW registered: ', registration);
+      }).catch(registrationError => {
+        console.log('SW registration failed: ', registrationError);
+      });
+    }, 3000);
+  });
+}

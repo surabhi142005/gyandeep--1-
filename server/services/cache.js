@@ -17,9 +17,13 @@ let initErrorLogged = false;
 
 export function initRedis() {
   try {
+    console.log('[Redis] Initializing, UPSTASH_REDIS_REST_URL:', !!process.env.UPSTASH_REDIS_REST_URL);
+    console.log('[Redis] REDIS_URL:', REDIS_URL.substring(0, 30), '...');
+    
     const isUpstash = REDIS_URL.includes('upstash.io') || process.env.UPSTASH_REDIS_REST_URL;
     
     if (isUpstash) {
+      console.log('[Redis] Using Upstash');
       return initUpstash();
     }
     
@@ -148,7 +152,7 @@ export function getRedis() {
 }
 
 export function isRedisConnected() {
-  return isConnected && redis?.status === 'ready';
+  return isConnected || (redis && typeof redis.get === 'function');
 }
 
 // ── Session Management ─────────────────────────────────────────────────────────

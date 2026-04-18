@@ -77,13 +77,8 @@ export function csrfProtection(req, res, next) {
 
 export function securityHeaders(req, res, next) {
   const isProduction = ENVIRONMENT === 'production';
-  const allowedOrigins = process.env.ALLOWED_ORIGINS?.split(',') || [];
-  const origin = req.headers.origin;
 
-  if (origin && allowedOrigins.includes(origin)) {
-    res.setHeader('Access-Control-Allow-Origin', origin);
-  }
-
+  // Basic security headers
   res.setHeader('X-XSS-Protection', '1; mode=block');
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader('X-Download-Options', 'noopen');
