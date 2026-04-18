@@ -11,9 +11,9 @@ RUN apk add --no-cache python3 make g++
 # Copy package files
 COPY package*.json ./
 
-# Install all dependencies (using --legacy-peer-deps if needed for older react/three dependencies)
-# We use npm install instead of npm ci to be more flexible with local package-lock mismatches
-RUN npm install
+# Install all dependencies with --legacy-peer-deps to handle React 18/19 peer conflicts
+# specifically for @react-three/drei and @react-three/fiber
+RUN npm install --legacy-peer-deps
 
 # Copy source code
 COPY . .
