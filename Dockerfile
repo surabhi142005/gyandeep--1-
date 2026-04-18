@@ -25,9 +25,9 @@ FROM node:20-alpine AS production
 
 WORKDIR /app
 
-# Install production dependencies only
+# Install production dependencies
 COPY package*.json ./
-RUN npm ci --only=production
+RUN npm install
 
 # Copy built assets from builder
 COPY --from=builder /app/dist ./dist
@@ -53,4 +53,4 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
   CMD wget --no-verbose --tries=1 --spider http://localhost:3001/api/health || exit 1
 
 # Start server
-CMD ["node", "server/production.js"]
+CMD ["node", "server/index.js"]
