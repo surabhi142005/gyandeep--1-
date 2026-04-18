@@ -2,8 +2,8 @@
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
   "framework": "vite",
-  "installCommand": "npm install",
-  "rewrites": [
+  "installCommand": "npm install --legacy-peer-deps",
+  "routes": [
     { "source": "/(.*)", "destination": "/index.html" }
   ],
   "headers": [
