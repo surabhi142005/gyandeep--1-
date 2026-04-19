@@ -4,7 +4,8 @@ import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
 
 export default defineConfig(({ mode }) => {
-  const env = loadEnv(mode, process.cwd(), '');
+  // Load from .env, .env.local, .env.production files
+  const env = { ...loadEnv('', process.cwd(), ''), ...loadEnv('production', process.cwd(), '') };
   const apiUrl = env.VITE_API_URL || env.VITE_API_BASE_URL || '';
   
   return {
