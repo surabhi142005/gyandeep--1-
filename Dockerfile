@@ -1,7 +1,7 @@
 # Dockerfile for Gyandeep Backend (Render deployment)
 # Frontend should be deployed separately to Vercel
 
-FROM node:20-alpine
+FROM node:22-alpine
 
 WORKDIR /app
 
