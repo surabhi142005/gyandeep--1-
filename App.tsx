@@ -108,6 +108,8 @@ const App: React.FC = () => {
 
     // ── Data initialisation from backend API ─────────────────────────────────
     useEffect(() => {
+        if (!currentUser) return;
+        
         const loadData = async () => {
             try {
                 const [users, classes] = await Promise.all([
@@ -127,7 +129,7 @@ const App: React.FC = () => {
             }
         };
         loadData();
-    }, []);
+    }, [currentUser]);
 
     // ── Login wrapper (init teacher session on login) ─────────────────────────
     const handleLogin = (user: AnyUser) => {
