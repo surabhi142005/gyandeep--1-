@@ -272,7 +272,7 @@ if (process.env.NODE_ENV === 'production') {
 }
 
 // Start server only if not running on Vercel
-if (process.env.NODE_ENV !== 'production' && !process.env.VERCEL) {
+if (!process.env.VERCEL) {
   server.listen(PORT, () => {
     console.log(`🚀 Server running on http://localhost:${PORT}`);
     console.log(`📊 Health check: http://localhost:${PORT}/api/health`);

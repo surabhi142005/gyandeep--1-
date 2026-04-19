@@ -9,7 +9,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "server": "node server/index.js",
-    "start": "NODE_ENV=production node server/production.js",
+    "start": "NODE_ENV=production node server/index.js",
     "start:cluster": "pm2 start ecosystem.config.json --env production",
     "stop:cluster": "pm2 stop ecosystem.config.json",
     "restart:cluster": "pm2 restart ecosystem.config.json",
