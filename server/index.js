@@ -246,9 +246,26 @@ setupSentryErrorHandlers(app);
 // Global error handler
 app.use(errorHandler);
 
+// Find dist folder - check multiple locations for Vercel compatibility
+const getDistPath = () => {
+  const candidates = [
+    path.join(process.cwd(), 'dist'),
+    path.join(process.cwd(), '..', 'app', 'dist'),
+    path.join('/app', 'dist'),
+  ];
+  for (const distPath of candidates) {
+    try {
+      if (require('fs').existsSync(distPath)) return distPath;
+    } catch { /* ignore */ }
+  }
+  return path.join(process.cwd(), 'dist');
+};
+
+const distPath = getDistPath();
+
 // Serve static files from dist folder in production
 if (process.env.NODE_ENV === 'production') {
-  app.use(express.static(path.join(process.cwd(), 'dist'), {
+  app.use(express.static(distPath, {
     setHeaders: (res, filePath) => {
       if (filePath.endsWith('.webmanifest')) {
         res.setHeader('Content-Type', 'application/manifest+json');
@@ -259,7 +276,7 @@ if (process.env.NODE_ENV === 'production') {
   // SPA fallback - serve index.html for non-API routes
   app.get('*', (req, res) => {
     if (!req.path.startsWith('/api/') && !req.path.startsWith('/auth/') && !req.path.startsWith('/storage/')) {
-      res.sendFile(path.join(process.cwd(), 'dist', 'index.html'));
+      res.sendFile(path.join(distPath, 'index.html'));
     } else {
       res.status(404).json({ error: 'Not found' });
     }
