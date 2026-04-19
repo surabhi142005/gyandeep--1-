@@ -17,7 +17,6 @@ RUN npm install --omit=dev --legacy-peer-deps
 # Copy backend files
 COPY server ./server
 COPY lib ./lib
-COPY node_modules ./node_modules
 
 # Create required directories
 RUN mkdir -p server/data server/storage
