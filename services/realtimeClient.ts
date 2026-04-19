@@ -8,7 +8,22 @@ import { tokenManager } from './tokenManager';
 
 const API_BASE = import.meta.env.VITE_API_URL || '';
 const WS_URL = API_BASE.replace(/^http/, 'ws') + '/ws';
+const API_TIMEOUT = 10000;
 
+/**
+ * Fetch with timeout for polling fallback
+ * @param url - URL to fetch
+ * @param options - Request options
+ * @returns Promise<Response>
+ */
+function fetchWithTimeout(url: string, options: RequestInit = {}): Promise<Response> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), API_TIMEOUT);
+  return fetch(url, { ...options, signal: controller.signal })
+    .finally(() => clearTimeout(timeoutId));
+}
+
+/** Handler for incoming realtime messages */
 type MessageHandler = (data: any) => void;
 type ConnectionHandler = () => void;
 
@@ -193,7 +208,7 @@ class RealtimeClient {
         const token = this.cachedToken || await getRealtimeToken();
         if (!token) return;
         
-        const response = await fetch(`${API_BASE}/api/health`, {
+        const response = await fetchWithTimeout(`${API_BASE}/api/health`, {
           method: 'GET',
           headers: { 
             'Authorization': `Bearer ${token}`

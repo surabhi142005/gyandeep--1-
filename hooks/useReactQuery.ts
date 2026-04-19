@@ -9,7 +9,21 @@ import { toast } from '../services/toastService';
 import { getCSRFHeaders, getCSRFToken } from '../services/csrfService';
 
 const API_BASE = import.meta.env.VITE_API_URL || '';
+const API_TIMEOUT = 10000;
 
+function fetchWithTimeout(url: string, options: RequestInit = {}): Promise<Response> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), API_TIMEOUT);
+  return fetch(url, { ...options, signal: controller.signal })
+    .finally(() => clearTimeout(timeoutId));
+}
+
+/**
+ * Fetch API with CSRF protection
+ * @param endpoint - API endpoint
+ * @param options - Fetch options
+ * @returns Promise
+ */
 async function fetchAPI(endpoint: string, options: RequestInit = {}) {
   const token = getStoredToken();
   
@@ -30,7 +44,7 @@ async function fetchAPI(endpoint: string, options: RequestInit = {}) {
     headers.Authorization = `Bearer ${token}`;
   }
 
-  const response = await fetch(`${API_BASE}${endpoint}`, {
+  const response = await fetchWithTimeout(`${API_BASE}${endpoint}`, {
     ...options,
     headers,
     credentials: 'include',

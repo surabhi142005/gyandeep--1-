@@ -4,7 +4,16 @@
  */
 
 const API_BASE = import.meta.env.VITE_API_URL || '';
+const API_TIMEOUT = 10000;
 
+function fetchWithTimeout(url: string, options: RequestInit = {}): Promise<Response> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), API_TIMEOUT);
+  return fetch(url, { ...options, signal: controller.signal })
+    .finally(() => clearTimeout(timeoutId));
+}
+
+/** CSRF token state */
 let csrfToken: string | null = null;
 let csrfSignature: string | null = null;
 let csrfTokenExpiry: number = 0;
@@ -13,7 +22,7 @@ const CSRF_TOKEN_REFRESH_INTERVAL = 50 * 60 * 1000; // 50 minutes (tokens expire
 
 export async function fetchCSRFToken(): Promise<string | null> {
   try {
-    const res = await fetch(`${API_BASE}/api/auth/csrf-token`, {
+    const res = await fetchWithTimeout(`${API_BASE}/api/auth/csrf-token`, {
       credentials: 'include',
     });
     if (!res.ok) return null;

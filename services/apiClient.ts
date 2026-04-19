@@ -7,6 +7,20 @@ import { tokenManager } from './tokenManager';
 import { getCSRFToken, getCSRFHeaders, initCSRFToken } from './csrfService';
 
 const API_BASE = import.meta.env.VITE_API_URL || '';
+const API_TIMEOUT = 10000;
+
+/**
+ * Fetch wrapper with timeout protection
+ * @param url - URL to fetch
+ * @param options - Request options
+ * @returns Promise<Response>
+ */
+function fetchWithTimeout(url: string, options: RequestInit = {}): Promise<Response> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), API_TIMEOUT);
+  return fetch(url, { ...options, signal: controller.signal })
+    .finally(() => clearTimeout(timeoutId));
+}
 
 // Eagerly fetch CSRF token so it's ready before the first mutating request
 initCSRFToken();
@@ -63,7 +77,7 @@ class ApiClient {
     }
 
     try {
-      const response = await fetch(fullUrl, {
+      const response = await fetchWithTimeout(fullUrl, {
         ...options,
         headers,
       });

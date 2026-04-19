@@ -11,7 +11,16 @@ import { initCSRFToken, getCSRFHeaders, getCSRFToken } from './csrfService';
 import type { Coordinates } from '../types';
 
 const API_BASE = import.meta.env.VITE_API_URL || '';
+const API_TIMEOUT = 10000;
 
+function fetchWithTimeout(url: string, options: RequestInit = {}): Promise<Response> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), API_TIMEOUT);
+  return fetch(url, { ...options, signal: controller.signal })
+    .finally(() => clearTimeout(timeoutId));
+}
+
+/** Authentication state managed by the auth service */
 interface AuthState {
   isAuthenticated: boolean;
   user: any | null;
@@ -50,7 +59,7 @@ export function getAuthState(): AuthState {
 
 export async function getAccessToken(): Promise<string | null> {
   try {
-    const res = await fetch(`${API_BASE}/api/auth/me`, {
+    const res = await fetchWithTimeout(`${API_BASE}/api/auth/me`, {
       credentials: 'include',
     });
     if (res.ok) {
@@ -70,7 +79,7 @@ export function getStoredToken(): string | null {
 
 export async function getRealtimeToken(): Promise<string | null> {
   try {
-    const res = await fetch(`${API_BASE}/api/auth/socket-token`, {
+    const res = await fetchWithTimeout(`${API_BASE}/api/auth/socket-token`, {
       credentials: 'include',
     });
     if (!res.ok) return null;
@@ -94,7 +103,7 @@ export async function refreshAccessToken(): Promise<boolean> {
 
   refreshPromise = (async () => {
     try {
-      const res = await fetch(`${API_BASE}/api/auth/refresh`, {
+      const res = await fetchWithTimeout(`${API_BASE}/api/auth/refresh`, {
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
@@ -123,7 +132,7 @@ export async function refreshAccessToken(): Promise<boolean> {
 
 export async function ensureValidToken(): Promise<boolean> {
   try {
-    const res = await fetch(`${API_BASE}/api/auth/me`, {
+    const res = await fetchWithTimeout(`${API_BASE}/api/auth/me`, {
       credentials: 'include',
     });
 

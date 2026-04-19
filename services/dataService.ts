@@ -9,6 +9,7 @@ import { websocketService } from './websocketService';
 import { getCSRFHeaders, getCSRFToken } from './csrfService';
 
 const API_BASE = import.meta.env.VITE_API_URL || '';
+const API_TIMEOUT = 10000;
 
 const uid = () => {
   try {
@@ -19,8 +20,20 @@ const uid = () => {
 
 const idempotencyKey = (prefix: string) => `gd-${prefix}-${uid()}`;
 
+/**
+ * Fetch with timeout to prevent hanging requests
+ * @param url - The URL to fetch
+ * @param options - Fetch options
+ * @returns Promise<Response>
+ */
+function fetchWithTimeout(url: string, options: RequestInit = {}): Promise<Response> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), API_TIMEOUT);
+  return fetch(url, { ...options, signal: controller.signal })
+    .finally(() => clearTimeout(timeoutId));
+}
+
 async function apiRequest(path: string, init: RequestInit = {}) {
-  // For non-GET requests, ensure we have a CSRF token
   let csrfHeaders = {};
   if (init.method && init.method !== 'GET' && init.method !== 'HEAD' && init.method !== 'OPTIONS') {
     await getCSRFToken();
@@ -33,7 +46,7 @@ async function apiRequest(path: string, init: RequestInit = {}) {
     ...(init.headers as Record<string, string> || {}),
   };
 
-  const res = await fetch(`${API_BASE}${path}`, { ...init, headers, credentials: 'include' });
+  const res = await fetchWithTimeout(`${API_BASE}${path}`, { ...init, headers, credentials: 'include' });
   const body = await res.json().catch(() => ({}));
   if (!res.ok) {
     const msg = body.error || body.message || `Request failed (${res.status})`;

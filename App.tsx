@@ -107,8 +107,15 @@ const App: React.FC = () => {
     useThemeEngine({ theme, highContrast, fontScale, reducedMotion, darkMode, voiceEnabled, locale: currentLocale });
 
     // ── Data initialisation from backend API ─────────────────────────────────
+    /**
+     * Load user and class data from backend when user logs in
+     * Sets isLoading(false) to proceed past loading screen
+     */
     useEffect(() => {
-        if (!currentUser) return;
+        if (!currentUser) {
+            setIsLoading(false);
+            return;
+        }
         
         const loadData = async () => {
             try {
