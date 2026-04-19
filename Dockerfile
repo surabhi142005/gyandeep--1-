@@ -1,51 +1,32 @@
-# Multi-stage Dockerfile for Gyandeep
+# Dockerfile for Gyandeep Backend (Render deployment)
+# Frontend should be deployed separately to Vercel
 
-# Stage 1: Build & Dependencies
-FROM node:20-alpine AS builder
+FROM node:20-alpine
 
 WORKDIR /app
 
-# Install build dependencies
+# Install build dependencies for native modules
 RUN apk add --no-cache python3 make g++
 
 # Copy package files
 COPY package*.json ./
 
-# Install all dependencies with --legacy-peer-deps to handle React 18/19 peer conflicts
-# specifically for @react-three/drei and @react-three/fiber
-RUN npm install --legacy-peer-deps
+# Install production dependencies only
+RUN npm install --omit=dev --legacy-peer-deps
 
-# Copy source code
-COPY . .
+# Copy backend files
+COPY server ./server
+COPY lib ./lib
+COPY node_modules ./node_modules
 
-# Build the frontend
-RUN npm run build
-
-# Stage 2: Production
-FROM node:20-alpine AS production
-
-WORKDIR /app
-
-# Copy package files
-COPY package*.json ./
-
-# Copy built assets and necessary backend files from builder
-COPY --from=builder /app/dist ./dist
-COPY --from=builder /app/server ./server
-COPY --from=builder /app/lib ./lib
-COPY --from=builder /app/api ./api
-COPY --from=builder /app/node_modules ./node_modules
-COPY --from=builder /app/public ./public
-
-# Create directories
-RUN mkdir -p public/models server/data server/storage
+# Create required directories
+RUN mkdir -p server/data server/storage
 
 # Set environment
 ENV NODE_ENV=production
-ENV PORT=3001
 
-# Expose port
-EXPOSE 3001
+# Expose port - Render provides this via $PORT
+EXPOSE $PORT
 
-# Start server
+# Start server (reads PORT from environment - Render provides this)
 CMD ["node", "server/index.js"]
