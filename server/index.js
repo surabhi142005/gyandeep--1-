@@ -58,6 +58,7 @@ app.use(cookieParser());
 const getCorsOrigins = () => {
   const origins = [];
   
+  // Always allow FRONTEND_URL if provided
   if (process.env.FRONTEND_URL) {
     origins.push(process.env.FRONTEND_URL);
   }
@@ -66,20 +67,31 @@ const getCorsOrigins = () => {
     origins.push(process.env.ALLOWED_ORIGIN);
   }
   
+  // Parse ALLOWED_ORIGINS - never use '*' in production with credentials
   if (process.env.ALLOWED_ORIGINS) {
-    if (process.env.ALLOWED_ORIGINS === '*') return '*';
-    origins.push(...process.env.ALLOWED_ORIGINS.split(',').map(o => o.trim()).filter(Boolean));
+    const trimmed = process.env.ALLOWED_ORIGINS.trim().toLowerCase();
+    // Block wildcard in production - it's insecure with credentials mode
+    if (trimmed === '*' && process.env.NODE_ENV === 'production') {
+      console.warn('[CORS] WARNING: ALLOWED_ORIGINS=* is insecure with credentials mode');
+    } else if (trimmed !== '*') {
+      origins.push(...trimmed.split(',').map(o => o.trim()).filter(Boolean));
+    }
   }
 
-  // Vercel deployment URLs
+  // Vercel deployment URLs (automatically provided by Vercel)
   if (process.env.VERCEL_URL) origins.push(`https://${process.env.VERCEL_URL}`);
   if (process.env.VERCEL_PROJECT_PRODUCTION_URL) origins.push(`https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`);
   if (process.env.VERCEL_BRANCH_URL) origins.push(`https://${process.env.VERCEL_BRANCH_URL}`);
   
-  // Return unique, normalized origins or *
+  // In production, if no origins configured, we can't allow all (insecure with credentials)
+  // Instead, require explicit configuration
+  if (origins.length === 0 && process.env.NODE_ENV === 'production') {
+    console.error('[CORS] No ALLOWED_ORIGINS configured for production! API requests will fail.');
+  }
+  
   return origins.length > 0 
     ? [...new Set(origins.map(o => o.replace(/\/$/, '').toLowerCase()))] 
-    : '*';
+    : ['http://localhost:5173', 'http://localhost:10000']; // Development fallback
 };
 
 const allowedOrigins = getCorsOrigins();
@@ -94,10 +106,17 @@ app.use(cors({
     
     const normalizedOrigin = origin.replace(/\/$/, '').toLowerCase();
     
-    // Check if origin is allowed
-    const isAllowed = allowedOrigins === '*' || 
-                     allowedOrigins.includes(normalizedOrigin) ||
+    // Never use wildcard with credentials - always specify exact origins
+    if (allowedOrigins === '*') {
+      console.warn('[CORS] ALLOWED_ORIGINS=* is insecure with credentials, blocking all origins');
+      return callback(null, false);
+    }
+    
+    // Check if origin is allowed - also allow all Vercel preview apps
+    const isAllowed = allowedOrigins.includes(normalizedOrigin) ||
                      normalizedOrigin.endsWith('.vercel.app') ||
+                     normalizedOrigin.endsWith('.vercel.sh') ||
+                     normalizedOrigin.includes('.vercel.') ||
                      (process.env.VERCEL && normalizedOrigin.includes('vercel.app'));
 
     if (isAllowed) {
