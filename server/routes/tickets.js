@@ -11,7 +11,7 @@ import { broadcastTicketUpdate } from '../services/broadcast.js';
 import { broadcastToUser, broadcastToAll } from './events.js';
 import { authMiddleware } from '../middleware/auth.js';
 
-router.get('/', authMiddleware, async (req, res) => {
+router.get('/', async (req, res) => {
   try {
     const db = await connectToDatabase();
     const { status, priority, assignedTo } = req.query;

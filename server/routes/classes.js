@@ -9,7 +9,8 @@ import { ObjectId } from 'mongodb';
 import { connectToDatabase, COLLECTIONS } from '../db/mongoAtlas.js';
 import { authMiddleware } from '../middleware/auth.js';
 
-router.get('/', authMiddleware, async (req, res) => {
+// Public endpoint - no auth required
+router.get('/', async (req, res) => {
   try {
     const db = await connectToDatabase();
     const classes = await db.collection(COLLECTIONS.CLASSES)

@@ -155,6 +155,7 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({
       userAvatar={student.faceImage}
       onLogout={onLogout}
       onShowProfile={() => setActiveTab('profile')}
+      theme={theme}
     >
       <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
         {/* Gamification Bar */}

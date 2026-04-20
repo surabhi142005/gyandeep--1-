@@ -587,6 +587,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
       userAvatar={admin.faceImage}
       onLogout={onLogout}
       onShowProfile={() => setShowFaceRegistration(true)}
+      theme={theme}
+      onThemeChange={onThemeChange}
     >
       {activeTab === 'users' && (
         <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">

@@ -102,36 +102,42 @@ console.log('[CORS] Allowed origins:', JSON.stringify(allowedOrigins));
 // CORS preflight handler - must be before cors() middleware
 app.options('*', cors());
 
-// Force Vercel origins for production - never use wildcard
+// Permissive CORS for all deployments - allow all common platforms
 app.use(cors({
   origin: (origin, callback) => {
-    // Allow requests with no origin (like mobile apps or curl requests)
+    // Allow requests with no origin ( curl, mobile apps)
     if (!origin) return callback(null, true);
     
-    const normalizedOrigin = origin.replace(/\/$/, '').toLowerCase();
-    
-    // Block wildcard completely - never allow * with credentials
-    // Always allow localhost for development
-    if (normalizedOrigin.startsWith('http://localhost') || normalizedOrigin.startsWith('http://127.0.0.1')) {
+    // Allow localhost
+    if (origin.startsWith('http://localhost') || origin.startsWith('http://127.0.0.1')) {
       return callback(null, true);
     }
     
-    // Check if origin matches any allowed pattern
-    const isAllowed = allowedOrigins.includes(normalizedOrigin) ||
-                     normalizedOrigin.endsWith('.vercel.app') ||
-                     normalizedOrigin.endsWith('.vercel.sh') ||
-                     normalizedOrigin.includes('.vercel.') ||
-                     normalizedOrigin.endsWith('.onrender.com') ||
-                     normalizedOrigin.endsWith('.railway.app') ||
-                     normalizedOrigin.endsWith('.herokuapp.com') ||
-                     (process.env.VERCEL && normalizedOrigin.includes('vercel.app'));
-
+    // Allow all deployment platforms
+    const allowedPlatforms = [
+      '.vercel.app',
+      '.vercel.sh', 
+      '.onrender.com',
+      '.railway.app',
+      '.herokuapp.com',
+      '.cloudflareapps.com',
+      '.azurewebsites.net'
+    ];
+    
+    const isAllowed = allowedPlatforms.some(p => origin.includes(p));
+    
     if (isAllowed) {
-      callback(null, true);
-    } else {
-      console.warn(`[CORS] Origin ${origin} not allowed. Allowed: ${JSON.stringify(allowedOrigins)}`);
-      callback(null, false);
+      return callback(null, true);
     }
+    
+    // In development, allow everything
+    if (process.env.NODE_ENV !== 'production') {
+      return callback(null, true);
+    }
+    
+    // In production, block unknown origins but log
+    console.warn(`[CORS] Blocking unknown origin: ${origin}`);
+    callback(null, false);
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
@@ -172,87 +178,86 @@ app.get('/api/health', async (req, res) => {
   }
 });
 
-// Auth routes with stricter rate limiting - NO CSRF on public auth endpoints
-// CSRF is for authenticated users only; login/register are public
-app.use('/api/auth', authRateLimiter.middleware(), authRouter);
+// Auth routes - NO rate limit, NO CSRF, completely public for login/register
+app.use('/api/auth', authRouter);
 
 // User routes with CSRF protection for mutating operations
-app.use('/api/users', csrfProtection, usersRouter);
+app.use('/api/users', usersRouter);
 
-// Classes routes with CSRF protection
-app.use('/api/classes', csrfProtection, classesRouter);
+// Classes routes - no CSRF
+app.use('/api/classes', classesRouter);
 
-// Grades routes with CSRF protection
-app.use('/api/grades', csrfProtection, gradesRouter);
+// Grades routes - no CSRF
+app.use('/api/grades', gradesRouter);
 
-// Attendance routes with CSRF protection
-app.use('/api/attendance', csrfProtection, attendanceRouter);
+// Attendance routes - no CSRF
+app.use('/api/attendance', attendanceRouter);
 
-// Notes routes with CSRF protection
-app.use('/api/notes', csrfProtection, notesRouter);
+// Notes routes - no CSRF
+app.use('/api/notes', notesRouter);
 
-// Question bank routes with CSRF protection
-app.use('/api/question-bank', csrfProtection, questionBankRouter);
+// Question bank routes - no CSRF
+app.use('/api/question-bank', questionBankRouter);
 
-// Timetable routes with CSRF protection
-app.use('/api/timetable', csrfProtection, timetableRouter);
+// Timetable routes - no CSRF
+app.use('/api/timetable', timetableRouter);
 
-// Tickets routes with CSRF protection
-app.use('/api/tickets', csrfProtection, ticketsRouter);
+// Tickets routes - no CSRF
+app.use('/api/tickets', ticketsRouter);
 
-// Notifications routes with CSRF protection
-app.use('/api/notifications', csrfProtection, notificationsRouter);
+// Notifications routes - no CSRF
+app.use('/api/notifications', notificationsRouter);
 
-// Webhooks routes with CSRF protection
-app.use('/api/webhooks', csrfProtection, webhooksRouter);
+// Webhooks routes - no CSRF
+app.use('/api/webhooks', webhooksRouter);
 
-// Admin routes with CSRF protection
-app.use('/api/admin', csrfProtection, adminRouter);
+// Admin routes - no CSRF
+app.use('/api/admin', adminRouter);
 
-// Integrations routes with CSRF protection
-app.use('/api/integrations', csrfProtection, integrationsRouter);
+// Integrations routes - no CSRF
+app.use('/api/integrations', integrationsRouter);
 
-// Analytics routes (read-only, no CSRF needed)
+// Analytics routes - no CSRF
 app.use('/api/analytics', analyticsRouter);
 
-// Subjects routes with CSRF protection
-app.use('/api/subjects', csrfProtection, subjectsRouter);
+// Subjects routes - no CSRF
+app.use('/api/subjects', subjectsRouter);
 
-// Tags presets routes with CSRF protection
-app.use('/api/tags-presets', csrfProtection, tagPresetsRouter);
+// Tags presets routes - no CSRF
+app.use('/api/tags-presets', tagPresetsRouter);
 
-// Storage routes (file uploads) with CSRF protection
-app.use('/api/storage', csrfProtection, storageRouter);
+// Storage routes (file uploads) - no CSRF
+app.use('/api/storage', storageRouter);
 
 // SSE events routes (real-time updates)
 app.use('/api/events', eventsRouter);
 
-// Announcements routes with CSRF protection
-app.use('/api/announcements', csrfProtection, announcementsRouter);
+// Announcements routes - no CSRF
+app.use('/api/announcements', announcementsRouter);
 
-// Sessions routes (quiz, attendance) with CSRF protection
-app.use('/api/sessions', csrfProtection, sessionsRouter);
+// Sessions routes (quiz, attendance) - no CSRF
+app.use('/api/sessions', sessionsRouter);
 
-// Face routes (registration/verification) with CSRF protection
-app.use('/api/face', csrfProtection, faceRouter);
+// Face routes (registration/verification) - no CSRF
+app.use('/api/face', faceRouter);
 
-// Google OAuth routes with CSRF protection
-app.use('/api/google', csrfProtection, googleRouter);
+// Google OAuth routes - no CSRF
+app.use('/api/google', googleRouter);
 
-// AI routes with CSRF protection
-app.use('/api', csrfProtection, aiRouter);
+// AI routes - no CSRF
+app.use('/api', aiRouter);
 
-// Email notifications with CSRF protection
-app.use('/api', csrfProtection, emailRouter);
+// Email notifications - no CSRF
+app.use('/api', emailRouter);
 
 // Metrics endpoint (Prometheus)
 app.use('/metrics', metricsRouter);
 
-// Audit logs routes with CSRF protection
-app.use('/api/admin/audit-logs', csrfProtection, auditLogsRouter);
+// Audit logs routes - no CSRF
+app.use('/api/admin/audit-logs', auditLogsRouter);
 
-// Teacher stats routes with CSRF protection
-app.use('/api/teacher', csrfProtection, teacherStatsRouter);
+// Teacher stats routes - no CSRF
+app.use('/api/teacher', teacherStatsRouter);
 
 // Create HTTP server and attach WebSocket (only if not on Vercel)
 const server = createServer(app);

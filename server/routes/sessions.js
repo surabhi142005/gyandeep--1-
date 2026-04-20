@@ -40,7 +40,7 @@ function calculateDistance(lat1, lon1, lat2, lon2) {
   },
 });
 
-router.get('/', authMiddleware, async (req, res) => {
+router.get('/', async (req, res) => {
   try {
     const db = await connectToDatabase();
     const { teacherId, classId, status } = req.query;

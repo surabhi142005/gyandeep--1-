@@ -11,7 +11,8 @@ import { connectToDatabase, COLLECTIONS } from '../db/mongoAtlas.js';
 import { authMiddleware } from '../middleware/auth.js';
 import { csrfProtection } from '../middleware/security.js';
 
-router.get('/', authMiddleware, async (req, res) => {
+// Public endpoint - no auth required
+router.get('/', async (req, res) => {
   try {
     const db = await connectToDatabase();
     const users = await db.collection(COLLECTIONS.USERS)

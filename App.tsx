@@ -66,6 +66,11 @@ const App: React.FC = () => {
     const [notification, setNotification] = useState<{ message: string; type: ToastType } | null>(null);
     const [showLiquid, setShowLiquid] = useState(false);
 
+    // Apply theme to document
+    useEffect(() => {
+        document.documentElement.setAttribute('data-theme', theme);
+    }, [theme]);
+
     // Delay LiquidChrome to improve LCP
     useEffect(() => {
         const timer = setTimeout(() => setShowLiquid(true), 500);
