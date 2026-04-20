@@ -81,7 +81,9 @@ const App: React.FC = () => {
         { id: 'english', name: 'English' },
     ]);
     const [allClasses, setAllClasses] = useState<ClassConfig[]>([]);
-    const [isSetupComplete, setIsSetupComplete] = useState(false);
+    const [isSetupComplete, setIsSetupComplete] = useState(() => {
+        try { return localStorage.getItem('gyandeep_setup_complete') === 'true'; } catch { return false; }
+    });
     const [announcements, setAnnouncements] = useState<Announcement[]>([]);
     const [isLoading, setIsLoading] = useState(true);
 
@@ -124,13 +126,26 @@ const App: React.FC = () => {
                     fetchClasses()
                 ]);
                 setAllUsers(users || []);
+                try { localStorage.setItem('gyandeep_cached_users', JSON.stringify(users || [])); } catch {}
                 setAllClasses(classes || []);
                 if (Array.isArray(users) && users.length > 0) {
                     setIsSetupComplete(true);
+                    try { localStorage.setItem('gyandeep_setup_complete', 'true'); } catch {}
                 }
             } catch (err) {
                 console.error('Failed to fetch data from server:', err);
                 showNotification('Failed to connect to server. Please ensure backend is running.', 'error');
+                // Fallback: load cached users from localStorage
+                try {
+                    const cached = localStorage.getItem('gyandeep_cached_users');
+                    if (cached) {
+                        const parsed = JSON.parse(cached);
+                        setAllUsers(parsed || []);
+                        if (Array.isArray(parsed) && parsed.length > 0) {
+                            setIsSetupComplete(true);
+                        }
+                    }
+                } catch {}
             } finally {
                 setIsLoading(false);
             }
@@ -159,6 +174,7 @@ const App: React.FC = () => {
         }
         setAllUsers([newAdmin]);
         setIsSetupComplete(true);
+        try { localStorage.setItem('gyandeep_setup_complete', 'true'); } catch {}
     };
 
     // ── User management ───────────────────────────────────────────────────────
