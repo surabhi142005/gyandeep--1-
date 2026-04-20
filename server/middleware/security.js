@@ -54,10 +54,12 @@ export function csrfProtection(req, res, next) {
   const signature = req.headers['x-csrf-signature'];
   const ENVIRONMENT = process.env.NODE_ENV || 'development';
   
-  // Make CSRF optional for initial login/register to prevent lockouts
+// Make CSRF optional for initial login/register to prevent lockouts
   const isAuthRoute = req.path.includes('/api/auth/login') || 
-                     req.path.includes('/api/auth/register') ||
-                     req.path.includes('/api/auth/csrf-token');
+                       req.path.includes('/api/auth/register') ||
+                       req.path.includes('/api/auth/csrf-token') ||
+                       req.path.includes('/api/chat') ||
+                       req.path.includes('/api/quiz');
 
   if (!token) {
     if (isAuthRoute) {

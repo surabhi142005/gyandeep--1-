@@ -89,16 +89,20 @@ const getCorsOrigins = () => {
     console.error('[CORS] No ALLOWED_ORIGINS configured for production! API requests will fail.');
   }
   
-  return origins.length > 0 
-    ? [...new Set(origins.map(o => o.replace(/\/$/, '').toLowerCase()))] 
+  const filtered = origins.map(o => o.replace(/\/$/, '').toLowerCase()).filter(o => o !== '*');
+  return filtered.length > 0 
+    ? [...new Set(filtered)] 
     : ['http://localhost:5173', 'http://localhost:10000']; // Development fallback
 };
 
 const allowedOrigins = getCorsOrigins();
 
+console.log('[CORS] Allowed origins:', JSON.stringify(allowedOrigins));
+
 // CORS preflight handler - must be before cors() middleware
 app.options('*', cors());
 
+// Force Vercel origins for production - never use wildcard
 app.use(cors({
   origin: (origin, callback) => {
     // Allow requests with no origin (like mobile apps or curl requests)
@@ -106,17 +110,20 @@ app.use(cors({
     
     const normalizedOrigin = origin.replace(/\/$/, '').toLowerCase();
     
-    // Never use wildcard with credentials - always specify exact origins
-    if (allowedOrigins === '*') {
-      console.warn('[CORS] ALLOWED_ORIGINS=* is insecure with credentials, blocking all origins');
-      return callback(null, false);
+    // Block wildcard completely - never allow * with credentials
+    // Always allow localhost for development
+    if (normalizedOrigin.startsWith('http://localhost') || normalizedOrigin.startsWith('http://127.0.0.1')) {
+      return callback(null, true);
     }
     
-    // Check if origin is allowed - also allow all Vercel preview apps
+    // Check if origin matches any allowed pattern
     const isAllowed = allowedOrigins.includes(normalizedOrigin) ||
                      normalizedOrigin.endsWith('.vercel.app') ||
                      normalizedOrigin.endsWith('.vercel.sh') ||
                      normalizedOrigin.includes('.vercel.') ||
+                     normalizedOrigin.endsWith('.onrender.com') ||
+                     normalizedOrigin.endsWith('.railway.app') ||
+                     normalizedOrigin.endsWith('.herokuapp.com') ||
                      (process.env.VERCEL && normalizedOrigin.includes('vercel.app'));
 
     if (isAllowed) {
