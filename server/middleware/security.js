@@ -55,28 +55,8 @@ export function csrfProtection(req, res, next) {
 }
 
 export function securityHeaders(req, res, next) {
-  const isProduction = ENVIRONMENT === 'production';
-  const origin = req.headers.origin;
-
-  // Allow all common deployment platforms - be permissive for development
-  const isAllowedOrigin = !origin || 
-    origin.startsWith('http://localhost') ||
-    origin.startsWith('http://127.0.0.1') ||
-    origin.endsWith('.vercel.app') ||
-    origin.endsWith('.vercel.sh') ||
-    origin.endsWith('.onrender.com') ||
-    origin.endsWith('.railway.app') ||
-    origin.endsWith('.herokuapp.com') ||
-    origin.includes('vercel.app') ||
-    origin.includes('vercel.sh');
-
-  // Always set CORS headers - be permissive
-  if (origin) {
-    res.setHeader('Access-Control-Allow-Origin', origin);
-    res.setHeader('Access-Control-Allow-Credentials', 'true');
-    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, PATCH, OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-CSRF-Token, X-CSRF-Signature');
-  }
+  // CORS is now handled by the cors() middleware in index.js
+  // Don't set any CORS headers here to avoid conflicts
 
   // Basic security headers - relaxed for cross-origin
   res.setHeader('X-XSS-Protection', '1; mode=block');
