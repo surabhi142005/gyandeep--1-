@@ -34,6 +34,8 @@ function fetchWithTimeout(url: string, options: RequestInit = {}): Promise<Respo
 }
 
 async function apiRequest(path: string, init: RequestInit = {}) {
+  console.log('[API Request]', API_BASE + path);
+  
   let csrfHeaders = {};
   if (init.method && init.method !== 'GET' && init.method !== 'HEAD' && init.method !== 'OPTIONS') {
     await getCSRFToken();
@@ -47,6 +49,7 @@ async function apiRequest(path: string, init: RequestInit = {}) {
   };
 
   const res = await fetchWithTimeout(`${API_BASE}${path}`, { ...init, headers, credentials: 'include' });
+  console.log('[API Response]', path, res.status);
   const body = await res.json().catch(() => ({}));
   if (!res.ok) {
     const msg = body.error || body.message || `Request failed (${res.status})`;
