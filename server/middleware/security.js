@@ -102,13 +102,9 @@ const cspDirectives = {
     .map(([directive, values]) => `${directive} ${values.join(' ')}`)
     .join('; ');
 
-  // Relax CSP for production to allow external scripts
-  if (process.env.NODE_ENV === 'production') {
-    res.setHeader('Content-Security-Policy', "default-src 'self' https: 'unsafe-inline' 'unsafe-eval'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https:; connect-src 'self' wss: ws: https:;");
-  } else {
-    res.setHeader('Content-Security-Policy', cspString);
-  }
-  res.setHeader('X-Content-Security-Policy', cspString);
+  // Disable CSP in production to avoid blocking external scripts
+  res.removeHeader('Content-Security-Policy');
+  res.removeHeader('X-Content-Security-Policy');
 
   res.removeHeader('X-Powered-By');
   res.removeHeader('Server');
