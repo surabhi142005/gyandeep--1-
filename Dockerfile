@@ -1,4 +1,4 @@
-# Gyandeep Dockerfile - Backend Only (Frontend on Vercel)
+# Gyandeep Dockerfile - Full Stack on Render
 
 FROM node:22-alpine
 
@@ -10,16 +10,20 @@ RUN apk add --no-cache python3 make g++
 # Copy package files
 COPY package*.json ./
 
-# Install production dependencies
-RUN npm install --omit=dev --legacy-peer-deps
+# Install all dependencies
+RUN npm install --legacy-peer-deps
 
-# Copy backend and lib folders
+# Copy source files
+COPY . .
+
+# Install Vite for building
+RUN npm install vite -D
+
+# Build frontend
+RUN npx vite build
+
+# Copy server files
 COPY server ./server
-COPY lib ./lib
-COPY prisma ./prisma
-
-# Create directories
-RUN mkdir -p server/data server/storage
 
 # Set production env
 ENV NODE_ENV=production

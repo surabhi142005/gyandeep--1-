@@ -2,10 +2,10 @@ previewsEnabled: false
 
 services:
   - type: web
-    name: gyandeep-backend
+    name: gyandeep
     env: node
     region: oregon
-    buildCommand: npm install --legacy-peer-deps && npm run build
+    buildCommand: npm install && npm run build
     startCommand: node server/index.js
     healthCheckPath: /api/health
     envVars:
@@ -13,6 +13,12 @@ services:
         value: production
       - key: PORT
         value: 10000
+      - key: VITE_API_URL
+        value: https://gyandeep.onrender.com
+      - key: ALLOWED_ORIGINS
+        value: https://gyandeep.onrender.com
+      - key: API_URL
+        value: https://gyandeep.onrender.com
       - key: MONGODB_URI
         sync: false
       - key: MONGODB_DB
@@ -25,10 +31,6 @@ services:
         sync: false
       - key: REDIS_URL
         sync: false
-      - key: UPSTASH_REDIS_REST_URL
-        sync: false
-      - key: UPSTASH_REDIS_REST_TOKEN
-        sync: false
       - key: RESEND_API_KEY
         sync: false
       - key: EMAIL_FROM
@@ -39,24 +41,11 @@ services:
         sync: false
       - key: GOOGLE_CLIENT_SECRET
         sync: false
-      - key: RENDER_EXTERNAL_URL
-        fromService:
-          type: web
-          name: gyandeep-backend
-          envVarKey: RENDER_EXTERNAL_URL
-      - key: VITE_APP_URL
-        value: https://gyandeep.edu
-      - key: API_URL
-        value: https://gyandeep-backend.onrender.com
-      - key: ALLOWED_ORIGINS
-        value: https://gyandeep.edu
-      - key: OPENAI_API_KEY
-        sync: false
       - key: GEMINI_API_KEY
         sync: false
       - key: CLOUDINARY_CLOUD_NAME
-        value: dkir4idkb
+        sync: false
       - key: CLOUDINARY_API_KEY
-        value: 498654644824369
+        sync: false
       - key: CLOUDINARY_API_SECRET
-        value: LPZhp0eIhrkfJaUR7UGqX6P79jE
+        sync: false
