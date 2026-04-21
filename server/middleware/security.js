@@ -84,11 +84,11 @@ export function securityHeaders(req, res, next) {
 
 const cspDirectives = {
     'default-src': ["'self'"],
-    'script-src': ["'self'", "'unsafe-inline'", "'unsafe-eval'", "https://embed.tawk.to"], // Allow inline scripts and Tawk.to
+    'script-src': ["'self'", "'unsafe-inline'", "'unsafe-eval'", "https://*.tawk.to", "https://cdnjs.cloudflare.com"], // Allow inline scripts and Tawk.to
     'style-src': ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
     'img-src': ["'self'", 'data:', 'blob:', 'https:'],
     'font-src': ["'self'", 'https://fonts.gstatic.com'],
-    'connect-src': ["'self'", 'wss:', 'ws:', 'https://*.onrender.com', 'https://fonts.googleapis.com', 'https://fonts.gstatic.com', 'https://*.vercel.app', 'https://embed.tawk.to'],
+    'connect-src': ["'self'", 'wss:', 'ws:', 'https://*.onrender.com', 'https://fonts.googleapis.com', 'https://fonts.gstatic.com', 'https://*.vercel.app', 'https://*.tawk.to'],
     'frame-src': ["'none'"],
     'object-src': ["'none'"],
     'base-uri': ["'self'"],
