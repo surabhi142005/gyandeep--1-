@@ -44,6 +44,7 @@ import sessionsRouter from './routes/sessions.js';
 import faceRouter from './routes/face.js';
 import emailRouter from './routes/email.js';
 import teacherStatsRouter from './routes/teacherStats.js';
+import seedRouter from './routes/seed.js';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -259,6 +260,7 @@ app.use('/api/admin/audit-logs', auditLogsRouter);
 
 // Teacher stats routes - no CSRF
 app.use('/api/teacher', teacherStatsRouter);
+app.use('/api/seed', seedRouter);
 
 // Create HTTP server and attach WebSocket (only if not on Vercel)
 const server = createServer(app);
