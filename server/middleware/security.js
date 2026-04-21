@@ -82,13 +82,13 @@ export function securityHeaders(req, res, next) {
     res.setHeader('Strict-Transport-Security', 'max-age=0');
   }
 
-  const cspDirectives = {
+const cspDirectives = {
     'default-src': ["'self'"],
-    'script-src': ["'self'", "'unsafe-inline'"], // Allow inline scripts for React
+    'script-src': ["'self'", "'unsafe-inline'", "'unsafe-eval'", "https://embed.tawk.to"], // Allow inline scripts and Tawk.to
     'style-src': ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
     'img-src': ["'self'", 'data:', 'blob:', 'https:'],
     'font-src': ["'self'", 'https://fonts.gstatic.com'],
-    'connect-src': ["'self'", 'wss:', 'wss://*.onrender.com', 'https://fonts.googleapis.com', 'https://fonts.gstatic.com', 'https://*.vercel.app'],
+    'connect-src': ["'self'", 'wss:', 'ws:', 'https://*.onrender.com', 'https://fonts.googleapis.com', 'https://fonts.gstatic.com', 'https://*.vercel.app', 'https://embed.tawk.to'],
     'frame-src': ["'none'"],
     'object-src': ["'none'"],
     'base-uri': ["'self'"],
