@@ -84,11 +84,11 @@ export function securityHeaders(req, res, next) {
 
   const cspDirectives = {
     'default-src': ["'self'"],
-    'script-src': ["'self'"],
+    'script-src': ["'self'", "'unsafe-inline'"], // Allow inline scripts for React
     'style-src': ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
     'img-src': ["'self'", 'data:', 'blob:', 'https:'],
     'font-src': ["'self'", 'https://fonts.gstatic.com'],
-    'connect-src': ["'self'", 'wss:', 'https://fonts.googleapis.com', 'https://fonts.gstatic.com'],
+    'connect-src': ["'self'", 'wss:', 'wss://*.onrender.com', 'https://fonts.googleapis.com', 'https://fonts.gstatic.com', 'https://*.vercel.app'],
     'frame-src': ["'none'"],
     'object-src': ["'none'"],
     'base-uri': ["'self'"],
