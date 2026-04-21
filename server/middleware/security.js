@@ -83,15 +83,15 @@ export function securityHeaders(req, res, next) {
   }
 
 const cspDirectives = {
-    'default-src': ["'self'"],
-    'script-src': ["'self'", "'unsafe-inline'", "'unsafe-eval'", "https://*.tawk.to", "https://cdnjs.cloudflare.com"], // Allow inline scripts and Tawk.to
-    'style-src': ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
+    'default-src': ["'self'", 'https:'],
+    'script-src': ["'self'", "'unsafe-inline'", "'unsafe-eval'", 'https:', "https://*.tawk.to", "https://cdnjs.cloudflare.com"],
+    'style-src': ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com", "https:"],
     'img-src': ["'self'", 'data:', 'blob:', 'https:'],
-    'font-src': ["'self'", 'https://fonts.gstatic.com'],
-    'connect-src': ["'self'", 'wss:', 'ws:', 'https://*.onrender.com', 'https://fonts.googleapis.com', 'https://fonts.gstatic.com', 'https://*.vercel.app', 'https://*.tawk.to'],
+    'font-src': ["'self'", 'https://fonts.gstatic.com', 'https:'],
+    'connect-src': ["'self'", 'wss:', 'ws:', 'https:', "https://*.onrender.com", 'https://fonts.googleapis.com', 'https://fonts.gstatic.com'],
     'frame-src': ["'none'"],
     'object-src': ["'none'"],
-    'base-uri': ["'self'"],
+    'base-uri': ["'self'", 'https:'],
     'form-action': ["'self'"],
     'frame-ancestors': ["'none'"],
     'upgrade-insecure-requests': isProduction ? [] : [],
@@ -102,7 +102,12 @@ const cspDirectives = {
     .map(([directive, values]) => `${directive} ${values.join(' ')}`)
     .join('; ');
 
-  res.setHeader('Content-Security-Policy', cspString);
+  // Relax CSP for production to allow external scripts
+  if (process.env.NODE_ENV === 'production') {
+    res.setHeader('Content-Security-Policy', "default-src 'self' https: 'unsafe-inline' 'unsafe-eval'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https:; connect-src 'self' wss: ws: https:;");
+  } else {
+    res.setHeader('Content-Security-Policy', cspString);
+  }
   res.setHeader('X-Content-Security-Policy', cspString);
 
   res.removeHeader('X-Powered-By');
