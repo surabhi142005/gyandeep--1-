@@ -31,7 +31,7 @@ export function useLiveSession({ teacherId, sessionId }: UseLiveSessionOptions =
         if (parsed.expiry && parsed.expiry > Date.now()) {
           return parsed;
         }
-      } catch { /* ignore */ }
+      } catch (e) { console.warn('Failed to restore session from storage:', e); }
     }
     return {
       id: null,

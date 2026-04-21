@@ -125,15 +125,20 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({
     setIsVerifying(true);
     setMessage(null);
     try {
-      const faceRes = await verifyFace(imageDataUrl, student.id);
-      if (!faceRes.authenticated) throw new Error('Face verification failed');
-
       const pos = await getCurrentPosition();
       const teacherPos = { lat: classSession.lat || 0, lng: classSession.lng || 0 };
       const locRes = await verifyLocation(pos, teacherPos, classSession.radius || 10);
       if (!locRes.authenticated) throw new Error('You are not in the classroom range');
 
       if (code !== classSession.code) throw new Error('Invalid attendance code');
+
+      const faceRes = await verifyFace(imageDataUrl, student.id, {
+        recordAttendance: true,
+        sessionId: classSession.id,
+        classId: classSession.classId,
+        location: pos,
+      });
+      if (!faceRes.authenticated) throw new Error('Face verification failed');
 
       onMarkAttendance(student.id);
       setMessage({ type: 'success', text: 'Attendance marked successfully!' });

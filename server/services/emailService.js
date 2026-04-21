@@ -17,6 +17,8 @@ const PROVIDERS = {
 let emailProvider = null;
 let providerType = PROVIDERS.CONSOLE;
 
+const FRONTEND_URL = process.env.VITE_APP_URL || (process.env.NODE_ENV === 'production' ? 'https://gyandeep.edu' : 'http://localhost:5173');
+
 /**
  * Initialize the email service
  */
@@ -267,7 +269,7 @@ function generateEmailTemplate(content, options = {}) {
  * Send password reset email
  */
 export async function sendPasswordResetEmail(email, resetToken, userName = '') {
-  const resetUrl = `${process.env.VITE_APP_URL || 'http://localhost:5173'}/reset-password?token=${resetToken}`;
+  const resetUrl = `${FRONTEND_URL}/reset-password?token=${resetToken}`;
 
   const content = `
     <h2>Password Reset Request</h2>
@@ -327,8 +329,8 @@ export async function sendVerificationCode(email, code, purpose = 'verification'
  * Send welcome email to new users
  */
 export async function sendWelcomeEmail(email, userName, userType = 'student') {
-  const dashboardUrl = `${process.env.VITE_APP_URL || 'http://localhost:5173'}/dashboard`;
-  const helpUrl = `${process.env.VITE_APP_URL || 'http://localhost:5173'}/help`;
+  const dashboardUrl = `${FRONTEND_URL}/dashboard`;
+  const helpUrl = `${FRONTEND_URL}/help`;
 
   const content = `
     <h2>Welcome to Gyandeep! 🎉</h2>

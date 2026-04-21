@@ -1,165 +1,126 @@
 /**
  * server/lib/storage.js
- * Cloud storage integration for R2/S3-compatible services
+ * File storage using Cloudinary (free 25GB)
  */
 
-import { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand, HeadObjectCommand } from '@aws-sdk/client-s3';
-import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
+import { v2 as cloudinary } from 'cloudinary';
+import { Readable } from 'stream';
 
-const R2_ACCOUNT_ID = process.env.R2_ACCOUNT_ID;
-const R2_ACCESS_KEY_ID = process.env.R2_ACCESS_KEY_ID;
-const R2_SECRET_ACCESS_KEY = process.env.R2_SECRET_ACCESS_KEY;
-const R2_BUCKET_NAME = process.env.R2_BUCKET_NAME || 'gyandeep-uploads';
-const R2_PUBLIC_URL = process.env.R2_PUBLIC_URL || `https://${R2_ACCOUNT_ID}.r2.dev`;
+const CLOUDINARY_CLOUD_NAME = process.env.CLOUDINARY_CLOUD_NAME;
+const CLOUDINARY_API_KEY = process.env.CLOUDINARY_API_KEY;
+const CLOUDINARY_API_SECRET = process.env.CLOUDINARY_API_SECRET;
 
-let s3Client = null;
+let cloudinaryConfigured = false;
 
-function getS3Client() {
-  if (s3Client) return s3Client;
-
-  if (R2_ACCOUNT_ID && R2_ACCESS_KEY_ID && R2_SECRET_ACCESS_KEY) {
-    s3Client = new S3Client({
-      region: 'auto',
-      endpoint: `https://${R2_ACCOUNT_ID}.r2.dev`,
-      credentials: {
-        accessKeyId: R2_ACCESS_KEY_ID,
-        secretAccessKey: R2_SECRET_ACCESS_KEY,
-      },
+function initCloudinary() {
+  if (CLOUDINARY_CLOUD_NAME && CLOUDINARY_API_KEY && CLOUDINARY_API_SECRET) {
+    cloudinary.config({
+      cloud_name: CLOUDINARY_CLOUD_NAME,
+      api_key: CLOUDINARY_API_KEY,
+      api_secret: CLOUDINARY_API_SECRET,
     });
-    console.log('[Storage] R2/S3 client initialized');
+    cloudinaryConfigured = true;
+    console.log('[Storage] Cloudinary initialized');
   } else {
-    console.warn('[Storage] Cloud storage not configured - falling back to base64');
+    console.warn('[Storage] Cloudinary not configured - using base64 storage');
   }
-
-  return s3Client;
 }
 
+initCloudinary();
+
 export async function uploadFile(buffer, key, contentType) {
-  const client = getS3Client();
-  
-  if (!client) {
+  if (!cloudinaryConfigured) {
     throw new Error('Cloud storage not configured');
   }
 
-  const command = new PutObjectCommand({
-    Bucket: R2_BUCKET_NAME,
-    Key: key,
-    Body: buffer,
-    ContentType: contentType,
-    CacheControl: 'max-age=31536000',
+  return new Promise((resolve, reject) => {
+    const uploadStream = cloudinary.uploader.upload_stream(
+      {
+        folder: 'gyandeep',
+        public_id: key.replace(/\.[^/.]+$/, ''),
+        resource_type: 'auto',
+      },
+      (error, result) => {
+        if (error) {
+          reject(error);
+        } else {
+          resolve({
+            key,
+            url: result.secure_url,
+            publicId: result.public_id,
+          });
+        }
+      }
+    );
+
+    const stream = Readable.from(buffer);
+    stream.pipe(uploadStream);
   });
-
-  await client.send(command);
-
-  const url = `${R2_PUBLIC_URL}/${key}`;
-
-  return {
-    key,
-    url,
-    bucket: R2_BUCKET_NAME,
-  };
 }
 
 export async function getFileUrl(key, expiresIn = 3600) {
-  const client = getS3Client();
-  
-  if (!client) {
+  if (!cloudinaryConfigured) {
     throw new Error('Cloud storage not configured');
   }
 
-  const command = new GetObjectCommand({
-    Bucket: R2_BUCKET_NAME,
-    Key: key,
+  return cloudinary.url(key, {
+    secure: true,
+    sign_url: true,
+    expires: Math.floor(Date.now() / 1000) + expiresIn,
   });
-
-  return getSignedUrl(client, command, { expiresIn });
 }
 
 export async function deleteFile(key) {
-  const client = getS3Client();
-  
-  if (!client) {
+  if (!cloudinaryConfigured) {
     throw new Error('Cloud storage not configured');
   }
 
-  const command = new DeleteObjectCommand({
-    Bucket: R2_BUCKET_NAME,
-    Key: key,
-  });
-
-  await client.send(command);
+  const result = await cloudinary.uploader.destroy(key);
   return { deleted: true, key };
 }
 
 export async function getFileMetadata(key) {
-  const client = getS3Client();
-  
-  if (!client) {
+  if (!cloudinaryConfigured) {
     throw new Error('Cloud storage not configured');
   }
 
-  const command = new HeadObjectCommand({
-    Bucket: R2_BUCKET_NAME,
-    Key: key,
-  });
-
-  const response = await client.send(command);
-  
+  const result = await cloudinary.api.resource(key);
   return {
-    contentType: response.ContentType,
-    contentLength: response.ContentLength,
-    lastModified: response.LastModified,
-    etag: response.ETag,
+    contentType: result.format,
+    contentLength: result.bytes,
+    lastModified: result.created_at,
+    etag: result.asset_id,
   };
 }
 
 export async function checkStorageHealth() {
-  const configured = !!(R2_ACCOUNT_ID && R2_ACCESS_KEY_ID && R2_SECRET_ACCESS_KEY);
-  
-  if (!configured) {
+  if (!cloudinaryConfigured) {
     return {
       configured: false,
       provider: 'none',
-      message: 'Cloud storage not configured',
+      message: 'Cloudinary not configured',
     };
   }
 
   try {
-    const client = getS3Client();
-    const command = new HeadObjectCommand({
-      Bucket: R2_BUCKET_NAME,
-      Key: '.health-check',
-    });
-    
-    await client.send(command);
-    
+    await cloudinary.api.ping();
     return {
       configured: true,
-      provider: 'cloudflare-r2',
-      bucket: R2_BUCKET_NAME,
-      message: 'Cloud storage is healthy',
+      provider: 'cloudinary',
+      message: 'Cloudinary is healthy',
     };
   } catch (error) {
-    if (error.name === 'NotFound' || error.$metadata?.httpStatusCode === 404) {
-      return {
-        configured: true,
-        provider: 'cloudflare-r2',
-        bucket: R2_BUCKET_NAME,
-        message: 'Cloud storage configured (bucket accessible)',
-      };
-    }
-    
     return {
       configured: false,
-      provider: 'cloudflare-r2',
+      provider: 'cloudinary',
       error: error.message,
-      message: 'Cloud storage configuration error',
+      message: 'Cloudinary configuration error',
     };
   }
 }
 
 export function isStorageConfigured() {
-  return !!(R2_ACCOUNT_ID && R2_ACCESS_KEY_ID && R2_SECRET_ACCESS_KEY);
+  return cloudinaryConfigured;
 }
 
 export default {

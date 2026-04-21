@@ -12,6 +12,7 @@ const purify = DOMPurify(window);
 
 const CSRF_SECRET = process.env.CSRF_SECRET || process.env.SESSION_SECRET || 'default-csrf-secret-change-me';
 const ENVIRONMENT = process.env.NODE_ENV || 'development';
+const isProduction = ENVIRONMENT === 'production';
 
 export function generateCSRFToken() {
   return crypto.randomBytes(32).toString('hex');
@@ -55,6 +56,7 @@ export function csrfProtection(req, res, next) {
 }
 
 export function securityHeaders(req, res, next) {
+  const isProduction = (process.env.NODE_ENV || 'development') === 'production';
   // CORS is now handled by the cors() middleware in index.js
   // Don't set any CORS headers here to avoid conflicts
 

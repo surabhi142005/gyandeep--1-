@@ -59,6 +59,7 @@ router.post('/upload', authMiddleware, handleUpload, async (req, res) => {
     const file = req.file;
 
     const R2_CONFIGURED = process.env.R2_ACCOUNT_ID && process.env.R2_ACCESS_KEY_ID;
+    const CLOUDINARY_CONFIGURED = process.env.CLOUDINARY_CLOUD_NAME && process.env.CLOUDINARY_API_KEY;
 
     if (R2_CONFIGURED) {
       const { uploadFile } = await import('../lib/storage.js');
@@ -81,6 +82,42 @@ router.post('/upload', authMiddleware, handleUpload, async (req, res) => {
         noteType: type || 'class_notes',
         uploadedBy: userId || null,
         deletedAt: null,
+        _id: new ObjectId(),
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+      
+      await db.collection(COLLECTIONS.SESSION_NOTES).insertOne(note);
+      
+      return res.json({
+        ok: true,
+        id: note._id.toString(),
+        url: result.url,
+        fileName: file.originalname,
+        fileSize: file.size,
+      });
+    } else if (CLOUDINARY_CONFIGURED) {
+      const { uploadFile } = await import('../lib/storage.js');
+      const timestamp = Date.now();
+      const safeName = file.originalname.replace(/[^a-zA-Z0-9.-]/g, '_');
+      const key = `uploads/${classId || 'shared'}/${subjectId || 'general'}/${timestamp}-${safeName}`;
+      
+      const result = await uploadFile(file.buffer, key, file.mimetype);
+      
+      const db = await connectToDatabase();
+      const note = {
+        classId: classId || null,
+        subjectId: subjectId || null,
+        title: file.originalname,
+        url: result.url,
+        key: result.publicId,
+        fileName: file.originalname,
+        fileSize: file.size,
+        mimeType: file.mimetype,
+        noteType: type || 'class_notes',
+        uploadedBy: userId || null,
+        deletedAt: null,
+        storage: 'cloudinary',
         _id: new ObjectId(),
         createdAt: new Date(),
         updatedAt: new Date(),
@@ -127,7 +164,7 @@ router.post('/upload', authMiddleware, handleUpload, async (req, res) => {
       url: dataUrl,
       fileName: file.originalname,
       fileSize: file.size,
-      storageWarning: 'Using local storage. Configure R2 for production.',
+      storageWarning: 'Using local storage. Configure Cloudinary for production.',
     });
   } catch (error) {
     console.error('Upload error:', error);
@@ -218,13 +255,19 @@ router.post('/profile', authMiddleware, handleUpload, async (req, res) => {
 router.get('/storage-status', (req, res) => {
   const R2_CONFIGURED = !!(process.env.R2_ACCOUNT_ID && process.env.R2_ACCESS_KEY_ID);
   const BACKBLAZE_CONFIGURED = !!(process.env.B2_ACCESS_KEY && process.env.B2_SECRET_KEY);
+  const CLOUDINARY_CONFIGURED = !!(process.env.CLOUDINARY_CLOUD_NAME && process.env.CLOUDINARY_API_KEY);
+  
+  let provider = 'none';
+  if (R2_CONFIGURED) provider = 'cloudflare-r2';
+  else if (BACKBLAZE_CONFIGURED) provider = 'backblaze-b2';
+  else if (CLOUDINARY_CONFIGURED) provider = 'cloudinary';
   
   res.json({
-    configured: R2_CONFIGURED || BACKBLAZE_CONFIGURED,
-    provider: R2_CONFIGURED ? 'cloudflare-r2' : BACKBLAZE_CONFIGURED ? 'backblaze-b2' : 'none',
-    message: R2_CONFIGURED || BACKBLAZE_CONFIGURED 
-      ? 'Cloud storage is configured' 
-      : 'Using local storage. Configure R2 or Backblaze for production.',
+    configured: R2_CONFIGURED || BACKBLAZE_CONFIGURED || CLOUDINARY_CONFIGURED,
+    provider,
+    message: (R2_CONFIGURED || BACKBLAZE_CONFIGURED || CLOUDINARY_CONFIGURED)
+      ? 'Cloud storage is configured'
+      : 'Using local storage. Configure Cloudinary, R2, or Backblaze for production.',
   });
 });
 

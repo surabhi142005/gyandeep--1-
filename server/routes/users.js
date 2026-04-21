@@ -15,11 +15,26 @@ import { csrfProtection } from '../middleware/security.js';
 router.get('/', async (req, res) => {
   try {
     const db = await connectToDatabase();
-    const users = await db.collection(COLLECTIONS.USERS)
-      .find({})
-      .project({ password: 0 })
-      .toArray();
-    res.json({ items: users.map(u => ({ ...u, id: u._id?.toString() || u.id })) });
+    
+    // Parse pagination params
+    const page = Math.max(1, parseInt(req.query.page) || 1);
+    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit) || 20));
+    const skip = (page - 1) * limit;
+    
+    const [users, total] = await Promise.all([
+      db.collection(COLLECTIONS.USERS)
+        .find({})
+        .project({ password: 0 })
+        .skip(skip)
+        .limit(limit)
+        .toArray(),
+      db.collection(COLLECTIONS.USERS).countDocuments(),
+    ]);
+    
+    res.json({
+      data: users.map(u => ({ ...u, id: u._id?.toString() || u.id })),
+      pagination: { page, limit, total, totalPages: Math.ceil(total / limit), hasMore: page * limit < total },
+    });
   } catch (error) {
     console.error('Get users error:', error);
     res.status(500).json({ error: 'Failed to fetch users' });

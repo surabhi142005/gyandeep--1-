@@ -13,11 +13,26 @@ import { authMiddleware } from '../middleware/auth.js';
 router.get('/', async (req, res) => {
   try {
     const db = await connectToDatabase();
-    const classes = await db.collection(COLLECTIONS.CLASSES)
-      .find({})
-      .sort({ name: 1 })
-      .toArray();
-    res.json(classes.map(c => ({ ...c, id: c._id?.toString() || c.id })));
+    
+    // Parse pagination params
+    const page = Math.max(1, parseInt(req.query.page) || 1);
+    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit) || 20));
+    const skip = (page - 1) * limit;
+    
+    const [classes, total] = await Promise.all([
+      db.collection(COLLECTIONS.CLASSES)
+        .find({})
+        .sort({ name: 1 })
+        .skip(skip)
+        .limit(limit)
+        .toArray(),
+      db.collection(COLLECTIONS.CLASSES).countDocuments(),
+    ]);
+    
+    res.json({
+      data: classes.map(c => ({ ...c, id: c._id?.toString() || c.id })),
+      pagination: { page, limit, total, totalPages: Math.ceil(total / limit), hasMore: page * limit < total },
+    });
   } catch (error) {
     console.error('Get classes error:', error);
     res.status(500).json({ error: 'Failed to fetch classes' });

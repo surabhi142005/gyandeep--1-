@@ -6,7 +6,8 @@
 
 import Redis from 'ioredis';
 
-const REDIS_URL = process.env.REDIS_URL || process.env.UPSTASH_REDIS_REST_URL || 'redis://localhost:6379';
+const isProduction = process.env.NODE_ENV === 'production';
+const REDIS_URL = process.env.REDIS_URL || process.env.UPSTASH_REDIS_REST_URL || (isProduction ? null : 'redis://localhost:6379');
 const SESSION_PREFIX = 'session:';
 const CACHE_PREFIX = 'cache:';
 const RATE_LIMIT_PREFIX = 'ratelimit:';
@@ -17,6 +18,11 @@ let initErrorLogged = false;
 
 export function initRedis() {
   try {
+    if (!REDIS_URL) {
+      console.warn('[Redis] No REDIS_URL configured - running without Redis cache');
+      return;
+    }
+    
     console.log('[Redis] Initializing, UPSTASH_REDIS_REST_URL:', !!process.env.UPSTASH_REDIS_REST_URL);
     console.log('[Redis] REDIS_URL:', REDIS_URL.substring(0, 30), '...');
     

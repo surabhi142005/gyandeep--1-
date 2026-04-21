@@ -25,7 +25,7 @@ export function useAuth({ allUsers: _allUsers, setAllUsers, showNotification }: 
     try {
       const raw = localStorage.getItem('gyandeep_current_user');
       return raw ? JSON.parse(raw) : null;
-    } catch { return null; }
+    } catch (e) { console.warn('Failed to restore user from storage:', e); return null; }
   });
   const [userLocation, setUserLocation] = useState<Coordinates | null>(null);
 

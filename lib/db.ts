@@ -6,7 +6,8 @@
 
 import { MongoClient, ObjectId, Db } from 'mongodb';
 
-const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/gyandeep';
+const isProduction = process.env.NODE_ENV === 'production';
+const MONGODB_URI = process.env.MONGODB_URI || (isProduction ? '' : 'mongodb://localhost:27017/gyandeep');
 const MONGODB_DB = process.env.MONGODB_DB || 'gyandeep';
 
 let cachedClient: MongoClient | null = null;

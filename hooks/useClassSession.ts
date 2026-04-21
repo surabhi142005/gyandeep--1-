@@ -21,7 +21,7 @@ function loadHistoricalRecords(userId: string): HistoricalSessionRecord[] {
   try {
     const raw = window.localStorage.getItem(`attendanceHistory_${userId}`);
     return raw ? JSON.parse(raw) : [];
-  } catch { return []; }
+  } catch (e) { console.warn('Failed to load historical records:', e); return []; }
 }
 
 function saveHistoricalRecords(userId: string, records: HistoricalSessionRecord[]) {

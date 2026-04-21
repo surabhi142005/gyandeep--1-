@@ -13,7 +13,8 @@ import { connectToDatabase, COLLECTIONS } from '../db/mongoAtlas.js';
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
 const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET;
 const JWT_SECRET = process.env.JWT_SECRET || 'gyandeep-secret-key';
-const FRONTEND_URL = process.env.VITE_APP_URL || 'http://localhost:5173';
+const FRONTEND_URL = process.env.VITE_APP_URL || (process.env.NODE_ENV === 'production' ? 'https://gyandeep.edu' : 'http://localhost:5173');
+const API_URL = process.env.API_URL || (process.env.NODE_ENV === 'production' ? 'https://api.gyandeep.edu' : 'http://localhost:3001');
 
 function generateTokenPair(user) {
   const accessToken = jwt.sign(
@@ -39,7 +40,7 @@ router.get('/auth/google', (req, res) => {
 
   const state = Math.random().toString(36).substring(7);
   const scope = encodeURIComponent('email profile');
-  const origin = process.env.API_URL || (process.env.NODE_ENV === 'production' ? `${req.protocol}://${req.get('host')}` : 'http://localhost:3001');
+  const origin = API_URL || `${req.protocol}://${req.get('host')}`;
   const redirectUri = `${origin}/api/google/callback`;
   
   const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?` +
@@ -66,7 +67,7 @@ router.post('/callback', async (req, res) => {
       return res.status(501).json({ error: 'Google OAuth not configured' });
     }
 
-    const origin = process.env.API_URL || (process.env.NODE_ENV === 'production' ? `${req.protocol}://${req.get('host')}` : 'http://localhost:3001');
+    const origin = API_URL || `${req.protocol}://${req.get('host')}`;
     const redirectUri = `${origin}/api/google/callback`;
 
     const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
@@ -163,7 +164,7 @@ router.post('/link', async (req, res) => {
       return res.status(400).json({ error: 'Code and userId required' });
     }
 
-    const origin = process.env.API_URL || (process.env.NODE_ENV === 'production' ? `${req.protocol}://${req.get('host')}` : 'http://localhost:3001');
+    const origin = API_URL || `${req.protocol}://${req.get('host')}`;
     const redirectUri = `${origin}/api/google/callback`;
 
     const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {

@@ -131,11 +131,11 @@ const App: React.FC = () => {
                     fetchClasses()
                 ]);
                 setAllUsers(users || []);
-                try { localStorage.setItem('gyandeep_cached_users', JSON.stringify(users || [])); } catch {}
+                try { localStorage.setItem('gyandeep_cached_users', JSON.stringify(users || [])); } catch (e) { console.warn('Failed to cache users:', e); }
                 setAllClasses(classes || []);
                 if (Array.isArray(users) && users.length > 0) {
                     setIsSetupComplete(true);
-                    try { localStorage.setItem('gyandeep_setup_complete', 'true'); } catch {}
+                    try { localStorage.setItem('gyandeep_setup_complete', 'true'); } catch (e) { console.warn('Failed to save setup status:', e); }
                 }
             } catch (err) {
                 console.error('Failed to fetch data from server:', err);
@@ -150,7 +150,7 @@ const App: React.FC = () => {
                             setIsSetupComplete(true);
                         }
                     }
-                } catch {}
+                } catch (e) { console.warn('Failed to load cached users:', e); }
             } finally {
                 setIsLoading(false);
             }
@@ -179,7 +179,7 @@ const App: React.FC = () => {
         }
         setAllUsers([newAdmin]);
         setIsSetupComplete(true);
-        try { localStorage.setItem('gyandeep_setup_complete', 'true'); } catch {}
+        try { localStorage.setItem('gyandeep_setup_complete', 'true'); } catch (e) { console.warn('Failed to save setup status:', e); }
     };
 
     // ── User management ───────────────────────────────────────────────────────

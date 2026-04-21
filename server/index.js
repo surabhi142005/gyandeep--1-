@@ -322,9 +322,14 @@ if (process.env.NODE_ENV === 'production') {
 // Start server only if not running on Vercel
 if (!process.env.VERCEL) {
   server.listen(PORT, () => {
-    console.log(`🚀 Server running on http://localhost:${PORT}`);
-    console.log(`📊 Health check: http://localhost:${PORT}/api/health`);
-    console.log(`🔌 WebSocket: ws://localhost:${PORT}/ws`);
+    const isProd = process.env.NODE_ENV === 'production';
+    const host = process.env.API_URL || (isProd ? `https://${process.env.RENDER_EXTERNAL_URL?.split(':')[0] || 'api.gyandeep.edu'}` : `http://localhost:${PORT}`);
+    const wsHost = process.env.WS_URL || (isProd ? `wss://${process.env.RENDER_EXTERNAL_URL?.split(':')[0] || 'api.gyandeep.edu'}` : `ws://localhost:${PORT}`);
+    
+    console.log(`🚀 Server running on ${host}`);
+    console.log(`📊 Health check: ${host}/api/health`);
+    console.log(`🔌 WebSocket: ${wsHost}/ws`);
+    console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
   });
 }
 

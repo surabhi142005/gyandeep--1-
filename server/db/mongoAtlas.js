@@ -5,7 +5,8 @@
 
 import { MongoClient } from 'mongodb';
 
-const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/gyandeep';
+const isProduction = process.env.NODE_ENV === 'production';
+const MONGODB_URI = process.env.MONGODB_URI || (isProduction ? null : 'mongodb://localhost:27017/gyandeep');
 const MONGODB_DB = process.env.MONGODB_DB || 'gyandeep';
 
 const ENVIRONMENT = process.env.NODE_ENV || 'development';
@@ -59,6 +60,10 @@ export const COLLECTIONS = {
 export async function connectToDatabase() {
   if (cachedDb) {
     return cachedDb;
+  }
+
+  if (!MONGODB_URI) {
+    throw new Error('MONGODB_URI environment variable is required');
   }
 
   if (!cachedClient) {

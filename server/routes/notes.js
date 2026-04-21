@@ -14,15 +14,29 @@ router.get('/', async (req, res) => {
     const db = await connectToDatabase();
     const { classId, subjectId } = req.query;
     
+    // Parse pagination params
+    const page = Math.max(1, parseInt(req.query.page) || 1);
+    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit) || 20));
+    const skip = (page - 1) * limit;
+    
     const filter = {};
     if (classId) filter.classId = classId;
     if (subjectId) filter.subjectId = subjectId;
 
-    const notes = await db.collection(COLLECTIONS.SESSION_NOTES)
-      .find({ ...filter, deletedAt: null })
-      .sort({ createdAt: -1 })
-      .toArray();
-    res.json(notes.map(n => ({ ...n, id: n._id?.toString() || n.id })));
+    const [notes, total] = await Promise.all([
+      db.collection(COLLECTIONS.SESSION_NOTES)
+        .find({ ...filter, deletedAt: null })
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limit)
+        .toArray(),
+      db.collection(COLLECTIONS.SESSION_NOTES).countDocuments({ ...filter, deletedAt: null }),
+    ]);
+    
+    res.json({
+      data: notes.map(n => ({ ...n, id: n._id?.toString() || n.id })),
+      pagination: { page, limit, total, totalPages: Math.ceil(total / limit), hasMore: page * limit < total },
+    });
   } catch (error) {
     console.error('Get notes error:', error);
     res.status(500).json({ error: 'Failed to fetch notes' });

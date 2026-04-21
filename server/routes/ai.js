@@ -1,47 +1,49 @@
 /**
  * server/routes/ai.js
- * AI-powered routes using Gemini API
+ * AI-powered routes using OpenAI API
  */
 
 import express from 'express';
 const router = express.Router();
 
-const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models';
-const GEMINI_MODEL = 'gemini-2.0-flash';
+const OPENAI_API_KEY = process.env.OPENAI_API_KEY || process.env.GEMINI_API_KEY;
 
-async function callGemini(prompt, history = [], apiKey, retries = 2) {
-  const contents = [
-    ...history.map(m => ({
-      role: m.role === 'user' ? 'user' : 'model',
-      parts: [{ text: m.content }],
-    })),
-    { role: 'user', parts: [{ text: prompt }] },
+async function callOpenAI(prompt, history = [], retries = 2) {
+  const messages = [
+    {
+      role: 'system',
+      content: `You are GyanDeep AI, a helpful educational assistant for a classroom management platform. You help students and teachers with:
+- Answering questions about various subjects
+- Explaining complex concepts
+- Helping with study strategies
+- Providing homework assistance
+- Supporting classroom activities
+Be friendly, encouraging, and educational in your responses.`
+    },
+    ...history.map(m => ({ role: m.role, content: m.content })),
+    { role: 'user', content: prompt }
   ];
 
   for (let i = 0; i <= retries; i++) {
     try {
-      const response = await fetch(
-        `${GEMINI_API_URL}/${GEMINI_MODEL}:generateContent?key=${apiKey}`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            contents,
-            generationConfig: {
-              temperature: 0.7,
-              maxOutputTokens: 2048,
-              topP: 0.95,
-              topK: 40,
-            },
-          }),
-        }
-      );
+      const response = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${OPENAI_API_KEY}`
+        },
+        body: JSON.stringify({
+          model: 'gpt-4o-mini',
+          messages: messages,
+          max_tokens: 2048,
+          temperature: 0.7
+        })
+      });
 
       if (!response.ok) {
         const error = await response.json().catch(() => ({}));
-        // If it's a 503 or 500 and we have retries left, wait and try again
-        if ((response.status === 503 || response.status === 500) && i < retries) {
-          console.warn(`[AI] Google service busy (503). Retry ${i + 1}/${retries}...`);
+        if ((response.status === 503 || response.status === 500 || response.status === 429) && i < retries) {
+          console.warn(`[AI] OpenAI service busy. Retry ${i + 1}/${retries}...`);
           await new Promise(resolve => setTimeout(resolve, 1500 * (i + 1)));
           continue;
         }
@@ -49,7 +51,7 @@ async function callGemini(prompt, history = [], apiKey, retries = 2) {
       }
 
       const data = await response.json();
-      return data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+      return data.choices?.[0]?.message?.content || '';
     } catch (err) {
       if (i === retries) throw err;
       console.warn(`[AI] Request failed. Retry ${i + 1}/${retries}...`, err.message);
@@ -66,10 +68,10 @@ router.post('/ai-email', async (req, res) => {
       return res.status(400).json({ error: 'Prompt and recipients are required' });
     }
 
-    if (!process.env.GEMINI_API_KEY) {
+    if (!OPENAI_API_KEY) {
       return res.status(501).json({ 
         error: 'AI not configured',
-        message: 'Set GEMINI_API_KEY environment variable for AI email generation'
+        message: 'Set OPENAI_API_KEY environment variable for AI email generation'
       });
     }
 
@@ -85,7 +87,7 @@ Subject: [your subject line here]
 ---
 [your email body here]`;
 
-    const reply = await callGemini(emailPrompt, [], process.env.GEMINI_API_KEY);
+    const reply = await callOpenAI(emailPrompt, []);
     const [subjectLine, ...bodyParts] = reply.split('---');
     
     const generatedEmail = {
@@ -109,28 +111,18 @@ router.post('/chat', async (req, res) => {
       return res.status(400).json({ error: 'Message is required' });
     }
 
-    if (!process.env.GEMINI_API_KEY) {
+    if (!OPENAI_API_KEY) {
       return res.json({ 
-        reply: 'AI chat requires GEMINI_API_KEY to be configured. Please set this environment variable.'
+        reply: 'AI chat requires API key to be configured. Please set this environment variable.'
       });
     }
 
-    const systemPrompt = `You are GyanDeep AI, a helpful educational assistant for a classroom management platform. You help students and teachers with:
-- Answering questions about various subjects
-- Explaining complex concepts
-- Helping with study strategies
-- Providing homework assistance
-- Supporting classroom activities
-
-Be friendly, encouraging, and educational in your responses.`;
-    
     const chatHistory = [
-      { role: 'user', content: systemPrompt },
       ...(history || []),
       { role: 'user', content: message },
     ];
 
-    const reply = await callGemini(message, chatHistory.slice(0, -1), process.env.GEMINI_API_KEY);
+    const reply = await callOpenAI(message, chatHistory.slice(0, -1));
 
     res.json({ 
       reply,
@@ -150,10 +142,10 @@ router.post('/quiz/generate', async (req, res) => {
       return res.status(400).json({ error: 'Notes text is required' });
     }
 
-    if (!process.env.GEMINI_API_KEY) {
+    if (!OPENAI_API_KEY) {
       return res.json({
         quiz: generateMockQuiz(subject || 'General'),
-        message: 'Using demo quiz (set GEMINI_API_KEY for AI generation)',
+        message: 'Using demo quiz (set API key for AI generation)',
       });
     }
 
@@ -172,7 +164,7 @@ Format as JSON array:
   }
 ]`;
 
-    const response = await callGemini(quizPrompt, [], process.env.GEMINI_API_KEY);
+    const response = await callOpenAI(quizPrompt, []);
     
     try {
       const jsonMatch = response.match(/\[[\s\S]*\]/);
@@ -213,7 +205,7 @@ router.post('/grade', async (req, res) => {
       return res.status(400).json({ error: 'Questions and answers arrays are required' });
     }
 
-    if (!process.env.GEMINI_API_KEY) {
+    if (!OPENAI_API_KEY) {
       return res.json({
         totalScore: 0,
         maxScore: questions.reduce((s, q) => s + (q.maxScore || 10), 0),
@@ -265,7 +257,7 @@ Max Score: ${qMaxScore}
 Respond with JSON: { "score": number, "feedback": "string", "comment": "string" }`;
 
         try {
-          const response = await callGemini(gradingPrompt, [], process.env.GEMINI_API_KEY);
+          const response = await callOpenAI(gradingPrompt, []);
           const jsonMatch = response.match(/\{[\s\S]*\}/);
           if (jsonMatch) {
             const parsed = JSON.parse(jsonMatch[0]);
@@ -329,39 +321,39 @@ router.post('/extract-text', async (req, res) => {
       return res.status(400).json({ error: 'Image base64 data is required' });
     }
 
-    if (!process.env.GEMINI_API_KEY) {
+    if (!OPENAI_API_KEY) {
       return res.status(501).json({
         error: 'AI not configured',
-        message: 'Set GEMINI_API_KEY for OCR functionality',
+        message: 'Set API key for OCR functionality',
       });
     }
 
     const prompt = 'Extract all text from this image. Preserve structure. If no readable text, describe what you see.';
 
-    const response = await fetch(
-      `${GEMINI_API_URL}/gemini-1.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{
-            role: 'user',
-            parts: [
-              { text: prompt },
-              { inlineData: { mimeType: 'image/jpeg', data: imageBase64.replace(/^data:image\/\w+;base64,/, '') } },
-            ],
-          }],
-          generationConfig: { temperature: 0.1, maxOutputTokens: 8192 },
-        }),
-      }
-    );
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${OPENAI_API_KEY}`
+      },
+      body: JSON.stringify({
+        model: 'gpt-4o',
+        messages: [
+          { role: 'user', content: [
+            { type: 'text', text: prompt },
+            { type: 'image_url', image_url: { url: `data:image/jpeg;base64,${imageBase64.replace(/^data:image\/\w+;base64,/, '')}` } }
+          ]}
+        ],
+        max_tokens: 8192
+      })
+    });
 
     if (!response.ok) {
-      throw new Error(`Gemini API error: ${response.status}`);
+      throw new Error(`OpenAI API error: ${response.status}`);
     }
 
     const data = await response.json();
-    const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+    const text = data.choices?.[0]?.message?.content || '';
 
     res.json({ text, success: true });
   } catch (error) {
@@ -378,11 +370,11 @@ router.post('/summarize', async (req, res) => {
       return res.status(400).json({ error: 'Text is required' });
     }
 
-    if (!process.env.GEMINI_API_KEY) {
+    if (!OPENAI_API_KEY) {
       const summarized = text.split('\n').slice(0, 5).join('\n');
       return res.json({ 
-        result: summarized || 'Configure GEMINI_API_KEY for AI summarization',
-        message: 'Demo mode - set GEMINI_API_KEY for full AI summarization'
+        result: summarized || 'Configure API key for AI summarization',
+        message: 'Demo mode - set API key for full AI summarization'
       });
     }
 
@@ -400,24 +392,26 @@ ${modeInstructions[mode] || modeInstructions.bullets}
 
 Keep the summary concise and educational.`;
 
-    const response = await fetch(
-      `${GEMINI_API_URL}/${GEMINI_MODEL}:generateContent?key=${process.env.GEMINI_API_KEY}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{ role: 'user', parts: [{ text: prompt }] }],
-          generationConfig: { temperature: 0.5, maxOutputTokens: 2048 },
-        }),
-      }
-    );
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${OPENAI_API_KEY}`
+      },
+      body: JSON.stringify({
+        model: 'gpt-4o-mini',
+        messages: [{ role: 'user', content: prompt }],
+        max_tokens: 2048,
+        temperature: 0.5
+      })
+    });
 
     if (!response.ok) {
-      throw new Error(`Gemini API error: ${response.status}`);
+      throw new Error(`OpenAI API error: ${response.status}`);
     }
 
     const data = await response.json();
-    const result = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+    const result = data.choices?.[0]?.message?.content || '';
 
     res.json({ result, success: true });
   } catch (error) {
