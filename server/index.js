@@ -5,6 +5,7 @@
 
 import 'dotenv/config';
 import path from 'path';
+import fs from 'fs';
 import express from 'express';
 import { createServer } from 'http';
 import cors from 'cors';
@@ -293,7 +294,7 @@ const getDistPath = () => {
 };
 
 const distPath = getDistPath();
-const hasFrontend = require('fs').existsSync(path.join(distPath, 'index.html'));
+const hasFrontend = fs.existsSync(path.join(distPath, 'index.html'));
 
 // Serve static files from dist folder in production (if built)
 if (process.env.NODE_ENV === 'production' && hasFrontend) {
