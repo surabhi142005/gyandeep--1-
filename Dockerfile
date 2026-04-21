@@ -1,31 +1,30 @@
-# Dockerfile for Gyandeep Backend (Render deployment)
-# Frontend should be deployed separately to Vercel
+# Gyandeep Dockerfile - Backend Only (Frontend on Vercel)
 
 FROM node:22-alpine
 
 WORKDIR /app
 
-# Install build dependencies for native modules
+# Install build tools
 RUN apk add --no-cache python3 make g++
 
 # Copy package files
 COPY package*.json ./
 
-# Install production dependencies only
+# Install production dependencies
 RUN npm install --omit=dev --legacy-peer-deps
 
-# Copy backend files
+# Copy backend and lib folders
 COPY server ./server
 COPY lib ./lib
+COPY prisma ./prisma
 
-# Create required directories
+# Create directories
 RUN mkdir -p server/data server/storage
 
-# Set environment
+# Set production env
 ENV NODE_ENV=production
+ENV PORT=10000
 
-# Expose port - Render provides this via $PORT
-EXPOSE $PORT
+EXPOSE 10000
 
-# Start server (reads PORT from environment - Render provides this)
 CMD ["node", "server/index.js"]

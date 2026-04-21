@@ -55,16 +55,8 @@ services:
       - key: GEMINI_API_KEY
         sync: false
       - key: CLOUDINARY_CLOUD_NAME
-        sync: false
+        value: dkir4idkb
       - key: CLOUDINARY_API_KEY
-        sync: false
+        value: 498654644824369
       - key: CLOUDINARY_API_SECRET
-        sync: false
-      - key: AWS_ACCESS_KEY_ID
-        sync: false
-      - key: AWS_SECRET_ACCESS_KEY
-        sync: false
-      - key: AWS_BUCKET_NAME
-        value: gyandeep-assets
-      - key: AWS_REGION
-        value: us-east-1
+        value: LPZhp0eIhrkfJaUR7UGqX6P79jE

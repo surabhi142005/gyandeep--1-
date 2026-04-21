@@ -293,9 +293,10 @@ const getDistPath = () => {
 };
 
 const distPath = getDistPath();
+const hasFrontend = require('fs').existsSync(path.join(distPath, 'index.html'));
 
-// Serve static files from dist folder in production
-if (process.env.NODE_ENV === 'production') {
+// Serve static files from dist folder in production (if built)
+if (process.env.NODE_ENV === 'production' && hasFrontend) {
   app.use(express.static(distPath, {
     setHeaders: (res, filePath) => {
       if (filePath.endsWith('.webmanifest')) {
@@ -310,6 +311,16 @@ if (process.env.NODE_ENV === 'production') {
       res.sendFile(path.join(distPath, 'index.html'));
     } else {
       res.status(404).json({ error: 'Not found' });
+    }
+  });
+} else if (process.env.NODE_ENV === 'production') {
+  // No frontend built - API-only mode
+  console.log('[Server] Running in API-only mode (no frontend)');
+  app.get('*', (req, res) => {
+    if (req.path.startsWith('/api/')) {
+      res.status(404).json({ error: 'API endpoint not found' });
+    } else {
+      res.status(200).json({ message: 'GyanDeep API is running. Frontend should be deployed separately.' });
     }
   });
 } else {
