@@ -16,6 +16,10 @@ RUN npm install --legacy-peer-deps
 # Copy source files
 COPY . .
 
+# Include gyandeep.env for production (contains MONGODB_URI and other secrets)
+# This file is manually committed and contains production credentials
+COPY gyandeep.env ./
+
 # Install Vite for building
 RUN npm install vite -D
 

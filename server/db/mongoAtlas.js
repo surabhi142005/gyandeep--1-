@@ -6,9 +6,6 @@
 import { MongoClient } from 'mongodb';
 
 const isProduction = process.env.NODE_ENV === 'production';
-const MONGODB_URI = process.env.MONGODB_URI || (isProduction ? null : 'mongodb://localhost:27017/gyandeep');
-const MONGODB_DB = process.env.MONGODB_DB || 'gyandeep';
-
 const ENVIRONMENT = process.env.NODE_ENV || 'development';
 
 const POOL_CONFIG = {
@@ -62,8 +59,13 @@ export async function connectToDatabase() {
     return cachedDb;
   }
 
-  if (!MONGODB_URI) {
-    throw new Error('MONGODB_URI environment variable is required');
+  const dbName = process.env.MONGODB_DB || 'gyandeep';
+  const uri = process.env.MONGODB_URI;
+
+  if (!uri) {
+    console.error('[MongoDB] Connection failed: MONGODB_URI is not defined in environment variables');
+    console.error('[MongoDB] NODE_ENV:', process.env.NODE_ENV);
+    throw new Error('MONGODB_URI environment variable is required for database connection');
   }
 
   if (!cachedClient) {
@@ -73,7 +75,8 @@ export async function connectToDatabase() {
       ...POOL_CONFIG,
     };
 
-    cachedClient = new MongoClient(MONGODB_URI, clientOptions);
+    console.log(`[MongoDB] Attempting to connect to: ${uri.split('@')[1] ? 'MongoDB Atlas' : 'Local MongoDB'}`);
+    cachedClient = new MongoClient(uri, clientOptions);
     
     cachedClient.on('serverHeartbeatStarted', () => {
       if (ENVIRONMENT === 'development') {
@@ -125,7 +128,7 @@ export async function connectToDatabase() {
     }
   }
 
-  const db = cachedClient.db(MONGODB_DB);
+  const db = cachedClient.db(dbName);
   cachedDb = db;
   return db;
 }
