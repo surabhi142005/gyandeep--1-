@@ -116,6 +116,27 @@ const App: React.FC = () => {
 
     // ── Data initialisation from backend API ─────────────────────────────────
     /**
+     * Initial check to see if setup is complete by checking if any users exist
+     */
+    useEffect(() => {
+        const checkSetup = async () => {
+            if (isSetupComplete) return;
+            try {
+                const response = await fetchUsers();
+                const users = Array.isArray(response) ? response : response?.data || [];
+                if (Array.isArray(users) && users.length > 0) {
+                    setIsSetupComplete(true);
+                    localStorage.setItem('gyandeep_setup_complete', 'true');
+                    setAllUsers(users);
+                }
+            } catch (err) {
+                console.warn('Initial setup check failed (backend might be offline):', err);
+            }
+        };
+        checkSetup();
+    }, []);
+
+    /**
      * Load user and class data from backend when user logs in
      * Sets isLoading(false) to proceed past loading screen
      */
