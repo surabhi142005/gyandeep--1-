@@ -14,7 +14,7 @@ import {
   sendWelcomeEmail
 } from '../services/emailService.js';
 
-import { setAuthCookies, clearAuthCookies } from '../middleware/auth.js';
+import { setAuthCookies, clearAuthCookies, TOKEN_COOKIE_NAME, REFRESH_COOKIE_NAME } from '../middleware/auth.js';
 import { createCSRFTokenPair } from '../middleware/security.js';
 
 const JWT_SECRET = process.env.JWT_SECRET;
