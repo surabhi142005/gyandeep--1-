@@ -6,7 +6,6 @@
 
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
-import type { NextRequest } from 'next/server';
 
 const JWT_SECRET = process.env.JWT_SECRET;
 const JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET || (process.env.JWT_SECRET ? process.env.JWT_SECRET + '_refresh' : undefined);
@@ -38,6 +37,12 @@ export interface AuthUser extends JWTPayload {
 export interface TokenPair {
   accessToken: string;
   refreshToken: string;
+}
+
+interface RequestLike {
+  headers: {
+    get(name: string): string | null | undefined;
+  };
 }
 
 /**
@@ -102,7 +107,7 @@ export function verifyToken(token: string): AuthUser {
 /**
  * Extract token from Authorization header
  */
-export function extractToken(request: NextRequest): string | null {
+export function extractToken(request: RequestLike): string | null {
   const authHeader = request.headers.get('authorization');
   if (!authHeader) return null;
   
@@ -115,7 +120,7 @@ export function extractToken(request: NextRequest): string | null {
 /**
  * Get user from request
  */
-export function getUserFromRequest(request: NextRequest): AuthUser | null {
+export function getUserFromRequest(request: RequestLike): AuthUser | null {
   const token = extractToken(request);
   if (!token) return null;
   
@@ -129,7 +134,7 @@ export function getUserFromRequest(request: NextRequest): AuthUser | null {
 /**
  * Require authentication - returns user or null
  */
-export function requireAuth(request: NextRequest): AuthUser | null {
+export function requireAuth(request: RequestLike): AuthUser | null {
   const user = getUserFromRequest(request);
   if (!user) return null;
   return user;
@@ -138,7 +143,7 @@ export function requireAuth(request: NextRequest): AuthUser | null {
 /**
  * Require specific role(s)
  */
-export function requireRole(request: NextRequest, roles: string | string[]): AuthUser | null {
+export function requireRole(request: RequestLike, roles: string | string[]): AuthUser | null {
   const user = getUserFromRequest(request);
   if (!user) return null;
   
@@ -151,14 +156,14 @@ export function requireRole(request: NextRequest, roles: string | string[]): Aut
 /**
  * Require teacher or admin
  */
-export function requireTeacher(request: NextRequest): AuthUser | null {
+export function requireTeacher(request: RequestLike): AuthUser | null {
   return requireRole(request, ['teacher', 'admin']);
 }
 
 /**
  * Require admin only
  */
-export function requireAdmin(request: NextRequest): AuthUser | null {
+export function requireAdmin(request: RequestLike): AuthUser | null {
   return requireRole(request, 'admin');
 }
 

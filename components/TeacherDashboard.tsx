@@ -15,7 +15,7 @@ import {
   RefreshCw,
   Zap
 } from 'lucide-react';
-import type { User, AttendanceRecord } from '../types';
+import type { User, Student, AttendanceRecord } from '../types';
 import { getCurrentPosition } from '../services/locationService';
 import Spinner from './Spinner';
 import PerformanceChart from './PerformanceChart';
@@ -232,7 +232,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
         // Trigger a students refresh if needed
         fetchUsers()
           .then((users) => {
-            const studentsOnly = users.filter((u: any) => u.role === 'student');
+            const studentsOnly = users.filter((u): u is Student => u.role === 'student');
             onStudentsUpdate(studentsOnly);
           })
           .catch(console.error);

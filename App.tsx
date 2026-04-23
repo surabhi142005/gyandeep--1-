@@ -120,23 +120,21 @@ const App: React.FC = () => {
      */
     useEffect(() => {
         const checkSetup = async () => {
-            if (isSetupComplete) {
-                // Try to load cached users for immediate login availability
-                try {
-                    const cached = localStorage.getItem('gyandeep_cached_users');
-                    if (cached) setAllUsers(JSON.parse(cached));
-                } catch (e) {}
-                return;
-            }
+            // Load cached users immediately while we verify against the backend.
+            try {
+                const cached = localStorage.getItem('gyandeep_cached_users');
+                if (cached) setAllUsers(JSON.parse(cached));
+            } catch (e) {}
             
             try {
-                const response = await fetchUsers();
-                const users = Array.isArray(response) ? response : response?.data || [];
+                const users = await fetchUsers();
                 if (Array.isArray(users) && users.length > 0) {
                     setIsSetupComplete(true);
                     localStorage.setItem('gyandeep_setup_complete', 'true');
                     setAllUsers(users);
                     localStorage.setItem('gyandeep_cached_users', JSON.stringify(users));
+                } else if (!isSetupComplete) {
+                    setAllUsers([]);
                 }
             } catch (err) {
                 console.warn('Initial setup check failed (backend might be offline):', err);

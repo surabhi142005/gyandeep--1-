@@ -7,6 +7,7 @@
 
 import { websocketService } from './websocketService';
 import { getCSRFHeaders, getCSRFToken } from './csrfService';
+import type { AnyUser, ClassConfig } from '../types';
 
 const API_BASE = import.meta.env.VITE_API_URL || '';
 const API_TIMEOUT = 10000;
@@ -19,6 +20,16 @@ const uid = () => {
 };
 
 const idempotencyKey = (prefix: string) => `gd-${prefix}-${uid()}`;
+
+const extractArrayPayload = <T>(payload: unknown): T[] => {
+  if (Array.isArray(payload)) return payload as T[];
+  if (payload && typeof payload === 'object') {
+    const record = payload as Record<string, unknown>;
+    if (Array.isArray(record.items)) return record.items as T[];
+    if (Array.isArray(record.data)) return record.data as T[];
+  }
+  return [];
+};
 
 /**
  * Fetch with timeout to prevent hanging requests
@@ -73,9 +84,9 @@ const lsSet = (_key: string, _value: unknown) => {
 
 // ─── Users / Profiles ────────────────────────────────────────────────────────
 
-export const fetchUsers = async () => {
+export const fetchUsers = async (): Promise<AnyUser[]> => {
   const data = await apiRequest('/api/users', { method: 'GET' });
-  return Array.isArray(data?.items) ? data.items : Array.isArray(data) ? data : [];
+  return extractArrayPayload<AnyUser>(data);
 };
 
 export const saveUsers = async (users: any[]) => {
@@ -89,9 +100,9 @@ export const bulkImportUsers = async (users: any[]) => saveUsers(users);
 
 // ─── Classes ─────────────────────────────────────────────────────────────────
 
-export const fetchClasses = async () => {
+export const fetchClasses = async (): Promise<ClassConfig[]> => {
   const data = await apiRequest('/api/classes', { method: 'GET' });
-  return Array.isArray(data) ? data : [];
+  return extractArrayPayload<ClassConfig>(data);
 };
 
 export const saveClasses = async (classes: any[]) => {
