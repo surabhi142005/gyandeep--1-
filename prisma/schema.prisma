@@ -56,7 +56,7 @@ model User {
   email            String   @unique
   role             String   @default("student")
   password         String?
-  googleId         String?  @unique @map("google_id")
+  googleId         String?  @map("google_id")
   faceImage        String?  @map("face_image")
   active           Boolean  @default(true)
   emailVerified    Boolean  @default(false) @map("email_verified")
@@ -318,7 +318,7 @@ model QuizAttempt {
   quiz      Quiz            @relation("QuizAttempts", fields: [quizId], references: [id])
   student   User            @relation("StudentAttempts", fields: [studentId], references: [id])
   reviewedBy User?          @relation("AttemptReviewer", fields: [reviewedById], references: [id])
-  grade     Grade?          @relation("QuizAttemptGrade")
+  grades    Grade[]         @relation("QuizAttemptGrade")
   answers   AttemptAnswer[] @relation("AttemptAnswers")
 
   @@unique([quizId, studentId, attemptNumber])
@@ -446,7 +446,7 @@ model Grade {
   date          String
   teacherId     String?  @map("teacher_id") @db.ObjectId
   sessionId     String?  @map("session_id") @db.ObjectId
-  quizAttemptId String?  @unique @map("quiz_attempt_id") @db.ObjectId
+  quizAttemptId String?  @map("quiz_attempt_id") @db.ObjectId
   gradedAt      DateTime @default(now()) @map("graded_at")
 
   createdAt DateTime @default(now()) @map("created_at")
