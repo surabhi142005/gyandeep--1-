@@ -10,23 +10,46 @@ import { connectToDatabase, COLLECTIONS } from '../db/mongoAtlas.js';
 
 const SALT_ROUNDS = 12;
 
-router.post('/', async (req, res) => {
+// Get seed status
+router.get('/status', async (req, res) => {
   try {
-    // Simple secret check to prevent unauthorized seeding
+    const db = await connectToDatabase();
+    const userCount = await db.collection(COLLECTIONS.USERS).countDocuments();
+    const classCount = await db.collection(COLLECTIONS.CLASSES).countDocuments();
+    const subjectCount = await db.collection(COLLECTIONS.SUBJECTS).countDocuments();
+
+    res.json({
+      seeded: userCount > 0,
+      users: userCount,
+      classes: classCount,
+      subjects: subjectCount,
+    });
+  } catch (error) {
+    console.error('Seed status error:', error);
+    res.status(500).json({ error: 'Failed to get seed status' });
+  }
+});
+
+// Force reseed - clears existing data and reseeds
+router.post('/reseed', async (req, res) => {
+  try {
     const { secret } = req.body;
     if (secret !== 'gyandeep-seed-2024') {
       return res.status(401).json({ error: 'Invalid secret' });
     }
 
-    console.log('🌱 Starting database seed...');
+    console.log('🔄 Starting force reseed...');
     const db = await connectToDatabase();
 
-    // Check if data already exists
-    const existingUsers = await db.collection(COLLECTIONS.USERS).countDocuments();
-    if (existingUsers > 0) {
-      console.log(`⚠️  Database already has ${existingUsers} users. Skipping seed.`);
-      return res.json({ message: 'Database already seeded', users: existingUsers });
-    }
+    // Clear existing data
+    console.log('🗑️  Clearing existing data...');
+    await db.collection(COLLECTIONS.USERS).deleteMany({});
+    await db.collection(COLLECTIONS.CLASSES).deleteMany({});
+    await db.collection(COLLECTIONS.SUBJECTS).deleteMany({});
+    await db.collection(COLLECTIONS.ANNOUNCEMENTS).deleteMany({});
+    await db.collection(COLLECTIONS.ATTENDANCE).deleteMany({});
+    await db.collection(COLLECTIONS.GRADES).deleteMany({});
+    console.log('✅ Existing data cleared');
 
     // Create Users
     console.log('👥 Creating users...');

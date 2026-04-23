@@ -23,13 +23,13 @@
     "test:security": "vitest run server/tests/security.test.js",
     "test:api": "node test-api.js",
     "test:fullstack": "node test-fullstack.js",
-    "db:seed": "npx tsx prisma/seed.ts",
+    "db:seed": "node scripts/run-prisma-seed.mjs",
     "db:seed:force": "node -e \"import('./server/db/mongoAtlas.js').then(m => m.connectToDatabase().then(async db => { await db.collection('users').deleteMany({}); await db.collection('classes').deleteMany({}); await db.collection('subjects').deleteMany({}); await db.collection('class_sessions').deleteMany({}); await db.collection('attendance').deleteMany({}); await db.collection('announcements').deleteMany({}); await db.collection('timetable').deleteMany({}); process.exit(0); }))\"",
-    "db:push": "npx prisma db push",
-    "db:studio": "npx prisma studio"
+    "db:push": "node scripts/run-prisma-command.mjs db push",
+    "db:studio": "node scripts/run-prisma-command.mjs studio"
   },
   "prisma": {
-    "seed": "tsx prisma/seed.ts"
+    "seed": "node --experimental-strip-types prisma/seed.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1008.0",
@@ -44,7 +44,6 @@
     "@types/jsonwebtoken": "^9.0.10",
     "@upstash/redis": "^1.28.0",
     "@vladmandic/face-api": "^1.7.15",
-    "bcryptjs": "^3.0.3",
     "chart.js": "^4.4.1",
     "cloudinary": "^2.9.0",
     "clsx": "^2.1.1",
@@ -85,6 +84,7 @@
     "@typescript-eslint/parser": "^8.56.0",
     "@vitejs/plugin-react": "^5.0.0",
     "autoprefixer": "^10.4.20",
+    "bcryptjs": "^3.0.3",
     "concurrently": "^8.2.2",
     "eslint": "^8.57.1",
     "eslint-plugin-react": "^7.37.5",
