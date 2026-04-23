@@ -20,28 +20,56 @@ router.post('/insights', authMiddleware, async (req, res) => {
       });
     }
 
-    const insights = [];
+    const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+    const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent';
+
+    const prompt = `Analyze this student performance data and provide 3-5 concise, actionable insights.
     
-    if (studentData?.grades) {
-      const avgScore = studentData.grades.reduce((sum, g) => sum + (g.score / g.maxScore * 100), 0) / studentData.grades.length;
-      
-      if (avgScore >= 90) {
-        insights.push({ type: 'achievement', message: 'Outstanding performance! Keep up the excellent work.' });
-      } else if (avgScore >= 75) {
-        insights.push({ type: 'progress', message: 'Good progress. Focus on areas with lower scores to improve further.' });
-      } else if (avgScore < 60) {
-        insights.push({ type: 'improvement', message: 'Consider reviewing the material and seeking additional help.' });
+Student Data:
+${JSON.stringify(studentData, null, 2)}
+
+Format your response ONLY as a JSON array of objects:
+[
+  { "type": "achievement|improvement|attendance|progress", "message": "Short actionable insight message" }
+]`;
+
+    try {
+      const response = await fetch(`${GEMINI_API_URL}?key=${GEMINI_API_KEY}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }],
+          generationConfig: { temperature: 0.4, maxOutputTokens: 1024 }
+        })
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+        const jsonMatch = text.match(/\[[\s\S]*\]/);
+        if (jsonMatch) {
+          const insights = JSON.parse(jsonMatch[0]);
+          return res.json({ insights });
+        }
       }
+    } catch (err) {
+      console.warn('[Analytics] Gemini insight generation failed, using fallback:', err.message);
     }
 
+    // Fallback manual insights if AI fails
+    const insights = [];
+    if (studentData?.grades?.length > 0) {
+      const avgScore = studentData.grades.reduce((sum, g) => sum + (g.score / g.maxScore * 100), 0) / studentData.grades.length;
+      if (avgScore >= 90) insights.push({ type: 'achievement', message: 'Outstanding performance! Keep up the excellent work.' });
+      else if (avgScore < 60) insights.push({ type: 'improvement', message: 'Consider reviewing the material and seeking additional help.' });
+    }
+    
     if (studentData?.attendance) {
       const attendanceRate = (studentData.attendance.present / studentData.attendance.total) * 100;
-      if (attendanceRate < 80) {
-        insights.push({ type: 'attendance', message: 'Attendance rate is below 80%. Regular attendance improves learning outcomes.' });
-      }
+      if (attendanceRate < 80) insights.push({ type: 'attendance', message: 'Attendance rate is below 80%. Regular attendance improves learning outcomes.' });
     }
 
-    res.json({ insights });
+    res.json({ insights: insights.length > 0 ? insights : [{ type: 'progress', message: 'Keep consistent with your studies and attendance.' }] });
   } catch (error) {
     console.error('Analytics insights error:', error);
     res.status(500).json({ error: 'Failed to generate insights' });

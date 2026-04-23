@@ -1,49 +1,68 @@
 /**
  * server/routes/ai.js
- * AI-powered routes using OpenAI API
+ * AI-powered routes using Google Gemini API
  */
 
 import express from 'express';
 const router = express.Router();
 
-const OPENAI_API_KEY = process.env.OPENAI_API_KEY || process.env.GEMINI_API_KEY;
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY || process.env.OPENAI_API_KEY;
+const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models';
+const DEFAULT_MODEL = 'gemini-1.5-flash';
 
-async function callOpenAI(prompt, history = [], retries = 2) {
-  const messages = [
-    {
-      role: 'system',
-      content: `You are GyanDeep AI, a helpful educational assistant for a classroom management platform. You help students and teachers with:
+/**
+ * Generic function to call Google Gemini API
+ */
+async function callGemini(prompt, history = [], options = {}) {
+  const { model = DEFAULT_MODEL, temperature = 0.7, maxTokens = 2048, retries = 2 } = options;
+
+  const contents = [
+    ...history.map(m => ({
+      role: m.role === 'user' ? 'user' : 'model',
+      parts: [{ text: m.content }],
+    })),
+    { role: 'user', parts: [{ text: prompt }] },
+  ];
+
+  // System instruction is handled as part of the prompt in Gemini or via system_instruction if supported
+  const payload = {
+    contents,
+    generationConfig: {
+      temperature,
+      maxOutputTokens: maxTokens,
+      topP: 0.95,
+      topK: 40,
+    },
+  };
+
+  // Add system instruction if it's the first message
+  if (history.length === 0) {
+    payload.system_instruction = {
+      parts: [{ text: `You are GyanDeep AI, a helpful educational assistant for a classroom management platform. You help students and teachers with:
 - Answering questions about various subjects
 - Explaining complex concepts
 - Helping with study strategies
 - Providing homework assistance
 - Supporting classroom activities
-Be friendly, encouraging, and educational in your responses.`
-    },
-    ...history.map(m => ({ role: m.role, content: m.content })),
-    { role: 'user', content: prompt }
-  ];
+Be friendly, encouraging, and educational in your responses.` }]
+    };
+  }
 
   for (let i = 0; i <= retries; i++) {
     try {
-      const response = await fetch('https://api.openai.com/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${OPENAI_API_KEY}`
-        },
-        body: JSON.stringify({
-          model: 'gpt-4o-mini',
-          messages: messages,
-          max_tokens: 2048,
-          temperature: 0.7
-        })
-      });
+      const response = await fetch(
+        `${GEMINI_API_URL}/${model}:generateContent?key=${GEMINI_API_KEY}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        }
+      );
 
       if (!response.ok) {
         const error = await response.json().catch(() => ({}));
         if ((response.status === 503 || response.status === 500 || response.status === 429) && i < retries) {
-          console.warn(`[AI] OpenAI service busy. Retry ${i + 1}/${retries}...`);
+          console.warn(`[AI] Gemini service busy. Retry ${i + 1}/${retries}...`);
           await new Promise(resolve => setTimeout(resolve, 1500 * (i + 1)));
           continue;
         }
@@ -51,7 +70,7 @@ Be friendly, encouraging, and educational in your responses.`
       }
 
       const data = await response.json();
-      return data.choices?.[0]?.message?.content || '';
+      return data.candidates?.[0]?.content?.parts?.[0]?.text || '';
     } catch (err) {
       if (i === retries) throw err;
       console.warn(`[AI] Request failed. Retry ${i + 1}/${retries}...`, err.message);
@@ -68,10 +87,10 @@ router.post('/ai-email', async (req, res) => {
       return res.status(400).json({ error: 'Prompt and recipients are required' });
     }
 
-    if (!OPENAI_API_KEY) {
+    if (!GEMINI_API_KEY) {
       return res.status(501).json({ 
         error: 'AI not configured',
-        message: 'Set OPENAI_API_KEY environment variable for AI email generation'
+        message: 'Set GEMINI_API_KEY environment variable for AI email generation'
       });
     }
 
@@ -82,12 +101,12 @@ Recipients: ${recipients.join(', ')}
 
 Generate a professional email based on: ${prompt}
 
-Format your response as:
+Format your response exactly as:
 Subject: [your subject line here]
 ---
 [your email body here]`;
 
-    const reply = await callOpenAI(emailPrompt, []);
+    const reply = await callGemini(emailPrompt, [], { temperature: 0.5 });
     const [subjectLine, ...bodyParts] = reply.split('---');
     
     const generatedEmail = {
@@ -111,18 +130,14 @@ router.post('/chat', async (req, res) => {
       return res.status(400).json({ error: 'Message is required' });
     }
 
-    if (!OPENAI_API_KEY) {
+    if (!GEMINI_API_KEY) {
       return res.json({ 
-        reply: 'AI chat requires API key to be configured. Please set this environment variable.'
+        reply: 'AI chat requires API key to be configured. Please set GEMINI_API_KEY.'
       });
     }
 
-    const chatHistory = [
-      ...(history || []),
-      { role: 'user', content: message },
-    ];
-
-    const reply = await callOpenAI(message, chatHistory.slice(0, -1));
+    const chatHistory = history || [];
+    const reply = await callGemini(message, chatHistory);
 
     res.json({ 
       reply,
@@ -136,13 +151,13 @@ router.post('/chat', async (req, res) => {
 
 router.post('/quiz/generate', async (req, res) => {
   try {
-    const { notesText, subject, enableThinkingMode } = req.body;
+    const { notesText, subject } = req.body;
     
     if (!notesText) {
       return res.status(400).json({ error: 'Notes text is required' });
     }
 
-    if (!OPENAI_API_KEY) {
+    if (!GEMINI_API_KEY) {
       return res.json({
         quiz: generateMockQuiz(subject || 'General'),
         message: 'Using demo quiz (set API key for AI generation)',
@@ -151,9 +166,9 @@ router.post('/quiz/generate', async (req, res) => {
 
     const quizPrompt = `Generate 5 multiple choice quiz questions based on the following content about ${subject || 'the topic'}:
 
-${notesText.slice(0, 3000)}
+${notesText.slice(0, 5000)}
 
-Format as JSON array:
+Format your response ONLY as a JSON array:
 [
   {
     "id": "q1",
@@ -164,22 +179,18 @@ Format as JSON array:
   }
 ]`;
 
-    const response = await callOpenAI(quizPrompt, []);
+    const response = await callGemini(quizPrompt, [], { temperature: 0.3 });
     
     try {
       const jsonMatch = response.match(/\[[\s\S]*\]/);
       if (jsonMatch) {
         let quiz = JSON.parse(jsonMatch[0]);
-        if (!Array.isArray(quiz)) {
-          quiz = [];
+        if (Array.isArray(quiz)) {
+          return res.json({ quiz: quiz.slice(0, 5), subject });
         }
-        if (quiz.length > 5) {
-          quiz = quiz.slice(0, 5);
-        }
-        return res.json({ quiz, subject });
       }
     } catch (parseError) {
-      console.error('Failed to parse quiz JSON:', parseError);
+      console.error('Failed to parse quiz JSON:', parseError, response);
     }
 
     res.json({ quiz: generateMockQuiz(subject || 'General'), subject });
@@ -205,7 +216,7 @@ router.post('/grade', async (req, res) => {
       return res.status(400).json({ error: 'Questions and answers arrays are required' });
     }
 
-    if (!OPENAI_API_KEY) {
+    if (!GEMINI_API_KEY) {
       return res.json({
         totalScore: 0,
         maxScore: questions.reduce((s, q) => s + (q.maxScore || 10), 0),
@@ -231,7 +242,8 @@ router.post('/grade', async (req, res) => {
       maxScore += qMaxScore;
 
       if (q.type === 'mcq') {
-        const isCorrect = studentAnswer.toUpperCase().trim() === q.correctAnswer?.toUpperCase().trim();
+        const isCorrect = studentAnswer.toUpperCase().trim() === q.correctAnswer?.toUpperCase().trim() || 
+                          studentAnswer.trim() === q.correctAnswer?.trim();
         const score = isCorrect ? qMaxScore : 0;
         totalScore += score;
         results.push({
@@ -247,17 +259,17 @@ router.post('/grade', async (req, res) => {
           overallComment: isCorrect ? 'Full marks.' : 'No marks.',
         });
       } else {
-        const gradingPrompt = `Grade this answer:
+        const gradingPrompt = `You are an AI teacher grading a student's answer.
 
 Question: ${q.question}
 Correct Answer: ${q.correctAnswer || 'N/A'}
 Student Answer: ${studentAnswer}
 Max Score: ${qMaxScore}
 
-Respond with JSON: { "score": number, "feedback": "string", "comment": "string" }`;
+Respond ONLY with a JSON object: { "score": number, "feedback": "string", "comment": "string" }`;
 
         try {
-          const response = await callOpenAI(gradingPrompt, []);
+          const response = await callGemini(gradingPrompt, [], { temperature: 0.2 });
           const jsonMatch = response.match(/\{[\s\S]*\}/);
           if (jsonMatch) {
             const parsed = JSON.parse(jsonMatch[0]);
@@ -276,22 +288,15 @@ Respond with JSON: { "score": number, "feedback": "string", "comment": "string" 
               overallComment: parsed.feedback || '',
             });
           } else {
-            results.push({
-              score: Math.round(qMaxScore * 0.5),
-              maxScore: qMaxScore,
-              feedback: 'Could not parse AI response.',
-              criteriaScores: [],
-              overallComment: 'Manual review recommended.',
-            });
-            totalScore += Math.round(qMaxScore * 0.5);
+            throw new Error('Could not parse AI response');
           }
         } catch {
           results.push({
             score: Math.round(qMaxScore * 0.5),
             maxScore: qMaxScore,
-            feedback: 'Grading failed. Partial credit assigned.',
+            feedback: 'Grading failed. Manual review recommended.',
             criteriaScores: [],
-            overallComment: 'Please review manually.',
+            overallComment: 'Partial credit assigned by fallback.',
           });
           totalScore += Math.round(qMaxScore * 0.5);
         }
@@ -321,39 +326,42 @@ router.post('/extract-text', async (req, res) => {
       return res.status(400).json({ error: 'Image base64 data is required' });
     }
 
-    if (!OPENAI_API_KEY) {
+    if (!GEMINI_API_KEY) {
       return res.status(501).json({
         error: 'AI not configured',
-        message: 'Set API key for OCR functionality',
+        message: 'Set GEMINI_API_KEY for OCR functionality',
       });
     }
 
-    const prompt = 'Extract all text from this image. Preserve structure. If no readable text, describe what you see.';
+    const prompt = 'Extract all text from this image. Preserve structure and formatting. If no readable text, describe the image content.';
 
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${OPENAI_API_KEY}`
-      },
-      body: JSON.stringify({
-        model: 'gpt-4o',
-        messages: [
-          { role: 'user', content: [
-            { type: 'text', text: prompt },
-            { type: 'image_url', image_url: { url: `data:image/jpeg;base64,${imageBase64.replace(/^data:image\/\w+;base64,/, '')}` } }
-          ]}
-        ],
-        max_tokens: 8192
-      })
-    });
+    const response = await fetch(
+      `${GEMINI_API_URL}/${DEFAULT_MODEL}:generateContent?key=${GEMINI_API_KEY}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{
+            parts: [
+              { text: prompt },
+              { inlineData: { mimeType: 'image/jpeg', data: imageBase64.replace(/^data:image\/\w+;base64,/, '') } },
+            ],
+          }],
+          generationConfig: {
+            temperature: 0.1,
+            maxOutputTokens: 8192,
+          },
+        }),
+      }
+    );
 
     if (!response.ok) {
-      throw new Error(`OpenAI API error: ${response.status}`);
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.error?.message || `Gemini API error: ${response.status}`);
     }
 
     const data = await response.json();
-    const text = data.choices?.[0]?.message?.content || '';
+    const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
 
     res.json({ text, success: true });
   } catch (error) {
@@ -370,7 +378,7 @@ router.post('/summarize', async (req, res) => {
       return res.status(400).json({ error: 'Text is required' });
     }
 
-    if (!OPENAI_API_KEY) {
+    if (!GEMINI_API_KEY) {
       const summarized = text.split('\n').slice(0, 5).join('\n');
       return res.json({ 
         result: summarized || 'Configure API key for AI summarization',
@@ -386,32 +394,13 @@ router.post('/summarize', async (req, res) => {
 
     const prompt = `Summarize the following notes about ${subject || 'the topic'}:
 
-${text.slice(0, 5000)}
+${text.slice(0, 8000)}
 
 ${modeInstructions[mode] || modeInstructions.bullets}
 
-Keep the summary concise and educational.`;
+Keep the summary concise, educational, and helpful.`;
 
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${OPENAI_API_KEY}`
-      },
-      body: JSON.stringify({
-        model: 'gpt-4o-mini',
-        messages: [{ role: 'user', content: prompt }],
-        max_tokens: 2048,
-        temperature: 0.5
-      })
-    });
-
-    if (!response.ok) {
-      throw new Error(`OpenAI API error: ${response.status}`);
-    }
-
-    const data = await response.json();
-    const result = data.choices?.[0]?.message?.content || '';
+    const result = await callGemini(prompt, [], { temperature: 0.5 });
 
     res.json({ result, success: true });
   } catch (error) {

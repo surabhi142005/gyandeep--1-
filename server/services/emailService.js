@@ -72,7 +72,7 @@ function initializeEmailService() {
  * Get sender email address
  */
 function getSenderEmail() {
-  return process.env.FROM_EMAIL || process.env.SMTP_FROM || 'Gyandeep <noreply@gyandeep.app>';
+  return process.env.RESEND_FROM_EMAIL || process.env.FROM_EMAIL || process.env.SMTP_FROM || 'Gyandeep <noreply@gyandeep.app>';
 }
 
 /**

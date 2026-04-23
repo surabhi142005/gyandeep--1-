@@ -3,7 +3,7 @@
  * Express server for local development
  */
 
-import 'dotenv/config';
+import './utils/env.js';
 import path from 'path';
 import fs from 'fs';
 import express from 'express';

@@ -4,7 +4,7 @@
  * Run with: node server/db/seedData.js
  */
 
-import 'dotenv/config';
+import '../utils/env.js';
 import bcrypt from 'bcryptjs';
 import { connectToDatabase, COLLECTIONS } from './mongoAtlas.js';
 
