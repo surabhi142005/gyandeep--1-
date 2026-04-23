@@ -120,7 +120,15 @@ const App: React.FC = () => {
      */
     useEffect(() => {
         const checkSetup = async () => {
-            if (isSetupComplete) return;
+            if (isSetupComplete) {
+                // Try to load cached users for immediate login availability
+                try {
+                    const cached = localStorage.getItem('gyandeep_cached_users');
+                    if (cached) setAllUsers(JSON.parse(cached));
+                } catch (e) {}
+                return;
+            }
+            
             try {
                 const response = await fetchUsers();
                 const users = Array.isArray(response) ? response : response?.data || [];
@@ -128,9 +136,21 @@ const App: React.FC = () => {
                     setIsSetupComplete(true);
                     localStorage.setItem('gyandeep_setup_complete', 'true');
                     setAllUsers(users);
+                    localStorage.setItem('gyandeep_cached_users', JSON.stringify(users));
                 }
             } catch (err) {
                 console.warn('Initial setup check failed (backend might be offline):', err);
+                // Try fallback to cache even if setup is not marked complete in localStorage
+                try {
+                    const cached = localStorage.getItem('gyandeep_cached_users');
+                    if (cached) {
+                        const parsed = JSON.parse(cached);
+                        if (parsed.length > 0) {
+                            setAllUsers(parsed);
+                            setIsSetupComplete(true);
+                        }
+                    }
+                } catch (e) {}
             }
         };
         checkSetup();
