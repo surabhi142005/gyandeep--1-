@@ -306,17 +306,54 @@ export async function requestPasswordReset(email: string) {
 // ── Face Recognition ──────────────────────────────────────────────────────────
 
 export async function registerFace(userId: string, imageDataUrl: string): Promise<{ ok: boolean }> {
-  const res = await fetch(`${API_BASE}/api/face/register`, {
+  const payload = JSON.stringify({ userId, faceImage: imageDataUrl });
+  const attempt = async (path: string) => {
+    const res = await fetch(`${API_BASE}${path}`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: payload,
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || 'Face registration failed');
+    }
+    return res.json().catch(() => ({ ok: true }));
+  };
+
+  try {
+    await attempt('/api/auth/register-face');
+  } catch (error: any) {
+    if (error?.message !== 'Failed to fetch') {
+      throw error;
+    }
+    await attempt('/api/face/register');
+  }
+
+  return { ok: true };
+}
+
+export async function loginWithFace(userId: string, imageDataUrl: string) {
+  const res = await fetch(`${API_BASE}/api/auth/login-face`, {
     method: 'POST',
     credentials: 'include',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ userId, faceImage: imageDataUrl }),
   });
+
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
-    throw new Error(err.error || 'Face registration failed');
+    throw new Error(err.error || 'Face login failed');
   }
-  return { ok: true };
+
+  const data = await res.json();
+  updateAuthState({
+    user: data.user,
+    isAuthenticated: true,
+    isLoading: false,
+  });
+  initCSRFToken();
+  return data.user;
 }
 
 export async function verifyFace(

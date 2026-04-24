@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { t } from '../services/i18n';
 
 interface AccessibilityPanelProps {
   highContrast: boolean;
@@ -34,8 +35,8 @@ const AccessibilityPanel: React.FC<AccessibilityPanelProps> = ({
       <button
         onClick={() => setIsOpen(!isOpen)}
         className={`fixed bottom-6 left-6 z-50 ${themeColor} text-white w-12 h-12 rounded-full shadow-lg flex items-center justify-center hover:scale-110 transition-transform`}
-        aria-label="Accessibility Settings"
-        title="Accessibility Settings"
+        aria-label={t('Accessibility Settings')}
+        title={t('Accessibility Settings')}
       >
         <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
@@ -48,15 +49,15 @@ const AccessibilityPanel: React.FC<AccessibilityPanelProps> = ({
           onClick={(e) => { if (e.target === e.currentTarget) setIsOpen(false); }}
           role="dialog"
           aria-modal="true"
-          aria-label="Accessibility Settings"
+          aria-label={t('Accessibility Settings')}
         >
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 max-h-[80vh] overflow-y-auto">
             <div className="flex items-center justify-between mb-6">
-              <h2 className="text-xl font-bold text-gray-800">Accessibility Settings</h2>
+              <h2 className="text-xl font-bold text-gray-800">{t('Accessibility Settings')}</h2>
               <button
                 onClick={() => setIsOpen(false)}
                 className="text-gray-400 hover:text-gray-600 text-2xl leading-none"
-                aria-label="Close accessibility panel"
+                aria-label={t('Close accessibility panel')}
               >
                 &times;
               </button>
@@ -67,8 +68,8 @@ const AccessibilityPanel: React.FC<AccessibilityPanelProps> = ({
               {setDarkMode && (
                 <div className="flex items-center justify-between">
                   <div>
-                    <label className="font-semibold text-gray-700">Dark Mode</label>
-                    <p className="text-xs text-gray-500">Switch to a dark color scheme</p>
+                    <label className="font-semibold text-gray-700">{t('Dark Mode')}</label>
+                    <p className="text-xs text-gray-500">{t('Switch to a dark color scheme')}</p>
                   </div>
                   <button
                     role="switch"
@@ -84,8 +85,8 @@ const AccessibilityPanel: React.FC<AccessibilityPanelProps> = ({
               {/* High Contrast */}
               <div className="flex items-center justify-between">
                 <div>
-                  <label className="font-semibold text-gray-700">High Contrast</label>
-                  <p className="text-xs text-gray-500">Increase color contrast for better visibility</p>
+                  <label className="font-semibold text-gray-700">{t('High Contrast')}</label>
+                  <p className="text-xs text-gray-500">{t('Increase color contrast for better visibility')}</p>
                 </div>
                 <button
                   role="switch"
@@ -100,8 +101,8 @@ const AccessibilityPanel: React.FC<AccessibilityPanelProps> = ({
               {/* Reduced Motion */}
               <div className="flex items-center justify-between">
                 <div>
-                  <label className="font-semibold text-gray-700">Reduced Motion</label>
-                  <p className="text-xs text-gray-500">Disable animations and transitions</p>
+                  <label className="font-semibold text-gray-700">{t('Reduced Motion')}</label>
+                  <p className="text-xs text-gray-500">{t('Disable animations and transitions')}</p>
                 </div>
                 <button
                   role="switch"
@@ -116,7 +117,7 @@ const AccessibilityPanel: React.FC<AccessibilityPanelProps> = ({
               {/* Font Scale */}
               <div>
                 <div className="flex items-center justify-between mb-2">
-                  <label className="font-semibold text-gray-700">Font Size</label>
+                  <label className="font-semibold text-gray-700">{t('Font Size')}</label>
                   <span className="text-sm text-gray-500">{Math.round(fontScale * 100)}%</span>
                 </div>
                 <input
@@ -127,20 +128,20 @@ const AccessibilityPanel: React.FC<AccessibilityPanelProps> = ({
                   value={fontScale}
                   onChange={(e) => setFontScale(Number(e.target.value))}
                   className="w-full accent-indigo-600"
-                  aria-label="Adjust font size"
+                  aria-label={t('Adjust font size')}
                 />
                 <div className="flex justify-between text-xs text-gray-400 mt-1">
-                  <span>Small</span>
-                  <span>Default</span>
-                  <span>Large</span>
+                  <span>{t('Small')}</span>
+                  <span>{t('Default')}</span>
+                  <span>{t('Large')}</span>
                 </div>
               </div>
 
               {/* Screen Reader Hints */}
               <div className="flex items-center justify-between">
                 <div>
-                  <label className="font-semibold text-gray-700">Screen Reader Hints</label>
-                  <p className="text-xs text-gray-500">Add extra descriptions for assistive technology</p>
+                  <label className="font-semibold text-gray-700">{t('Screen Reader Hints')}</label>
+                  <p className="text-xs text-gray-500">{t('Add extra descriptions for assistive technology')}</p>
                 </div>
                 <button
                   role="switch"
@@ -155,8 +156,8 @@ const AccessibilityPanel: React.FC<AccessibilityPanelProps> = ({
               {/* Voice Assistance */}
               <div className="flex items-center justify-between">
                 <div>
-                  <label className="font-semibold text-gray-700">Voice Assistance</label>
-                  <p className="text-xs text-gray-500">Enable text-to-speech for AI responses</p>
+                  <label className="font-semibold text-gray-700">{t('Voice Assistance')}</label>
+                  <p className="text-xs text-gray-500">{t('Enable text-to-speech for AI responses')}</p>
                 </div>
                 <button
                   role="switch"
@@ -170,11 +171,11 @@ const AccessibilityPanel: React.FC<AccessibilityPanelProps> = ({
             </div>
 
             <div className="mt-6 pt-4 border-t">
-              <h3 className="text-sm font-semibold text-gray-600 mb-2">Keyboard Shortcuts</h3>
+              <h3 className="text-sm font-semibold text-gray-600 mb-2">{t('Keyboard Shortcuts')}</h3>
               <div className="text-xs text-gray-500 space-y-1">
-                <p><kbd className="px-1.5 py-0.5 bg-gray-100 rounded border text-gray-700">Tab</kbd> Navigate between elements</p>
-                <p><kbd className="px-1.5 py-0.5 bg-gray-100 rounded border text-gray-700">Esc</kbd> Close modals and panels</p>
-                <p><kbd className="px-1.5 py-0.5 bg-gray-100 rounded border text-gray-700">Enter</kbd> Activate buttons and links</p>
+                <p><kbd className="px-1.5 py-0.5 bg-gray-100 rounded border text-gray-700">Tab</kbd> {t('Navigate between elements')}</p>
+                <p><kbd className="px-1.5 py-0.5 bg-gray-100 rounded border text-gray-700">Esc</kbd> {t('Close modals and panels')}</p>
+                <p><kbd className="px-1.5 py-0.5 bg-gray-100 rounded border text-gray-700">Enter</kbd> {t('Activate buttons and links')}</p>
               </div>
             </div>
           </div>

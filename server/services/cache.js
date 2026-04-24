@@ -30,7 +30,64 @@ export function initRedis() {
     
     if (isUpstash) {
       console.log('[Redis] Using Upstash');
-      return initUpstash();
+      // Use dynamic import for ESM compatibility
+      import('@upstash/redis').then(({ Redis: UpstashRedis }) => {
+        const UPSTASH_URL = process.env.UPSTASH_REDIS_REST_URL;
+        const UPSTASH_TOKEN = process.env.UPSTASH_REDIS_REST_TOKEN;
+        
+        if (!UPSTASH_URL || !UPSTASH_TOKEN) {
+          console.warn('Upstash not configured - caching disabled');
+          return;
+        }
+        
+        const upstashClient = new UpstashRedis({
+          url: UPSTASH_URL,
+          token: UPSTASH_TOKEN,
+        });
+        
+        // Wrapper for ioredis compatibility
+        redis = {
+          async get(key) { return await upstashClient.get(key); },
+          async set(key, value, options) { 
+            if (options?.ex) return await upstashClient.set(key, value, { ex: options.ex });
+            return await upstashClient.set(key, value); 
+          },
+          async setex(key, seconds, value) { return await upstashClient.set(key, value, { ex: seconds }); },
+          async del(...keys) { return await upstashClient.del(...keys); },
+          async hset(key, ...args) {
+            if (args.length === 1 && typeof args[0] === 'object') {
+              return await upstashClient.hset(key, args[0]);
+            }
+            const obj = {};
+            for (let i = 0; i < args.length; i += 2) {
+              obj[args[i]] = args[i + 1];
+            }
+            return await upstashClient.hset(key, obj);
+          },
+          async hget(key, field) { return await upstashClient.hget(key, field); },
+          async hgetall(key) { return await upstashClient.hgetall(key); },
+          async exists(key) { return await upstashClient.exists(key); },
+          async expire(key, seconds) { return await upstashClient.expire(key, seconds); },
+          async keys(pattern) { return await upstashClient.keys(pattern); },
+          async zadd(key, score, member) { return await upstashClient.zadd(key, { score, member }); },
+          async zremrangebyscore(key, min, max) { return await upstashClient.zremrangebyscore(key, min, max); },
+          async zcard(key) { return await upstashClient.zcard(key); },
+          async zrange(key, start, stop, options) {
+            if (options === 'WITHSCORES') return await upstashClient.zrange(key, start, stop, { withScores: true });
+            return await upstashClient.zrange(key, start, stop);
+          },
+          async publish(channel, message) { return await upstashClient.publish(channel, message); },
+          async ping() { return await upstashClient.ping(); },
+          async info(section) { return await upstashClient.info(section); },
+          async dbsize() { return await upstashClient.dbsize(); },
+        };
+        
+        isConnected = true;
+        console.log('Upstash Redis initialized');
+      }).catch(err => {
+        console.warn('Failed to load Upstash Redis:', err.message);
+      });
+      return;
     }
     
     redis = new Redis(REDIS_URL, {
@@ -74,83 +131,6 @@ export function initRedis() {
     console.warn('Redis initialization failed:', error.message);
     return null;
   }
-}
-
-function initUpstash() {
-  const UPSTASH_URL = process.env.UPSTASH_REDIS_REST_URL;
-  const UPSTASH_TOKEN = process.env.UPSTASH_REDIS_REST_TOKEN;
-  
-  if (!UPSTASH_URL || !UPSTASH_TOKEN) {
-    console.warn('Upstash not configured - caching disabled');
-    return null;
-  }
-  
-  const { Redis } = require('@upstash/redis');
-  
-  redis = new Redis({
-    url: UPSTASH_URL,
-    token: UPSTASH_TOKEN,
-  });
-  
-  isConnected = true;
-  console.log('Upstash Redis initialized');
-  
-  return {
-    async get(key) {
-      return await redis.get(key);
-    },
-    async set(key, value, ex) {
-      return await redis.set(key, value, { ex });
-    },
-    async setex(key, seconds, value) {
-      return await redis.set(key, value, { ex: seconds });
-    },
-    async del(key) {
-      return await redis.del(key);
-    },
-    async hset(key, field, value) {
-      return await redis.hset(key, field, value);
-    },
-    async hget(key, field) {
-      return await redis.hget(key, field);
-    },
-    async hgetall(key) {
-      return await redis.hgetall(key);
-    },
-    async exists(key) {
-      return await redis.exists(key);
-    },
-    async expire(key, seconds) {
-      return await redis.expire(key, seconds);
-    },
-    async keys(pattern) {
-      return await redis.keys(pattern);
-    },
-    async zadd(key, score, member) {
-      return await redis.zadd(key, { score, member });
-    },
-    async zremrangebyscore(key, min, max) {
-      return await redis.zremrangebyscore(key, min, max);
-    },
-    async zcard(key) {
-      return await redis.zcard(key);
-    },
-    async zrange(key, start, stop, withScores) {
-      return await redis.zrange(key, start, stop, { withScores });
-    },
-    async publish(channel, message) {
-      return await redis.publish(channel, message);
-    },
-    async ping() {
-      return await redis.ping();
-    },
-    async info(section) {
-      return await redis.info(section);
-    },
-    async dbsize() {
-      return await redis.dbsize();
-    },
-  };
 }
 
 export function getRedis() {

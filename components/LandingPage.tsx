@@ -1,5 +1,6 @@
 import React, { useMemo, useRef } from 'react';
 import { motion, useScroll, useTransform, useInView } from 'framer-motion';
+import { t } from '../services/i18n';
 
 interface LandingPageProps {
   onGetStarted: () => void;
@@ -13,43 +14,7 @@ const THEME_COLORS: Record<string, Record<string, string>> = {
   purple: { primary: 'bg-purple-600', hover: 'hover:bg-purple-700', text: 'text-purple-600', gradient: 'from-purple-600 to-purple-800' },
 };
 
-const features = [
-  { icon: '🤖', title: 'AI-Powered Quizzes', desc: 'Auto-generate quizzes from class notes using Gemini AI', color: 'from-blue-500/10 to-indigo-500/10', border: 'border-blue-200/50' },
-  { icon: '📷', title: 'Face ID Login', desc: 'Secure biometric authentication with liveness detection', color: 'from-purple-500/10 to-pink-500/10', border: 'border-purple-200/50' },
-  { icon: '📍', title: 'Smart Attendance', desc: 'GPS-verified attendance marking with geofencing', color: 'from-green-500/10 to-emerald-500/10', border: 'border-green-200/50' },
-  { icon: '🏆', title: 'Gamified Learning', desc: 'Earn XP, badges, and coins as you learn and compete', color: 'from-amber-500/10 to-orange-500/10', border: 'border-amber-200/50' },
-  { icon: '📊', title: 'Live Analytics', desc: 'Real-time performance tracking and insights dashboard', color: 'from-cyan-500/10 to-teal-500/10', border: 'border-cyan-200/50' },
-  { icon: '💬', title: 'AI Chatbot', desc: 'Get instant help with a smart classroom assistant', color: 'from-rose-500/10 to-red-500/10', border: 'border-rose-200/50' },
-];
-
-const scenes = [
-  {
-    emoji: '📚',
-    title: 'Upload Your Notes',
-    desc: 'Teachers upload class notes and AI instantly processes them into structured content.',
-    visual: 'bg-gradient-to-br from-blue-100 to-indigo-100',
-  },
-  {
-    emoji: '🧠',
-    title: 'AI Generates Quizzes',
-    desc: 'Gemini AI creates personalized quiz questions tailored to the material.',
-    visual: 'bg-gradient-to-br from-purple-100 to-pink-100',
-  },
-  {
-    emoji: '🎮',
-    title: 'Students Compete',
-    desc: 'Gamified quiz experience with timers, streaks, XP, coins, and leaderboards.',
-    visual: 'bg-gradient-to-br from-amber-100 to-orange-100',
-  },
-  {
-    emoji: '📈',
-    title: 'Track Progress',
-    desc: 'Real-time analytics show learning pathways and personalized recommendations.',
-    visual: 'bg-gradient-to-br from-emerald-100 to-teal-100',
-  },
-];
-
-const FeatureCard: React.FC<{ feature: typeof features[0]; index: number }> = ({ feature, index }) => {
+const FeatureCard: React.FC<{ feature: any; index: number }> = ({ feature, index }) => {
   const ref = useRef<HTMLDivElement>(null);
   const isInView = useInView(ref, { once: true, margin: '-50px' });
 
@@ -78,7 +43,7 @@ const FeatureCard: React.FC<{ feature: typeof features[0]; index: number }> = ({
   );
 };
 
-const ScrollScene: React.FC<{ scene: typeof scenes[0]; index: number }> = ({ scene, index }) => {
+const ScrollScene: React.FC<{ scene: any; index: number }> = ({ scene, index }) => {
   const ref = useRef<HTMLDivElement>(null);
   const isInView = useInView(ref, { once: true, margin: '-100px' });
   const isEven = index % 2 === 0;
@@ -95,7 +60,7 @@ const ScrollScene: React.FC<{ scene: typeof scenes[0]; index: number }> = ({ sce
         className="flex-1 text-center md:text-left"
       >
         <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-50 text-indigo-600 text-xs font-semibold mb-4">
-          Step {index + 1}
+          {t('Step')} {index + 1}
         </div>
         <h3 className="text-2xl md:text-3xl font-bold text-gray-800 mb-3">{scene.title}</h3>
         <p className="text-gray-700 text-lg leading-relaxed max-w-md">{scene.desc}</p>
@@ -166,11 +131,45 @@ const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, theme }) => {
   const heroOpacity = useTransform(scrollYProgress, [0, 0.5], [1, 0]);
   const heroScale = useTransform(scrollYProgress, [0, 0.5], [1, 0.95]);
 
+  const features = [
+    { icon: '🤖', title: t('AI-Powered Quizzes'), desc: t('Auto-generate quizzes from class notes using Gemini AI'), color: 'from-blue-500/10 to-indigo-500/10', border: 'border-blue-200/50' },
+    { icon: '📷', title: t('Face ID Login'), desc: t('Secure biometric authentication with liveness detection'), color: 'from-purple-500/10 to-pink-500/10', border: 'border-purple-200/50' },
+    { icon: '📍', title: t('Smart Attendance'), desc: t('GPS-verified attendance marking with geofencing'), color: 'from-green-500/10 to-emerald-500/10', border: 'border-green-200/50' },
+    { icon: '🏆', title: t('Gamified Learning'), desc: t('Earn XP, badges, and coins as you learn and compete'), color: 'from-amber-500/10 to-orange-500/10', border: 'border-amber-200/50' },
+    { icon: '📊', title: t('Live Analytics'), desc: t('Real-time performance tracking and insights dashboard'), color: 'from-cyan-500/10 to-teal-500/10', border: 'border-cyan-200/50' },
+    { icon: '💬', title: t('AI Chatbot'), desc: t('Get instant help with a smart classroom assistant'), color: 'from-rose-500/10 to-red-500/10', border: 'border-rose-200/50' },
+  ];
+
+  const scenes = [
+    {
+      emoji: '📚',
+      title: t('Upload Your Notes'),
+      desc: t('Teachers upload class notes and AI instantly processes them into structured content.'),
+      visual: 'bg-gradient-to-br from-blue-100 to-indigo-100',
+    },
+    {
+      emoji: '🧠',
+      title: t('AI Generates Quizzes'),
+      desc: t('Gemini AI creates personalized quiz questions tailored to the material.'),
+      visual: 'bg-gradient-to-br from-purple-100 to-pink-100',
+    },
+    {
+      emoji: '🎮',
+      title: t('Students Compete'),
+      desc: t('Gamified quiz experience with timers, streaks, XP, coins, and leaderboards.'),
+      visual: 'bg-gradient-to-br from-amber-100 to-orange-100',
+    },
+    {
+      emoji: '📈',
+      title: t('Track Progress'),
+      desc: t('Real-time analytics show learning pathways and personalized recommendations.'),
+      visual: 'bg-gradient-to-br from-emerald-100 to-teal-100',
+    },
+  ];
+
   return (
     <div className="min-h-screen overflow-hidden bg-white/60 backdrop-blur-sm">
-      {/* Hero Section with Parallax */}
       <div ref={heroRef} className="relative min-h-screen flex flex-col items-center justify-center text-center px-4 py-20 overflow-hidden">
-        {/* Floating particles */}
         <FloatingParticle delay={0} x="top-20 left-[10%]" size="12px" />
         <FloatingParticle delay={1} x="top-40 right-[15%]" size="8px" />
         <FloatingParticle delay={2} x="bottom-32 left-[20%]" size="16px" />
@@ -178,7 +177,6 @@ const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, theme }) => {
         <FloatingParticle delay={1.5} x="bottom-48 right-[10%]" size="14px" />
         <FloatingParticle delay={3} x="top-32 left-[40%]" size="6px" />
 
-        {/* Background gradient orbs */}
         <div className="absolute inset-0 overflow-hidden pointer-events-none">
           <div className="absolute -top-40 -right-40 w-96 h-96 bg-gradient-to-br from-indigo-200/30 to-purple-200/30 rounded-full blur-3xl" />
           <div className="absolute -bottom-40 -left-40 w-96 h-96 bg-gradient-to-br from-blue-200/30 to-cyan-200/30 rounded-full blur-3xl" />
@@ -188,7 +186,6 @@ const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, theme }) => {
           style={{ y: heroY, opacity: heroOpacity, scale: heroScale }}
           className="relative z-10"
         >
-          {/* Logo */}
           <motion.div
             initial={{ scale: 0, rotate: -180 }}
             animate={{ scale: 1, rotate: 0 }}
@@ -198,7 +195,6 @@ const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, theme }) => {
             <img src="/logo.png" alt="Gyandeep" className="w-20 h-20 sm:w-24 sm:h-24 object-contain drop-shadow-[0_2px_6px_rgba(0,0,0,0.4)]" />
           </motion.div>
 
-          {/* Heading */}
           <motion.h1
             initial={{ opacity: 0, y: 30 }}
             animate={{ opacity: 1, y: 0 }}
@@ -210,14 +206,13 @@ const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, theme }) => {
             </span>
           </motion.h1>
 
-          {/* Subtitle */}
           <motion.p
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.7, delay: 0.5 }}
             className="text-xl md:text-2xl text-gray-800 max-w-2xl mx-auto mb-3 font-semibold"
           >
-            AI-Powered Smart Classroom System
+            {t('AI-Powered Smart Classroom System')}
           </motion.p>
           <motion.p
             initial={{ opacity: 0, y: 20 }}
@@ -225,10 +220,9 @@ const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, theme }) => {
             transition={{ duration: 0.7, delay: 0.6 }}
             className="text-gray-700 max-w-lg mx-auto mb-10 text-base"
           >
-            Transform your classroom with face recognition, AI quizzes, real-time attendance, and gamified learning.
+            {t('Transform your classroom with face recognition, AI quizzes, real-time attendance, and gamified learning.')}
           </motion.p>
 
-          {/* CTA Buttons */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -241,7 +235,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, theme }) => {
               onClick={onGetStarted}
               className="relative overflow-hidden bg-gradient-to-r from-indigo-600 via-purple-600 to-indigo-700 text-white font-bold py-4 px-10 rounded-2xl text-lg shadow-xl shadow-indigo-500/25 transition-all duration-300"
             >
-              <span className="relative z-10">Get Started</span>
+              <span className="relative z-10">{t('Get Started')}</span>
               <motion.div
                 className="absolute inset-0 bg-gradient-to-r from-purple-600 to-indigo-600"
                 initial={{ x: '100%' }}
@@ -255,12 +249,11 @@ const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, theme }) => {
               onClick={() => document.getElementById('features')?.scrollIntoView({ behavior: 'smooth' })}
               className="text-gray-800 font-semibold py-4 px-8 rounded-2xl text-lg border border-gray-300 bg-white/80 hover:bg-white hover:border-gray-400 backdrop-blur transition-all duration-300"
             >
-              Learn More
+              {t('Learn More')}
             </motion.button>
           </motion.div>
         </motion.div>
 
-        {/* Scroll indicator */}
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
@@ -277,17 +270,15 @@ const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, theme }) => {
         </motion.div>
       </div>
 
-      {/* Stats Section */}
       <div className="py-16 px-4">
         <div className="max-w-4xl mx-auto grid grid-cols-2 md:grid-cols-4 gap-8">
-          <StatCounter value="AI+" label="Powered Learning" delay={0} />
-          <StatCounter value="100%" label="Attendance Accuracy" delay={0.1} />
-          <StatCounter value="5x" label="Student Engagement" delay={0.2} />
-          <StatCounter value="24/7" label="AI Assistant" delay={0.3} />
+          <StatCounter value="AI+" label={t('Powered Learning')} delay={0} />
+          <StatCounter value="100%" label={t('Attendance Accuracy')} delay={0.1} />
+          <StatCounter value="5x" label={t('Student Engagement')} delay={0.2} />
+          <StatCounter value="24/7" label={t('AI Assistant')} delay={0.3} />
         </div>
       </div>
 
-      {/* Scrollytelling Scenes */}
       <div className="py-16 px-4 max-w-6xl mx-auto">
         <motion.div
           initial={{ opacity: 0 }}
@@ -296,10 +287,10 @@ const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, theme }) => {
           className="text-center mb-16"
         >
           <h2 className="text-3xl md:text-4xl font-extrabold text-gray-800 mb-4">
-            How It Works
+            {t('How It Works')}
           </h2>
           <p className="text-gray-700 text-lg max-w-2xl mx-auto">
-            From uploading notes to tracking progress, Gyandeep handles everything.
+            {t('From uploading notes to tracking progress, Gyandeep handles everything.')}
           </p>
         </motion.div>
         <div className="space-y-24">
@@ -309,7 +300,6 @@ const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, theme }) => {
         </div>
       </div>
 
-      {/* Features Grid */}
       <div id="features" className="px-4 py-20 max-w-6xl mx-auto">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
@@ -318,10 +308,10 @@ const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, theme }) => {
           className="text-center mb-12"
         >
           <h2 className="text-3xl md:text-4xl font-extrabold text-gray-800 mb-4">
-            What makes Gyandeep special?
+            {t('What makes Gyandeep special?')}
           </h2>
           <p className="text-gray-700 text-lg max-w-2xl mx-auto">
-            A complete platform for the modern classroom
+            {t('A complete platform for the modern classroom')}
           </p>
         </motion.div>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -331,7 +321,6 @@ const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, theme }) => {
         </div>
       </div>
 
-      {/* Final CTA */}
       <div className="py-24 px-4 text-center relative overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-b from-transparent to-indigo-50/50 pointer-events-none" />
         <motion.div
@@ -341,10 +330,10 @@ const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, theme }) => {
           className="relative z-10"
         >
           <h2 className="text-3xl md:text-4xl font-extrabold text-gray-800 mb-4">
-            Ready to transform your classroom?
+            {t('Ready to transform your classroom?')}
           </h2>
           <p className="text-gray-700 text-lg mb-8 max-w-xl mx-auto">
-            Join thousands of educators using AI to create engaging learning experiences.
+            {t('Join thousands of educators using AI to create engaging learning experiences.')}
           </p>
           <motion.button
             whileHover={{ scale: 1.05, boxShadow: '0 20px 40px rgba(99, 102, 241, 0.3)' }}
@@ -352,14 +341,13 @@ const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, theme }) => {
             onClick={onGetStarted}
             className="bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-bold py-4 px-12 rounded-2xl text-lg shadow-xl shadow-indigo-500/25"
           >
-            Start Now — It's Free
+            {t("Start Now — It's Free")}
           </motion.button>
         </motion.div>
       </div>
 
-      {/* Footer */}
       <footer className="text-center py-6 text-xs text-gray-600 border-t border-gray-200">
-        <p>Gyandeep — Built with React, Gemini AI & Three.js</p>
+        <p>{t('Gyandeep — Built with React, Gemini AI & Three.js')}</p>
       </footer>
     </div>
   );

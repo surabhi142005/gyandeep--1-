@@ -48,6 +48,24 @@ function generateTokenPair(user) {
   };
 }
 
+function buildSafeUser(user) {
+  return {
+    id: user._id?.toString() || user.id,
+    name: user.name,
+    email: user.email,
+    role: user.role,
+    faceImage: user.faceImage || null,
+    classId: user.classId || null,
+    assignedSubjects: Array.isArray(user.assignedSubjects) ? user.assignedSubjects : [],
+    performance: Array.isArray(user.performance) ? user.performance : [],
+    badges: Array.isArray(user.badges) ? user.badges : [],
+    xp: user.xp ?? 0,
+    level: user.level ?? 1,
+    coins: user.coins ?? 0,
+    active: user.active !== false,
+  };
+}
+
 function validatePassword(password) {
   const errors = [];
   if (password.length < 8) errors.push('at least 8 characters');
@@ -146,20 +164,10 @@ router.post('/login', async (req, res) => {
     const tokens = generateTokenPair(user);
     setAuthCookies(res, tokens.accessToken, tokens.refreshToken);
 
-    const safeUser = {
-      id: user._id?.toString() || user.id,
-      name: user.name,
-      email: user.email,
-      role: user.role,
-      faceImage: user.faceImage,
-      classId: user.classId,
-      assignedSubjects: user.assignedSubjects,
-    };
-
     // Also return tokens in body for clients that prefer it
     res.json({
       ...tokens,
-      user: safeUser,
+      user: buildSafeUser(user),
     });
   } catch (error) {
     console.error('Login error:', error);
@@ -202,6 +210,13 @@ router.post('/register', async (req, res) => {
       email,
       password: hashedPassword,
       role,
+      faceImage: null,
+      badges: [],
+      xp: 0,
+      level: 1,
+      coins: 0,
+      streak: 0,
+      classId: null,
       active: true,
       emailVerified: false,
       preferences: {},
@@ -223,16 +238,57 @@ router.post('/register', async (req, res) => {
 
     res.status(201).json({
       ...tokens,
-      user: {
-        id: result.insertedId.toString(),
-        name,
-        email,
-        role,
-      },
+      user: buildSafeUser({ _id: result.insertedId, name, email, role, faceImage: null, assignedSubjects: [], performance: [], badges: [], xp: 0, level: 1, coins: 0, classId: null, active: true }),
     });
   } catch (error) {
     console.error('Register error:', error);
     res.status(500).json({ error: 'Registration failed' });
+  }
+});
+
+router.post('/register-face', async (req, res) => {
+  try {
+    const token = req.cookies?.[TOKEN_COOKIE_NAME] || req.headers.authorization?.slice(7);
+    if (!token) {
+      return res.status(401).json({ error: 'Authentication required' });
+    }
+
+    const decoded = jwt.verify(token, JWT_SECRET);
+    const { userId, faceImage, metadata } = req.body;
+
+    if (!userId || !faceImage) {
+      return res.status(400).json({ error: 'userId and faceImage are required' });
+    }
+
+    if (decoded.id !== userId && decoded.role !== 'admin') {
+      return res.status(403).json({ error: 'You can only register a face for your own account' });
+    }
+
+    const { registerFaceForAuth } = await import('../routes/face.js');
+    const result = await registerFaceForAuth(userId, faceImage, metadata || {});
+
+    const db = await connectToDatabase();
+    const user = await db.collection(COLLECTIONS.USERS).findOne(
+      { _id: new ObjectId(userId) },
+      { projection: { password: 0 } }
+    );
+
+    res.status(201).json({
+      ...result,
+      user: user ? buildSafeUser(user) : { id: userId },
+    });
+  } catch (error) {
+    console.error('Register face error:', error);
+    if (error.name === 'JsonWebTokenError' || error.name === 'TokenExpiredError') {
+      return res.status(401).json({ error: 'Invalid token' });
+    }
+    if (error.message === 'User not found') {
+      return res.status(404).json({ error: error.message });
+    }
+    if (error.message === 'Face already registered for this user') {
+      return res.status(409).json({ error: error.message });
+    }
+    res.status(500).json({ error: 'Face registration failed' });
   }
 });
 
@@ -281,19 +337,9 @@ router.post('/login-face', async (req, res) => {
     const tokens = generateTokenPair(user);
     setAuthCookies(res, tokens.accessToken, tokens.refreshToken);
 
-    const safeUser = {
-      id: user._id?.toString() || user.id,
-      name: user.name,
-      email: user.email,
-      role: user.role,
-      faceImage: user.faceImage,
-      classId: user.classId,
-      assignedSubjects: user.assignedSubjects,
-    };
-
     res.json({
       ...tokens,
-      user: safeUser,
+      user: buildSafeUser(user),
     });
   } catch (error) {
     console.error('Face login error:', error);

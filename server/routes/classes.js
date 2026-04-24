@@ -115,4 +115,25 @@ router.post('/assign', authMiddleware, async (req, res) => {
   }
 });
 
+router.delete('/:id', authMiddleware, async (req, res) => {
+  try {
+    const db = await connectToDatabase();
+    const { id } = req.params;
+
+    // First, unassign all students from this class
+    await db.collection(COLLECTIONS.USERS).updateMany(
+      { classId: new ObjectId(id) },
+      { $set: { classId: null, updatedAt: new Date() } }
+    );
+
+    // Then delete the class
+    await db.collection(COLLECTIONS.CLASSES).deleteOne({ _id: new ObjectId(id) });
+
+    res.json({ ok: true, message: 'Class deleted successfully' });
+  } catch (error) {
+    console.error('Delete class error:', error);
+    res.status(500).json({ error: 'Failed to delete class' });
+  }
+});
+
 export default router;

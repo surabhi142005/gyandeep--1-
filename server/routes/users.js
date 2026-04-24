@@ -151,4 +151,21 @@ router.delete('/:id', authMiddleware, async (req, res) => {
   }
 });
 
+router.get('/:id/badges', authMiddleware, async (req, res) => {
+  try {
+    const db = await connectToDatabase();
+    const user = await db.collection(COLLECTIONS.USERS).findOne(
+      { _id: new ObjectId(req.params.id) },
+      { projection: { badges: 1, name: 1 } }
+    );
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    res.json({ badges: user.badges || [] });
+  } catch (error) {
+    console.error('Get badges error:', error);
+    res.status(500).json({ error: 'Failed to fetch badges' });
+  }
+});
+
 export default router;

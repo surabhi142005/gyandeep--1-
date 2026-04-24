@@ -3,7 +3,7 @@ import { useState, useMemo } from 'react';
 import type { User } from '../types';
 import { ROLE_DISPLAY_NAMES } from '../types';
 import WebcamCapture from './WebcamCapture';
-import { verifyFace, passwordMatches, hashPassword, login as expressLogin } from '../services/authService';
+import { verifyFace, passwordMatches, hashPassword, login as expressLogin, loginWithFace } from '../services/authService';
 import { preloadFaceApiModels } from '../services/faceApiLoader';
 import Spinner from './Spinner';
 import { t } from '../services/i18n';
@@ -13,6 +13,7 @@ interface LoginProps {
   users: User[];
   theme: string;
   onPasswordReset: (email: string, newPassword: string) => boolean;
+  onNavigateToRegister?: () => void;
 }
 
 type LoginMethod = 'faceId' | 'emailPassword';
@@ -25,7 +26,7 @@ const THEME_COLORS: Record<string, Record<string, string>> = {
 };
 
 
-const Login: React.FC<LoginProps> = ({ onLogin, users, theme, onPasswordReset }) => {
+const Login: React.FC<LoginProps> = ({ onLogin, users, theme, onPasswordReset, onNavigateToRegister }) => {
   const [loginMethod, setLoginMethod] = useState<LoginMethod>('emailPassword');
 
   // Face ID Login State
@@ -162,12 +163,26 @@ const Login: React.FC<LoginProps> = ({ onLogin, users, theme, onPasswordReset })
         setError('Please select a user first');
         return;
       }
-      const result = await verifyFace(imageDataUrl, userToLogin.id);
-      if (result.authenticated) {
-        onLogin(userToLogin);
-      } else {
-        setError('Face not recognized. Make sure you are in good lighting and try again.');
+
+      try {
+        const user = await loginWithFace(userToLogin.id, imageDataUrl);
+        if (user) {
+          onLogin({ ...userToLogin, ...user });
+          return;
+        }
+      } catch (apiError: any) {
+        if (apiError?.message && apiError.message !== 'Failed to fetch') {
+          throw apiError;
+        }
       }
+
+      const result = await verifyFace(imageDataUrl, userToLogin.id);
+      if (!result.authenticated) {
+        setError('Face not recognized. Make sure you are in good lighting and try again.');
+        return;
+      }
+
+      onLogin(userToLogin);
     } catch (e: any) {
       setError(e.message || 'Authentication failed. Please try again or use email & password login.');
     } finally {
@@ -223,7 +238,7 @@ const Login: React.FC<LoginProps> = ({ onLogin, users, theme, onPasswordReset })
                 className={`flex-1 py-2 px-4 text-sm font-semibold rounded-md transition-all ${loginMethod === 'emailPassword' ? `${colors.primary} text-white shadow` : 'text-gray-600'
                   }`}
               >
-                <span aria-hidden="true">📧 </span>Email & Password
+                <span aria-hidden="true">📧 </span>{t('Email & Password')}
               </button>
               <button
                 role="tab"
@@ -232,7 +247,7 @@ const Login: React.FC<LoginProps> = ({ onLogin, users, theme, onPasswordReset })
                 className={`flex-1 py-2 px-4 text-sm font-semibold rounded-md transition-all ${loginMethod === 'faceId' ? `${colors.primary} text-white shadow` : 'text-gray-600'
                   }`}
               >
-                <span aria-hidden="true">📷 </span>Face ID
+                <span aria-hidden="true">📷 </span>{t('Face ID')}
               </button>
             </div>
 
@@ -240,7 +255,7 @@ const Login: React.FC<LoginProps> = ({ onLogin, users, theme, onPasswordReset })
             {loginMethod === 'emailPassword' && (
               <div className="space-y-4">
                 <div>
-                  <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+                  <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">{t('Email')}</label>
                     <input
                       id="email"
                       type="email"
@@ -255,7 +270,7 @@ const Login: React.FC<LoginProps> = ({ onLogin, users, theme, onPasswordReset })
                   {emailError && <p className="text-red-500 text-xs mt-1">{emailError}</p>}
                 </div>
                 <div>
-                  <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1">Password</label>
+                  <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1">{t('Password')}</label>
                   <div className="relative">
                     <input
                       id="password"
@@ -263,7 +278,7 @@ const Login: React.FC<LoginProps> = ({ onLogin, users, theme, onPasswordReset })
                       value={password}
                       onChange={e => { setPassword(e.target.value); setError(null); }}
                       onKeyDown={e => e.key === 'Enter' && handleEmailPasswordLogin()}
-                      placeholder="Enter your password"
+                      placeholder={t('Enter your password')}
                       autoComplete="current-password"
                       className={`w-full p-3 pr-10 text-base border border-gray-300 rounded-xl shadow-sm focus:outline-none focus:ring-2 ${colors.ring}`}
                       style={{ fontSize: '16px' }}
@@ -273,7 +288,7 @@ const Login: React.FC<LoginProps> = ({ onLogin, users, theme, onPasswordReset })
                       onClick={() => setShowPassword(!showPassword)}
                       className="absolute right-3 top-1/2 -translate-y-1/2 p-2 text-gray-400 hover:text-gray-600 min-w-[44px] min-h-[44px] flex items-center justify-center"
                       tabIndex={-1}
-                      aria-label={showPassword ? 'Hide password' : 'Show password'}
+                      aria-label={showPassword ? t('Hide password') : t('Show password')}
                     >
                       {showPassword ? (
                         <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" /></svg>
@@ -288,11 +303,21 @@ const Login: React.FC<LoginProps> = ({ onLogin, users, theme, onPasswordReset })
                   disabled={isLoggingIn || !email || !password}
                   className={`w-full text-white font-bold py-3 rounded-xl transition-all duration-200 flex items-center justify-center gap-2 ${colors.primary} ${colors.hover} disabled:opacity-50 disabled:cursor-not-allowed`}
                 >
-                  {isLoggingIn ? <><Spinner size="w-5 h-5" /><span>Signing in...</span></> : 'Sign In'}
+                  {isLoggingIn ? <><Spinner size="w-5 h-5" /><span>{t('Signing in...')}</span></> : t('Sign In')}
                 </button>
                 <div className="text-center">
                   <button onClick={handleForgotPasswordStart} className={`text-sm ${colors.text} hover:underline`}>
-                    Forgot Password?
+                    {t('Forgot Password?')}
+                  </button>
+                </div>
+                <div className="text-center pt-1">
+                  <span className="text-sm text-gray-500">{t("Don't have an account?")} </span>
+                  <button
+                    type="button"
+                    onClick={() => onNavigateToRegister?.()}
+                    className={`text-sm font-medium ${colors.text} hover:underline`}
+                  >
+                    {t('Sign Up')}
                   </button>
                 </div>
               </div>
@@ -303,7 +328,7 @@ const Login: React.FC<LoginProps> = ({ onLogin, users, theme, onPasswordReset })
               <div className="space-y-4">
                 <div>
                   <label htmlFor="face-user-select" className="block text-sm font-medium text-gray-700 mb-1">
-                    Select Your Account
+                    {t('Select Your Account')}
                   </label>
                   {allUsersForLogin.length > 0 ? (
                     <select
@@ -312,16 +337,16 @@ const Login: React.FC<LoginProps> = ({ onLogin, users, theme, onPasswordReset })
                       onChange={e => { setSelectedUserId(e.target.value); setError(null); }}
                       className={`w-full p-3 text-base border border-gray-300 rounded-xl shadow-sm focus:outline-none focus:ring-2 ${colors.ring} bg-white`}
                     >
-                      <option value="">-- Select account --</option>
+                      <option value="">-- {t('Select account')} --</option>
                       {allUsersForLogin.map(u => (
                         <option key={u.id} value={u.id}>
-                          {u.name} ({ROLE_DISPLAY_NAMES[u.role]}) {u.faceImage ? '✅' : '(no Face ID)'}
+                          {u.name} ({t(ROLE_DISPLAY_NAMES[u.role] || u.role)}) {u.faceImage ? '✅' : `(${t('no Face ID')})`}
                         </option>
                       ))}
                     </select>
                   ) : (
                     <p className="text-sm text-gray-500 p-3 bg-gray-50 rounded-xl border">
-                      No accounts found. Contact admin.
+                      {t('No accounts found. Contact admin.')}
                     </p>
                   )}
                 </div>
@@ -329,12 +354,12 @@ const Login: React.FC<LoginProps> = ({ onLogin, users, theme, onPasswordReset })
                   onClick={handleFaceLoginRequest}
                   disabled={isRequestingPermission || !selectedUserId}
                   className={`w-full text-white font-bold py-3 rounded-xl transition-all duration-200 flex items-center justify-center gap-2 ${colors.primary} ${colors.hover} disabled:opacity-50 disabled:cursor-not-allowed`}
-                  aria-label="Login with Face ID"
+                  aria-label={t('Login with Face ID')}
                 >
                   {isRequestingPermission ? (
-                    <><Spinner size="w-5 h-5" /><span>Requesting camera...</span></>
+                    <><Spinner size="w-5 h-5" /><span>{t('Requesting camera...')}</span></>
                   ) : (
-                    <><span>📷</span><span>Login with Face ID</span></>
+                    <><span>📷</span><span>{t('Login with Face ID')}</span></>
                   )}
                 </button>
                 {selectedUserId && !allUsersForLogin.find(u => u.id === selectedUserId)?.faceImage && (
@@ -391,8 +416,8 @@ const Login: React.FC<LoginProps> = ({ onLogin, users, theme, onPasswordReset })
                   setIsModalLoading(false);
                 }
               }}>
-                <h2 className="text-xl font-bold text-gray-800 mb-1">Reset Password</h2>
-                <p className="text-gray-500 mb-4 text-sm">Enter your account email to receive a reset code.</p>
+                <h2 className="text-xl font-bold text-gray-800 mb-1">{t('Reset Password')}</h2>
+                <p className="text-gray-500 mb-4 text-sm">{t('Enter your account email to receive a reset code.')}</p>
                 {modalMessage && (
                   <p className={`mb-4 text-sm p-3 rounded-lg ${modalMessage.type === 'error' ? 'bg-red-50 text-red-600' : 'bg-green-50 text-green-600'}`}>
                     {modalMessage.text}
@@ -401,12 +426,12 @@ const Login: React.FC<LoginProps> = ({ onLogin, users, theme, onPasswordReset })
                 <input
                   type="email" value={forgotPasswordEmail}
                   onChange={e => setForgotPasswordEmail(e.target.value)}
-                  required placeholder="Email Address" disabled={isModalLoading}
+                  required placeholder={t('Email Address')} disabled={isModalLoading}
                   className={`w-full p-3 text-base border rounded-xl mb-4 focus:outline-none focus:ring-2 ${colors.ring} disabled:bg-gray-50`}
                 />
                 <button type="submit" disabled={isModalLoading || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(forgotPasswordEmail)}
                   className={`w-full text-white font-bold py-2.5 rounded-xl ${colors.primary} ${colors.hover} flex items-center justify-center disabled:opacity-50`}>
-                  {isModalLoading ? <Spinner /> : 'Send Code'}
+                  {isModalLoading ? <Spinner /> : t('Send Code')}
                 </button>
               </form>
             )}
@@ -416,7 +441,7 @@ const Login: React.FC<LoginProps> = ({ onLogin, users, theme, onPasswordReset })
                 e.preventDefault();
                 setModalMessage(null);
                 if (!verificationCode || verificationCode.length !== 6) {
-                  setModalMessage({ type: 'error', text: 'Enter a valid 6-digit code.' });
+                  setModalMessage({ type: 'error', text: t('Enter a valid 6-digit code.') });
                   return;
                 }
                 setIsModalLoading(true);
@@ -425,14 +450,14 @@ const Login: React.FC<LoginProps> = ({ onLogin, users, theme, onPasswordReset })
                   await verifyPasswordReset(forgotPasswordEmail, verificationCode);
                   setForgotPasswordStep('resetPassword');
                 } catch (err: any) {
-                  setModalMessage({ type: 'error', text: err.message || 'Invalid code.' });
+                  setModalMessage({ type: 'error', text: err.message || t('Invalid code.') });
                 } finally {
                   setIsModalLoading(false);
                 }
               }}>
-                <h2 className="text-xl font-bold text-gray-800 mb-1">Enter Code</h2>
+                <h2 className="text-xl font-bold text-gray-800 mb-1">{t('Enter Code')}</h2>
                 <p className="text-gray-500 mb-4 text-sm">
-                  A 6-digit code was sent to <strong>{forgotPasswordEmail}</strong>. Check browser console if offline.
+                  {t('A 6-digit code was sent to')} <strong>{forgotPasswordEmail}</strong>. {t('Check browser console if offline.')}
                 </p>
                 {modalMessage && (
                   <p className={`mb-4 text-sm p-3 rounded-lg ${modalMessage.type === 'error' ? 'bg-red-50 text-red-600' : 'bg-green-50 text-green-600'}`}>
@@ -442,12 +467,12 @@ const Login: React.FC<LoginProps> = ({ onLogin, users, theme, onPasswordReset })
                 <input
                   type="text" value={verificationCode}
                   onChange={e => setVerificationCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                  required placeholder="6-digit code" maxLength={6} disabled={isModalLoading}
+                  required placeholder={t('6-digit code')} maxLength={6} disabled={isModalLoading}
                   className={`w-full p-3 text-base border rounded-xl mb-4 tracking-widest text-center focus:outline-none focus:ring-2 ${colors.ring} disabled:bg-gray-50`}
                 />
                 <button type="submit" disabled={isModalLoading || verificationCode.length !== 6}
                   className={`w-full text-white font-bold py-2.5 rounded-xl ${colors.primary} ${colors.hover} flex items-center justify-center disabled:opacity-50`}>
-                  {isModalLoading ? <Spinner /> : 'Verify Code'}
+                  {isModalLoading ? <Spinner /> : t('Verify Code')}
                 </button>
               </form>
             )}
@@ -457,11 +482,11 @@ const Login: React.FC<LoginProps> = ({ onLogin, users, theme, onPasswordReset })
                 e.preventDefault();
                 setModalMessage(null);
                 if (newPassword.length < 8) {
-                  setModalMessage({ type: 'error', text: 'Password must be at least 8 characters.' });
+                  setModalMessage({ type: 'error', text: t('Password must be at least 8 characters.') });
                   return;
                 }
                 if (newPassword !== confirmNewPassword) {
-                  setModalMessage({ type: 'error', text: 'Passwords do not match.' });
+                  setModalMessage({ type: 'error', text: t('Passwords do not match.') });
                   return;
                 }
                 setIsModalLoading(true);
@@ -472,16 +497,16 @@ const Login: React.FC<LoginProps> = ({ onLogin, users, theme, onPasswordReset })
                   await completePasswordReset(forgotPasswordEmail, hashed);
                   // Also update the in-memory users list via onPasswordReset
                   onPasswordReset(forgotPasswordEmail, hashed);
-                  setModalMessage({ type: 'success', text: 'Password updated successfully!' });
+                  setModalMessage({ type: 'success', text: t('Password updated successfully!') });
                   setTimeout(closeForgotPassword, 1500);
                 } catch (err: any) {
-                  setModalMessage({ type: 'error', text: err.message || 'Failed to reset password.' });
+                  setModalMessage({ type: 'error', text: err.message || t('Failed to reset password.') });
                 } finally {
                   setIsModalLoading(false);
                 }
               }}>
-                <h2 className="text-xl font-bold text-gray-800 mb-1">Set New Password</h2>
-                <p className="text-gray-500 mb-4 text-sm">Create a strong password (min 8 characters).</p>
+                <h2 className="text-xl font-bold text-gray-800 mb-1">{t('Set New Password')}</h2>
+                <p className="text-gray-500 mb-4 text-sm">{t('Create a strong password (min 8 characters).')}</p>
                 {modalMessage && (
                   <p className={`mb-4 text-sm p-3 rounded-lg ${modalMessage.type === 'error' ? 'bg-red-50 text-red-600' : 'bg-green-50 text-green-600'}`}>
                     {modalMessage.text}
@@ -489,15 +514,15 @@ const Login: React.FC<LoginProps> = ({ onLogin, users, theme, onPasswordReset })
                 )}
                 <div className="space-y-3">
                   <input type="password" value={newPassword} onChange={e => setNewPassword(e.target.value)}
-                    required placeholder="New Password (min 8 chars)" disabled={isModalLoading}
+                    required placeholder={t('New Password (min 8 chars)')} disabled={isModalLoading}
                     className={`w-full p-3 text-base border rounded-xl focus:outline-none focus:ring-2 ${colors.ring} disabled:bg-gray-50`} />
                   <input type="password" value={confirmNewPassword} onChange={e => setConfirmNewPassword(e.target.value)}
-                    required placeholder="Confirm New Password" disabled={isModalLoading}
+                    required placeholder={t('Confirm New Password')} disabled={isModalLoading}
                     className={`w-full p-3 text-base border rounded-xl focus:outline-none focus:ring-2 ${colors.ring} disabled:bg-gray-50`} />
                 </div>
                 <button type="submit" disabled={isModalLoading}
                   className={`w-full mt-4 text-white font-bold py-2.5 rounded-xl ${colors.primary} ${colors.hover} flex items-center justify-center disabled:opacity-50`}>
-                  {isModalLoading ? <Spinner /> : 'Save New Password'}
+                  {isModalLoading ? <Spinner /> : t('Save New Password')}
                 </button>
               </form>
             )}

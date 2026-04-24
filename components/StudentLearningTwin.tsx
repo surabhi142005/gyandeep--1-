@@ -1,6 +1,7 @@
 import React from 'react';
 import { motion } from 'framer-motion';
 import { User, ActivityLog } from '../types';
+import { t } from '../services/i18n';
 
 interface StudentLearningTwinProps {
   student: User & { activities?: ActivityLog[] };
@@ -37,19 +38,19 @@ const StudentLearningTwin: React.FC<StudentLearningTwinProps> = ({ student, them
           <div className="absolute inset-0 rounded-full border-4 border-indigo-200 animate-ping opacity-25" />
           
           <div className="absolute -bottom-4 left-1/2 -translate-x-1/2 bg-white px-6 py-2 rounded-full shadow-lg border border-indigo-100 z-20">
-            <span className="text-sm font-black text-indigo-600 uppercase tracking-widest">Level {level}</span>
+            <span className="text-sm font-black text-indigo-600 uppercase tracking-widest">{t('Level')} {level}</span>
           </div>
         </div>
 
         {/* Stats & Progress */}
         <div className="flex-1 w-full">
-          <h3 className="text-2xl font-black text-slate-800 mb-2">{student.name}'s Learning Twin</h3>
-          <p className="text-slate-500 mb-6 font-medium text-sm uppercase tracking-wide">Syncing real-time academic performance...</p>
+          <h3 className="text-2xl font-black text-slate-800 mb-2">{student.name}'s {t('Learning Twin')}</h3>
+          <p className="text-slate-500 mb-6 font-medium text-sm uppercase tracking-wide">{t('Syncing real-time academic performance...')}</p>
           
           <div className="space-y-6">
             <div>
               <div className="flex justify-between items-end mb-2">
-                <span className="text-sm font-bold text-slate-600 uppercase tracking-tighter">Level Progress</span>
+                <span className="text-sm font-bold text-slate-600 uppercase tracking-tighter">{t('Level Progress')}</span>
                 <span className="text-xs font-black text-indigo-600">{Math.round(levelProgress)}%</span>
               </div>
               <div className="h-4 bg-slate-100 rounded-full overflow-hidden border border-slate-200 p-1">
@@ -59,19 +60,19 @@ const StudentLearningTwin: React.FC<StudentLearningTwinProps> = ({ student, them
                   className="h-full bg-gradient-to-r from-indigo-500 to-purple-600 rounded-full shadow-sm"
                 />
               </div>
-              <p className="text-[10px] text-slate-400 mt-2 font-bold uppercase tracking-widest">{500 - (xp % 500)} XP until next level</p>
+              <p className="text-[10px] text-slate-400 mt-2 font-bold uppercase tracking-widest">{500 - (xp % 500)} {t('XP until next level')}</p>
             </div>
 
             <div className="grid grid-cols-2 gap-4">
               <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 shadow-sm">
-                <p className="text-[10px] font-black text-slate-400 uppercase mb-1">Total Coins</p>
+                <p className="text-[10px] font-black text-slate-400 uppercase mb-1">{t('Total Coins')}</p>
                 <div className="flex items-center gap-2">
                   <span className="text-xl font-black text-amber-500">{coins}</span>
                   <div className="w-5 h-5 rounded-full bg-amber-400 shadow-inner" />
                 </div>
               </div>
               <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 shadow-sm">
-                <p className="text-[10px] font-black text-slate-400 uppercase mb-1">Current Streak</p>
+                <p className="text-[10px] font-black text-slate-400 uppercase mb-1">{t('Current Streak')}</p>
                 <div className="flex items-center gap-2">
                   <span className="text-xl font-black text-orange-600">{streak}</span>
                   <span className="text-lg">🔥</span>
@@ -84,7 +85,7 @@ const StudentLearningTwin: React.FC<StudentLearningTwinProps> = ({ student, them
 
       {/* Activity Feed */}
       <div className="mt-12 border-t pt-8">
-        <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-4">Recent Milestones</h4>
+        <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-4">{t('Recent Milestones')}</h4>
         <div className="space-y-3">
           {activities.length > 0 ? (
             activities.slice(0, 3).map((activity, idx) => (
@@ -93,13 +94,13 @@ const StudentLearningTwin: React.FC<StudentLearningTwinProps> = ({ student, them
                   +{activity.xpEarned}
                 </div>
                 <div>
-                  <p className="text-xs font-bold text-slate-700">{activity.type.replace(/_/g, ' ')}</p>
+                  <p className="text-xs font-bold text-slate-700">{t(activity.type.replace(/_/g, ' '))}</p>
                   <p className="text-[10px] text-slate-400">{new Date(activity.createdAt).toLocaleDateString()}</p>
                 </div>
               </div>
             ))
           ) : (
-            <p className="text-xs text-slate-400 font-medium">No recent activity recorded yet. Start learning to earn XP!</p>
+            <p className="text-xs text-slate-400 font-medium">{t('No recent activity recorded yet. Start learning to earn XP!')}</p>
           )}
         </div>
       </div>

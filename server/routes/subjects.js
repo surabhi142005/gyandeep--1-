@@ -67,4 +67,18 @@ router.post('/', authMiddleware, async (req, res) => {
   }
 });
 
+router.delete('/:id', authMiddleware, async (req, res) => {
+  try {
+    const db = await connectToDatabase();
+    const result = await db.collection(COLLECTIONS.SUBJECTS).deleteOne({ _id: new ObjectId(req.params.id) });
+    if (result.deletedCount === 0) {
+      return res.status(404).json({ error: 'Subject not found' });
+    }
+    res.json({ ok: true, message: 'Subject deleted successfully' });
+  } catch (error) {
+    console.error('Delete subject error:', error);
+    res.status(500).json({ error: 'Failed to delete subject' });
+  }
+});
+
 export default router;

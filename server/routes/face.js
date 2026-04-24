@@ -99,52 +99,69 @@ async function checkLiveness(imageBuffer, options = {}) {
   };
 }
 
+export async function registerFaceForAuth(userId, faceImage, metadata = {}) {
+  const db = await connectToDatabase();
+  const userObjectId = new ObjectId(userId);
+
+  const user = await db.collection(COLLECTIONS.USERS).findOne({ _id: userObjectId });
+  if (!user) {
+    throw new Error('User not found');
+  }
+
+  const existing = await db.collection(COLLECTIONS.FACE_EMBEDDINGS).findOne({ userId });
+  if (existing) {
+    throw new Error('Face already registered for this user');
+  }
+
+  const imageBuffer = decodeBase64Image(faceImage);
+  const embedding = await generateEmbedding(imageBuffer);
+  const liveness = await checkLiveness(imageBuffer);
+
+  const record = {
+    userId,
+    embedding,
+    livenessScore: liveness.score,
+    livenessPassed: liveness.passed,
+    faceImageBase64: faceImage.slice(0, 10000),
+    metadata,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  };
+
+  const result = await db.collection(COLLECTIONS.FACE_EMBEDDINGS).insertOne(record);
+
+  await db.collection(COLLECTIONS.USERS).updateOne(
+    { _id: userObjectId },
+    { $set: { faceImage: faceImage.slice(0, 1000), faceRegistered: true, updatedAt: new Date() } }
+  );
+
+  return {
+    ok: true,
+    userId,
+    embeddingStored: true,
+    livenessPassed: liveness.passed,
+    id: result.insertedId.toString(),
+  };
+}
+
 router.post('/register', authMiddleware, async (req, res) => {
   try {
     const { userId, faceImage, metadata } = req.body;
-    
+
     if (!userId || !faceImage) {
       return res.status(400).json({ error: 'userId and faceImage (Base64) are required' });
     }
-    
-    const db = await connectToDatabase();
-    
-    const existing = await db.collection(COLLECTIONS.FACE_EMBEDDINGS).findOne({ userId });
-    if (existing) {
-      return res.status(409).json({ error: 'Face already registered for this user' });
-    }
-    
-    const imageBuffer = decodeBase64Image(faceImage);
-    const embedding = await generateEmbedding(imageBuffer);
-    const liveness = await checkLiveness(imageBuffer);
-    
-    const record = {
-      userId,
-      embedding,
-      livenessScore: liveness.score,
-      livenessPassed: liveness.passed,
-      faceImageBase64: faceImage.slice(0, 10000),
-      metadata: metadata || {},
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    };
-    
-    const result = await db.collection(COLLECTIONS.FACE_EMBEDDINGS).insertOne(record);
-    
-    await db.collection(COLLECTIONS.USERS).updateOne(
-      { _id: new ObjectId(userId) },
-      { $set: { faceImage: faceImage.slice(0, 1000), faceRegistered: true, updatedAt: new Date() } }
-    );
-    
-    res.status(201).json({
-      ok: true,
-      userId,
-      embeddingStored: true,
-      livenessPassed: liveness.passed,
-      id: result.insertedId.toString(),
-    });
+
+    const result = await registerFaceForAuth(userId, faceImage, metadata || {});
+    res.status(201).json(result);
   } catch (error) {
     console.error('Face register error:', error);
+    if (error.message === 'User not found') {
+      return res.status(404).json({ error: error.message });
+    }
+    if (error.message === 'Face already registered for this user') {
+      return res.status(409).json({ error: error.message });
+    }
     res.status(500).json({ error: 'Failed to register face: ' + error.message });
   }
 });

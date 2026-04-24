@@ -31,6 +31,7 @@ import {
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import { t } from '../services/i18n';
 
 interface AdminDashboardProps {
   admin: Admin;
@@ -47,13 +48,13 @@ interface AdminDashboardProps {
 }
 
 const SIDEBAR_ITEMS = [
-  { id: 'users', label: 'Users', icon: Users },
-  { id: 'registration', label: 'Registration', icon: UserPlus },
-  { id: 'subjects', label: 'Subjects', icon: BookOpen },
-  { id: 'classes', label: 'Classes', icon: School },
-  { id: 'faces', label: 'Faces', icon: Camera },
-  { id: 'analytics', label: 'Analytics', icon: BarChart3 },
-  { id: 'qbank', label: 'Question Bank', icon: HelpCircle },
+  { id: 'users', label: t('User Management'), icon: Users },
+  { id: 'registration', label: t('Registration'), icon: UserPlus },
+  { id: 'subjects', label: t('Subjects'), icon: BookOpen },
+  { id: 'classes', label: t('Classes'), icon: School },
+  { id: 'faces', label: t('Biometrics'), icon: Camera },
+  { id: 'analytics', label: t('Analytics'), icon: BarChart3 },
+  { id: 'qbank', label: t('Question Bank'), icon: HelpCircle },
 ];
 
 const AdminDashboard: React.FC<AdminDashboardProps> = ({
@@ -599,7 +600,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   <Users size={24} />
                 </div>
                 <div>
-                  <p className="text-sm font-medium text-gray-500">Total Users</p>
+                  <p className="text-sm font-medium text-gray-500">{t('Total Users')}</p>
                   <p className="text-2xl font-bold">{analytics.totalUsers}</p>
                 </div>
               </div>
@@ -610,7 +611,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   <School size={24} />
                 </div>
                 <div>
-                  <p className="text-sm font-medium text-gray-500">Students</p>
+                  <p className="text-sm font-medium text-gray-500">{t('Students')}</p>
                   <p className="text-2xl font-bold">{analytics.students}</p>
                 </div>
               </div>
@@ -621,7 +622,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   <BookOpen size={24} />
                 </div>
                 <div>
-                  <p className="text-sm font-medium text-gray-500">Teachers</p>
+                  <p className="text-sm font-medium text-gray-500">{t('Teachers')}</p>
                   <p className="text-2xl font-bold">{analytics.teachers}</p>
                 </div>
               </div>
@@ -632,7 +633,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   <Camera size={24} />
                 </div>
                 <div>
-                  <p className="text-sm font-medium text-gray-500">Biometric Set</p>
+                  <p className="text-sm font-medium text-gray-500">{t('Biometric Set')}</p>
                   <p className="text-2xl font-bold">{analytics.usersWithFace}</p>
                 </div>
               </div>
@@ -642,22 +643,22 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
           <Card className="overflow-hidden">
             <div className="p-6 border-b border-gray-100 dark:border-gray-800 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
               <div>
-                <h2 className="text-xl font-bold">User Management</h2>
-                <p className="text-sm text-gray-500">Manage permissions and account status</p>
+                <h2 className="text-xl font-bold">{t('User Management')}</h2>
+                <p className="text-sm text-gray-500">{t('Manage permissions and account status')}</p>
               </div>
               <div className="flex gap-3 w-full sm:w-auto">
                 <div className="relative flex-1 sm:w-64">
                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                    <input 
                     type="text" 
-                    placeholder="Search users..." 
+                    placeholder={t('Search users...')}
                     className="w-full pl-10 pr-4 py-2 bg-gray-50 dark:bg-gray-800 border-none rounded-xl text-sm focus:ring-2 focus:ring-primary/20"
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
                    />
                 </div>
                 <Button variant="primary" onClick={() => setActiveTab('registration')} icon={<Plus size={18} />}>
-                  Add User
+                  {t('Add User')}
                 </Button>
               </div>
             </div>
@@ -666,11 +667,11 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
               <table className="w-full text-left">
                 <thead className="bg-gray-50 dark:bg-gray-800/50 text-gray-500 text-xs font-bold uppercase tracking-wider">
                   <tr>
-                    <th className="px-6 py-4">User</th>
-                    <th className="px-6 py-4">Role</th>
-                    <th className="px-6 py-4">Status</th>
-                    <th className="px-6 py-4">Face ID</th>
-                    <th className="px-6 py-4 text-right">Actions</th>
+                    <th className="px-6 py-4">{t('User')}</th>
+                    <th className="px-6 py-4">{t('Role')}</th>
+                    <th className="px-6 py-4">{t('Status')}</th>
+                    <th className="px-6 py-4">{t('Face ID')}</th>
+                    <th className="px-6 py-4 text-right">{t('Actions')}</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
@@ -729,32 +730,32 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
         <div className="max-w-4xl mx-auto animate-in fade-in slide-in-from-bottom-4 duration-500">
           <Card padding="xl">
             <div className="mb-8">
-              <h2 className="text-2xl font-bold mb-2">Registration Center</h2>
-              <p className="text-gray-500">Onboard new students, teachers and staff</p>
+              <h2 className="text-2xl font-bold mb-2">{t('Registration Center')}</h2>
+              <p className="text-gray-500">{t('Onboard new students, teachers and staff')}</p>
             </div>
 
             <form onSubmit={handleAddNewUser} className="space-y-6">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
-                  <label className="block text-sm font-bold mb-2">Full Name</label>
+                  <label className="block text-sm font-bold mb-2">{t('Full Name')}</label>
                   <Input
                     value={newUserName}
                     onChange={e => setNewUserName(e.target.value)}
-                    placeholder="e.g. Jane Doe"
+                    placeholder={t('e.g. Jane Doe')}
                     required
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-bold mb-2">User ID</label>
+                  <label className="block text-sm font-bold mb-2">{t('User ID')}</label>
                   <Input
                     value={newUserId}
                     onChange={e => setNewUserId(e.target.value)}
-                    placeholder="e.g. s101, t201"
+                    placeholder={t('e.g. s101, t201')}
                     required
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-bold mb-2">Email</label>
+                  <label className="block text-sm font-bold mb-2">{t('Email')}</label>
                   <Input
                     type="email"
                     value={newUserEmail}
@@ -764,24 +765,24 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-bold mb-2">Role</label>
+                  <label className="block text-sm font-bold mb-2">{t('Role')}</label>
                   <select 
                     value={newUserRole} 
                     onChange={e => setNewUserRole(e.target.value as any)}
                     className="w-full h-12 px-4 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-sm focus:ring-2 focus:ring-primary/20 outline-none transition-all"
                   >
-                    <option value={UserRoleEnum.STUDENT}>Student</option>
-                    <option value={UserRoleEnum.TEACHER}>Teacher</option>
-                    <option value={UserRoleEnum.ADMIN}>Administrator</option>
+                    <option value={UserRoleEnum.STUDENT}>{t('Student')}</option>
+                    <option value={UserRoleEnum.TEACHER}>{t('Teacher')}</option>
+                    <option value={UserRoleEnum.ADMIN}>{t('Administrator')}</option>
                   </select>
                 </div>
                 <div className="md:col-span-2">
-                  <label className="block text-sm font-bold mb-2">Password</label>
+                  <label className="block text-sm font-bold mb-2">{t('Password')}</label>
                   <Input
                     type="password"
                     value={newUserPassword}
                     onChange={e => setNewUserPassword(e.target.value)}
-                    placeholder="Min 6 characters"
+                    placeholder={t('Min 6 characters')}
                     required
                   />
                 </div>
@@ -795,8 +796,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
               )}
 
               <div className="flex justify-end gap-3 pt-4">
-                <Button variant="ghost" type="button" onClick={() => setActiveTab('users')}>Cancel</Button>
-                <Button variant="primary" type="submit" className="px-12">Register User</Button>
+                <Button variant="ghost" type="button" onClick={() => setActiveTab('users')}>{t('Cancel')}</Button>
+                <Button variant="primary" type="submit" className="px-12">{t('Register User')}</Button>
               </div>
             </form>
           </Card>
@@ -827,15 +828,15 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
             ))}
           </div>
           <Card padding="lg" className="h-fit sticky top-24">
-            <h3 className="text-lg font-bold mb-4">Add New Subject</h3>
+            <h3 className="text-lg font-bold mb-4">{t('Add New Subject')}</h3>
             <form onSubmit={handleAddSubject} className="space-y-4">
                <Input 
                 value={newSubjectName}
                 onChange={e => setNewSubjectName(e.target.value)}
-                placeholder="Subject Name"
+                placeholder={t('Subject Name')}
                />
                {subjectError && <p className="text-xs text-red-500">{subjectError}</p>}
-               <Button variant="primary" type="submit" className="w-full">Create Subject</Button>
+               <Button variant="primary" type="submit" className="w-full">{t('Create Subject')}</Button>
             </form>
           </Card>
         </div>
@@ -846,11 +847,11 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
            <Card padding="xl">
               <div className="flex justify-between items-center mb-8">
                 <div>
-                  <h2 className="text-2xl font-bold">Biometric Management</h2>
-                  <p className="text-gray-500">Manage student and staff facial recognition data</p>
+                  <h2 className="text-2xl font-bold">{t('Biometric Management')}</h2>
+                  <p className="text-gray-500">{t('Manage student and staff facial recognition data')}</p>
                 </div>
                 <Button variant="primary" onClick={() => setShowFaceViewer(true)} icon={<Camera size={20} />}>
-                  Open Face Viewer
+                  {t('Open Face Viewer')}
                 </Button>
               </div>
               
@@ -859,22 +860,22 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     <div className="w-12 h-12 rounded-xl bg-white dark:bg-gray-900 flex items-center justify-center text-primary mb-4 shadow-sm">
                        <ShieldCheck size={24} />
                     </div>
-                    <h3 className="font-bold mb-2">Secure Storage</h3>
-                    <p className="text-sm text-gray-500">All facial data is encrypted and stored locally on your secure server.</p>
+                    <h3 className="font-bold mb-2">{t('Secure Storage')}</h3>
+                    <p className="text-sm text-gray-500">{t('All facial data is encrypted and stored locally on your secure server.')}</p>
                  </div>
                  <div className="p-6 rounded-2xl bg-secondary/5 border border-secondary/10">
                     <div className="w-12 h-12 rounded-xl bg-white dark:bg-gray-900 flex items-center justify-center text-secondary mb-4 shadow-sm">
                        <RefreshCw size={24} />
                     </div>
-                    <h3 className="font-bold mb-2">Bulk Verification</h3>
-                    <p className="text-sm text-gray-500">Run automated health checks on your biometric database regularly.</p>
+                    <h3 className="font-bold mb-2">{t('Bulk Verification')}</h3>
+                    <p className="text-sm text-gray-500">{t('Run automated health checks on your biometric database regularly.')}</p>
                  </div>
                  <div className="p-6 rounded-2xl bg-amber-500/5 border border-amber-500/10">
                     <div className="w-12 h-12 rounded-xl bg-white dark:bg-gray-900 flex items-center justify-center text-amber-600 mb-4 shadow-sm">
                        <AlertCircle size={24} />
                     </div>
-                    <h3 className="font-bold mb-2">Privacy First</h3>
-                    <p className="text-sm text-gray-500">Ensure all users have consented to biometric data collection.</p>
+                    <h3 className="font-bold mb-2">{t('Privacy First')}</h3>
+                    <p className="text-sm text-gray-500">{t('Ensure all users have consented to biometric data collection.')}</p>
                  </div>
               </div>
            </Card>
@@ -910,15 +911,15 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
               </div>
             </div>
             <Card padding="lg" className="h-fit sticky top-24">
-              <h3 className="text-lg font-bold mb-4">Create New Class</h3>
+              <h3 className="text-lg font-bold mb-4">{t('Create New Class')}</h3>
               <form onSubmit={handleAddClass} className="space-y-4">
                  <Input 
                   value={newClassName}
                   onChange={e => setNewClassName(e.target.value)}
-                  placeholder="Class Name (e.g. 10-A)"
+                  placeholder={t('Class Name (e.g. 10-A)')}
                  />
                  {classError && <p className="text-xs text-red-500">{classError}</p>}
-                 <Button variant="primary" type="submit" className="w-full">Add Class</Button>
+                 <Button variant="primary" type="submit" className="w-full">{t('Add Class')}</Button>
               </form>
             </Card>
           </div>
@@ -929,15 +930,15 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
         <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
               <Card padding="xl">
-                 <h3 className="text-lg font-bold mb-6">User Distribution</h3>
+                 <h3 className="text-lg font-bold mb-6">{t('User Distribution')}</h3>
                  <div className="h-64">
                     <ResponsiveContainer width="100%" height="100%">
                        <PieChart>
                           <Pie
                              data={[
-                                { name: 'Students', value: analytics.students },
-                                { name: 'Teachers', value: analytics.teachers },
-                                { name: 'Admins', value: analytics.admins },
+                                { name: t('Students'), value: analytics.students },
+                                { name: t('Teachers'), value: analytics.teachers },
+                                { name: t('Admins'), value: analytics.admins },
                              ]}
                              cx="50%"
                              cy="50%"
@@ -965,11 +966,11 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
               </Card>
 
               <Card padding="xl">
-                 <h3 className="text-lg font-bold mb-6">System Health</h3>
+                 <h3 className="text-lg font-bold mb-6">{t('System Health')}</h3>
                  <div className="space-y-6">
                     <div>
                        <div className="flex justify-between text-sm mb-2">
-                          <span className="font-medium">Database Load</span>
+                          <span className="font-medium">{t('Database Load')}</span>
                           <span className="font-bold text-primary">12%</span>
                        </div>
                        <div className="w-full h-2 bg-primary/10 rounded-full overflow-hidden">
@@ -978,7 +979,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     </div>
                     <div>
                        <div className="flex justify-between text-sm mb-2">
-                          <span className="font-medium">Storage Usage</span>
+                          <span className="font-medium">{t('Storage Usage')}</span>
                           <span className="font-bold text-secondary">45%</span>
                        </div>
                        <div className="w-full h-2 bg-secondary/10 rounded-full overflow-hidden">
@@ -988,9 +989,9 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     <div className="pt-4 border-t border-gray-100 dark:border-gray-800 flex justify-between">
                        <div className="flex items-center gap-2">
                           <div className="w-3 h-3 bg-green-500 rounded-full animate-pulse" />
-                          <span className="text-sm font-bold text-green-600">All Systems Normal</span>
+                          <span className="text-sm font-bold text-green-600">{t('All Systems Normal')}</span>
                        </div>
-                       <Button variant="ghost" size="sm" icon={<RefreshCw size={14} />}>Restart Services</Button>
+                       <Button variant="ghost" size="sm" icon={<RefreshCw size={14} />}>{t('Restart Services')}</Button>
                     </div>
                  </div>
               </Card>
@@ -1003,8 +1004,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
            <Card className="overflow-hidden">
               <div className="p-6 border-b border-gray-100 dark:border-gray-800 flex justify-between items-center">
                  <div>
-                    <h2 className="text-xl font-bold">Global Question Bank</h2>
-                    <p className="text-sm text-gray-500">Universal questions shared across all classes</p>
+                    <h2 className="text-xl font-bold">{t('Global Question Bank')}</h2>
+                    <p className="text-sm text-gray-500">{t('Universal questions shared across all classes')}</p>
                  </div>
                  <div className="flex gap-2">
                     <Button variant="secondary" size="sm" icon={<Download size={16} />} onClick={() => {
@@ -1015,8 +1016,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
                       a.href = url;
                       a.download = 'question-bank.csv';
                       a.click();
-                    }}>Export</Button>
-                    <Button variant="primary" size="sm" icon={<Plus size={16} />} onClick={() => setEditingBankItem({})}>Add New</Button>
+                    }}>{t('Export')}</Button>
+                    <Button variant="primary" size="sm" icon={<Plus size={16} />} onClick={() => setEditingBankItem({})}>{t('Add New')}</Button>
                  </div>
               </div>
               
@@ -1026,7 +1027,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     <Search size={16} className="inline mr-2 text-gray-400" />
                     <input 
                       type="text" 
-                      placeholder="Search questions..." 
+                      placeholder={t('Search questions...')}
                       className="w-full px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-sm"
                       value={bankTagFilter}
                       onChange={(e) => setBankTagFilter(e.target.value)}
@@ -1037,7 +1038,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     value={bankSubjectFilter}
                     onChange={(e) => setBankSubjectFilter(e.target.value)}
                   >
-                    <option value="">All Subjects</option>
+                    <option value="">{t('All Subjects')}</option>
                     {allSubjects.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
                   </select>
                   <select 
@@ -1045,10 +1046,10 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     value={(bank.find(() => true) as any)?.difficulty || ''}
                     onChange={(e) => {}}
                   >
-                    <option value="">All Difficulties</option>
-                    <option value="easy">Easy</option>
-                    <option value="medium">Medium</option>
-                    <option value="hard">Hard</option>
+                    <option value="">{t('All Difficulties')}</option>
+                    <option value="easy">{t('Easy')}</option>
+                    <option value="medium">{t('Medium')}</option>
+                    <option value="hard">{t('Hard')}</option>
                   </select>
                 </div>
               </div>
@@ -1057,8 +1058,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 {bank.length === 0 ? (
                   <div className="p-12 text-center">
                     <Database size={48} className="mx-auto mb-4 text-gray-300" />
-                    <h3 className="text-lg font-bold text-gray-500">No questions found</h3>
-                    <p className="text-sm text-gray-400">Add questions to get started</p>
+                    <h3 className="text-lg font-bold text-gray-500">{t('No questions found')}</h3>
+                    <p className="text-sm text-gray-400">{t('Add questions to get started')}</p>
                   </div>
                 ) : (
                   bank
@@ -1069,8 +1070,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
                         <div className="flex justify-between items-start gap-4">
                           <div className="flex-1">
                             <div className="flex items-center gap-2 mb-2">
-                              <Badge variant="default" size="sm">{q.subject || 'No Subject'}</Badge>
-                              {q.difficulty && <Badge variant={q.difficulty === 'easy' ? 'success' : q.difficulty === 'hard' ? 'danger' : 'default'} size="sm">{q.difficulty}</Badge>}
+                              <Badge variant="default" size="sm">{q.subject || t('No Subject')}</Badge>
+                              {q.difficulty && <Badge variant={q.difficulty === 'easy' ? 'success' : q.difficulty === 'hard' ? 'danger' : 'default'} size="sm">{t(q.difficulty.charAt(0).toUpperCase() + q.difficulty.slice(1))}</Badge>}
                               {q.type && <Badge variant="secondary" size="sm">{q.type}</Badge>}
                             </div>
                             <p className="text-sm font-medium mb-1">{q.question}</p>
@@ -1092,7 +1093,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
                           <div className="flex gap-2">
                             <Button variant="ghost" size="sm" icon={<Edit2 size={14} />} onClick={() => setEditingBankItem(q)} />
                             <Button variant="ghost" size="sm" icon={<Trash2 size={14} />} onClick={async () => {
-                              if (confirm('Delete this question?')) {
+                              if (confirm(t('Delete this question?'))) {
                                 try {
                                   await import('../services/dataService').then(m => m.deleteQuestionFromBank(q.id));
                                   setBank(bank.filter(b => b.id !== q.id));
@@ -1107,7 +1108,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
               </div>
               
               <div className="p-4 border-t border-gray-100 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-800/50">
-                <p className="text-sm text-gray-500">{bank.length} total questions</p>
+                <p className="text-sm text-gray-500">{bank.length} {t('total questions')}</p>
               </div>
            </Card>
            
@@ -1115,7 +1116,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
              <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
                <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="relative w-full max-w-lg bg-white dark:bg-gray-900 rounded-2xl shadow-xl">
                  <div className="p-6 border-b border-gray-100 dark:border-gray-800">
-                   <h2 className="text-xl font-bold">{editingBankItem.id ? 'Edit Question' : 'Add New Question'}</h2>
+                   <h2 className="text-xl font-bold">{editingBankItem.id ? t('Edit Question') : t('Add New Question')}</h2>
                  </div>
                  <form onSubmit={async (e) => {
                    e.preventDefault();
@@ -1147,28 +1148,28 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
                    } catch (err) { console.error('Save failed:', err); }
                  }} className="p-6 space-y-4">
                    <div>
-                     <label className="block text-sm font-bold mb-1">Question</label>
+                     <label className="block text-sm font-bold mb-1">{t('Question')}</label>
                      <textarea name="question" defaultValue={editingBankItem.question || ''} className="w-full px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-sm" rows={3} required />
                    </div>
                    <div className="grid grid-cols-3 gap-4">
                      <div>
-                       <label className="block text-sm font-bold mb-1">Subject</label>
+                       <label className="block text-sm font-bold mb-1">{t('Subject')}</label>
                        <select name="subject" defaultValue={editingBankItem.subject || ''} className="w-full px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-sm" required>
-                         <option value="">Select...</option>
+                         <option value="">{t('Select...')}</option>
                          {allSubjects.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
                        </select>
                      </div>
                      <div>
-                       <label className="block text-sm font-bold mb-1">Difficulty</label>
+                       <label className="block text-sm font-bold mb-1">{t('Difficulty')}</label>
                        <select name="difficulty" defaultValue={editingBankItem.difficulty || ''} className="w-full px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-sm">
-                         <option value="">Select...</option>
-                         <option value="easy">Easy</option>
-                         <option value="medium">Medium</option>
-                         <option value="hard">Hard</option>
+                         <option value="">{t('Select...')}</option>
+                         <option value="easy">{t('Easy')}</option>
+                         <option value="medium">{t('Medium')}</option>
+                         <option value="hard">{t('Hard')}</option>
                        </select>
                      </div>
                      <div>
-                       <label className="block text-sm font-bold mb-1">Type</label>
+                       <label className="block text-sm font-bold mb-1">{t('Type')}</label>
                        <select name="type" defaultValue={editingBankItem.type || 'mcq'} className="w-full px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-sm">
                          <option value="mcq">MCQ</option>
                          <option value="short">Short Answer</option>
@@ -1177,7 +1178,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
                      </div>
                    </div>
                    <div>
-                     <label className="block text-sm font-bold mb-1">Options (A, B, C, D)</label>
+                     <label className="block text-sm font-bold mb-1">{t('Options (A, B, C, D)')}</label>
                      <div className="grid grid-cols-2 gap-2">
                        <div className="flex items-center gap-2"><span className="text-sm font-bold w-6">A.</span><input name="optionA" defaultValue={editingBankItem.options?.[0] || ''} className="flex-1 px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-sm" /></div>
                        <div className="flex items-center gap-2"><span className="text-sm font-bold w-6">B.</span><input name="optionB" defaultValue={editingBankItem.options?.[1] || ''} className="flex-1 px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-sm" /></div>
@@ -1186,9 +1187,9 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
                      </div>
                    </div>
                    <div>
-                     <label className="block text-sm font-bold mb-1">Correct Answer</label>
+                     <label className="block text-sm font-bold mb-1">{t('Correct Answer')}</label>
                      <select name="correctAnswer" defaultValue={editingBankItem.correctAnswer || ''} className="w-full px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-sm" required>
-                       <option value="">Select correct answer...</option>
+                       <option value="">{t('Select correct answer...')}</option>
                        <option value="A">A</option>
                        <option value="B">B</option>
                        <option value="C">C</option>
@@ -1196,12 +1197,12 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
                      </select>
                    </div>
                    <div>
-                     <label className="block text-sm font-bold mb-1">Tags (comma separated)</label>
+                     <label className="block text-sm font-bold mb-1">{t('Tags (comma separated)')}</label>
                      <input name="tags" defaultValue={editingBankItem.tags?.join(', ') || ''} className="w-full px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-sm" placeholder="algebra, practice, exam" />
                    </div>
                    <div className="flex justify-end gap-3 pt-4">
-                     <Button variant="ghost" type="button" onClick={() => setEditingBankItem(null)}>Cancel</Button>
-                     <Button variant="primary" type="submit">Save Question</Button>
+                     <Button variant="ghost" type="button" onClick={() => setEditingBankItem(null)}>{t('Cancel')}</Button>
+                     <Button variant="primary" type="submit">{t('Save Question')}</Button>
                    </div>
                  </form>
                </motion.div>

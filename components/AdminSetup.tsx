@@ -2,6 +2,7 @@ import React, { useState, useMemo } from 'react';
 import type { Admin } from '../types';
 import { UserRole as UserRoleEnum } from '../types';
 import Spinner from './Spinner';
+import { t } from '../services/i18n';
 
 interface AdminSetupProps {
   onSetupComplete: (adminData: Omit<Admin, 'faceImage'>) => void;
@@ -106,60 +107,60 @@ const AdminSetup: React.FC<AdminSetupProps> = ({ onSetupComplete, theme }) => {
       <div className="w-full max-w-md mx-auto">
         <div className="text-center mb-8">
           <h1 className="text-4xl font-bold text-gray-900 drop-shadow-[0_1px_2px_rgba(255,255,255,0.8)]">Gyandeep</h1>
-          <p className="text-gray-800 mt-2 font-medium drop-shadow-[0_1px_1px_rgba(255,255,255,0.6)]">Initial Setup: Create Administrator Account</p>
+          <p className="text-gray-800 mt-2 font-medium drop-shadow-[0_1px_1px_rgba(255,255,255,0.6)]">{t('Initial Setup: Create Administrator Account')}</p>
         </div>
         <div className="bg-white rounded-xl shadow-2xl p-8 border border-gray-200">
-          <h2 className="text-2xl font-bold text-center text-gray-800 mb-6">Administrator Details</h2>
+          <h2 className="text-2xl font-bold text-center text-gray-800 mb-6">{t('Administrator Details')}</h2>
           {error && <p className="text-red-600 text-center mb-4 text-sm bg-red-50 p-2 rounded-md">{error}</p>}
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <label htmlFor="adminName" className="sr-only">Full Name</label>
+              <label htmlFor="adminName" className="sr-only">{t('Full Name')}</label>
               <input
                 type="text"
                 id="adminName"
                 value={adminName}
                 onChange={(e) => setAdminName(e.target.value)}
                 required
-                placeholder="Full Name"
+                placeholder={t('Full Name')}
                 className={`w-full p-3 border border-gray-300 rounded-md shadow-sm focus:ring-1 ${colors.ring} ${colors.border}`}
                 disabled={isLoading}
               />
             </div>
             <div>
-              <label htmlFor="adminEmail" className="sr-only">Email Address</label>
+              <label htmlFor="adminEmail" className="sr-only">{t('Email Address')}</label>
               <input
                 type="email"
                 id="adminEmail"
                 value={adminEmail}
                 onChange={(e) => setAdminEmail(e.target.value)}
                 required
-                placeholder="Email Address"
+                placeholder={t('Email Address')}
                 className={`w-full p-3 border border-gray-300 rounded-md shadow-sm focus:ring-1 ${colors.ring} ${colors.border}`}
                 disabled={isLoading}
               />
             </div>
             <div>
-              <label htmlFor="adminPassword" className="sr-only">Password</label>
+              <label htmlFor="adminPassword" className="sr-only">{t('Password')}</label>
               <input
                 type="password"
                 id="adminPassword"
                 value={adminPassword}
                 onChange={(e) => setAdminPassword(e.target.value)}
                 required
-                placeholder="Password (min. 6 characters)"
+                placeholder={t('Password (min. 6 characters)')}
                 className={`w-full p-3 border border-gray-300 rounded-md shadow-sm focus:ring-1 ${colors.ring} ${colors.border}`}
                 disabled={isLoading}
               />
             </div>
             <div>
-              <label htmlFor="confirmPassword" className="sr-only">Confirm Password</label>
+              <label htmlFor="confirmPassword" className="sr-only">{t('Confirm Password')}</label>
               <input
                 type="password"
                 id="confirmPassword"
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
                 required
-                placeholder="Confirm Password"
+                placeholder={t('Confirm Password')}
                 className={`w-full p-3 border border-gray-300 rounded-md shadow-sm focus:ring-1 ${colors.ring} ${colors.border}`}
                 disabled={isLoading}
               />
@@ -169,7 +170,7 @@ const AdminSetup: React.FC<AdminSetupProps> = ({ onSetupComplete, theme }) => {
               disabled={isLoading}
               className={`w-full text-white font-bold py-3 rounded-lg transition-colors duration-300 flex items-center justify-center ${colors.primary} ${colors.hover} disabled:opacity-50`}
             >
-              {isLoading ? <Spinner /> : 'Create Admin Account'}
+              {isLoading ? <Spinner /> : t('Create Admin Account')}
             </button>
           </form>
         </div>

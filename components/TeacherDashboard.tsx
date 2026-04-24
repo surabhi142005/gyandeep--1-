@@ -30,15 +30,16 @@ import { useQuizWorker } from '../hooks/useQuizWorker';
 import { DashboardLayout, Card, Button, Badge, Input } from './ui';
 import { fetchTeacherStats, fetchQuizStats, fetchWeeklyAttendance, fetchPerformanceBySubject } from '../services/dataService';
 import { realtimeClient } from '../services/realtimeClient';
+import { t } from '../services/i18n';
 
 const SIDEBAR_ITEMS = [
-  { id: 'session', label: 'Session Control', icon: Play },
-  { id: 'attendance', label: 'Attendance', icon: UserCheck },
-  { id: 'performance', label: 'Performance', icon: LineChart },
-  { id: 'quiz', label: 'Quiz Center', icon: HelpCircle },
-  { id: 'notes', label: 'Class Notes', icon: FileText },
-  { id: 'announcements', label: 'Board', icon: Bell },
-  { id: 'analytics', label: 'Analytics', icon: BarChart3 },
+  { id: 'session', label: t('Session Control'), icon: Play },
+  { id: 'attendance', label: t('Attendance'), icon: UserCheck },
+  { id: 'performance', label: t('Performance'), icon: LineChart },
+  { id: 'quiz', label: t('Quiz Center'), icon: HelpCircle },
+  { id: 'notes', label: t('Class Notes'), icon: FileText },
+  { id: 'announcements', label: t('Board'), icon: Bell },
+  { id: 'analytics', label: t('Analytics'), icon: BarChart3 },
 ];
 
 const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ 
@@ -354,13 +355,13 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
             <Card className="lg:col-span-2" padding="xl">
                <div className="flex justify-between items-start mb-8">
                   <div>
-                    <h2 className="text-2xl font-bold mb-1">Session Control</h2>
-                    <p className="text-gray-500">Manage your active classroom session</p>
+                    <h2 className="text-2xl font-bold mb-1">{t('Session Control')}</h2>
+                    <p className="text-gray-500">{t('Manage your active classroom session')}</p>
                   </div>
                   {classSession.isActive ? (
-                    <Badge variant="success" size="lg" className="animate-pulse">Live Now</Badge>
+                    <Badge variant="success" size="lg" className="animate-pulse">{t('Live Now')}</Badge>
                   ) : (
-                    <Badge variant="default" size="lg">Inactive</Badge>
+                    <Badge variant="default" size="lg">{t('Inactive')}</Badge>
                   )}
                </div>
 
@@ -368,34 +369,34 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
                   {!classSession.isActive ? (
                     <div className="space-y-4 max-w-md">
                       <div>
-                        <label className="block text-sm font-bold mb-2 text-gray-700">Select Subject</label>
+                        <label className="block text-sm font-bold mb-2 text-gray-700">{t('Select Subject')}</label>
                         <select 
                           value={selectedSubject} 
                           onChange={(e) => setSelectedSubject(e.target.value)}
                           className="w-full h-12 px-4 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-sm focus:ring-2 focus:ring-primary/20 outline-none transition-all"
                         >
-                          <option value="">Choose a subject...</option>
+                          <option value="">{t('Choose a subject...')}</option>
                           {allSubjects.filter(s => teacher.assignedSubjects.includes(s.id)).map(s => (
                             <option key={s.id} value={s.name}>{s.name}</option>
                           ))}
                         </select>
                       </div>
                       <Button variant="primary" className="w-full h-12 text-lg" onClick={handleStartSession} icon={<Play size={20} />}>
-                        Start Live Session
+                        {t('Start Live Session')}
                       </Button>
                     </div>
                   ) : (
                     <div className="p-6 bg-primary/5 rounded-2xl border border-primary/10 space-y-6">
                       <div className="grid grid-cols-2 gap-4">
                         <div className="p-4 bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-100 dark:border-gray-800">
-                          <p className="text-xs font-bold text-gray-500 uppercase mb-1">Attendance Code</p>
+                          <p className="text-xs font-bold text-gray-500 uppercase mb-1">{t('Attendance Code')}</p>
                           <div className="flex items-center justify-between">
                              <p className="text-3xl font-black tracking-widest text-primary">{classSession.code || '---'}</p>
                              <Button variant="ghost" size="sm" onClick={handleGenerateCode} loading={isGeneratingCode} icon={<RefreshCw size={14} />} />
                           </div>
                         </div>
                         <div className="p-4 bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-100 dark:border-gray-800">
-                          <p className="text-xs font-bold text-gray-500 uppercase mb-1">Time Remaining</p>
+                          <p className="text-xs font-bold text-gray-500 uppercase mb-1">{t('Time Remaining')}</p>
                           <p className="text-2xl font-bold flex items-center gap-2">
                              <Clock className="text-secondary" size={20} />
                              {timeRemaining}
@@ -405,10 +406,10 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
 
                       <div className="flex gap-3">
                         <Button variant="danger" className="flex-1 h-12" onClick={handleEndSession} icon={<XCircle size={18} />}>
-                          End Session
+                          {t('End Session')}
                         </Button>
                         <Button variant="secondary" className="flex-1 h-12" onClick={() => exportSession()} icon={<Download size={18} />}>
-                          Export Report
+                          {t('Export Report')}
                         </Button>
                       </div>
                     </div>
@@ -419,19 +420,19 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
             <Card padding="lg" className="h-fit">
                <h3 className="text-lg font-bold mb-4 flex items-center gap-2">
                  <MapPin className="text-primary" size={20} />
-                 Location & Safety
+                 {t('Location & Safety')}
                </h3>
                <div className="space-y-4">
                   <div className="p-4 bg-gray-50 dark:bg-gray-800/50 rounded-xl border border-gray-100 dark:border-gray-800">
-                    <p className="text-xs font-bold text-gray-500 mb-2">Current Coordinates</p>
+                    <p className="text-xs font-bold text-gray-500 mb-2">{t('Current Coordinates')}</p>
                     <p className="text-sm font-medium">
                       {classSession.lat && classSession.lng ? 
                         `${classSession.lat.toFixed(4)}, ${classSession.lng.toFixed(4)}` : 
-                        'Location not set'}
+                        t('Location not set')}
                     </p>
                   </div>
                   <div className="p-4 bg-gray-50 dark:bg-gray-800/50 rounded-xl border border-gray-100 dark:border-gray-800">
-                    <p className="text-xs font-bold text-gray-500 mb-2">Attendance Radius</p>
+                    <p className="text-xs font-bold text-gray-500 mb-2">{t('Attendance Radius')}</p>
                     <div className="flex items-center gap-4">
                       <input 
                         type="range" 
@@ -455,7 +456,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
                    <UserCheck size={24} />
                  </div>
                  <div>
-                   <p className="text-sm font-medium text-gray-500">Present Today</p>
+                   <p className="text-sm font-medium text-gray-500">{t('Present Today')}</p>
                     <p className="text-2xl font-bold">{attendance.filter(a => a.status === 'Present').length}</p>
                  </div>
                </div>
@@ -466,7 +467,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
                    <HelpCircle size={24} />
                  </div>
                   <div>
-                    <p className="text-sm font-medium text-gray-500">Quizzes Taken</p>
+                    <p className="text-sm font-medium text-gray-500">{t('Quizzes Taken')}</p>
                     <p className="text-2xl font-bold">{quizStats.totalQuizzes || teacherStats.quizzesTaken}</p>
                   </div>
                </div>
@@ -477,7 +478,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
                    <Award size={24} />
                  </div>
                   <div>
-                    <p className="text-sm font-medium text-gray-500">Avg. Score</p>
+                    <p className="text-sm font-medium text-gray-500">{t('Avg. Score')}</p>
                     <p className="text-2xl font-bold">{quizStats.avgScore || teacherStats.avgScore || 0}%</p>
                   </div>
                </div>
@@ -490,24 +491,24 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
         <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                <Card className="lg:col-span-2" padding="xl">
-                  <h3 className="text-xl font-bold mb-6">Attendance Trends</h3>
+                  <h3 className="text-xl font-bold mb-6">{t('Attendance Trends')}</h3>
                   <AttendanceChart data={weeklyAttendanceData.length > 0 ? weeklyAttendanceData : [
-                     { date: 'Mon', present: 0 },
-                     { date: 'Tue', present: 0 },
-                     { date: 'Wed', present: 0 },
-                     { date: 'Thu', present: 0 },
-                     { date: 'Fri', present: 0 },
+                     { date: t('Mon'), present: 0 },
+                     { date: t('Tue'), present: 0 },
+                     { date: t('Wed'), present: 0 },
+                     { date: t('Thu'), present: 0 },
+                     { date: t('Fri'), present: 0 },
                   ]} />
                </Card>
               <Card padding="lg">
-                  <h3 className="text-lg font-bold mb-4">Quick Stats</h3>
+                  <h3 className="text-lg font-bold mb-4">{t('Quick Stats')}</h3>
                   <div className="space-y-4">
                      <div className="p-4 rounded-xl bg-green-500/10 border border-green-500/20">
-                        <p className="text-xs font-bold text-green-600 uppercase">Weekly Average</p>
+                        <p className="text-xs font-bold text-green-600 uppercase">{t('Weekly Average')}</p>
                         <p className="text-2xl font-black text-green-700">{teacherStats.attendanceRate || Math.round((weeklyAttendanceData.reduce((s, d) => s + d.present, 0) / Math.max(weeklyAttendanceData.length, 1) / Math.max(students.length, 1)) * 100)}%</p>
                      </div>
                      <div className="p-4 rounded-xl bg-orange-500/10 border border-orange-500/20">
-                        <p className="text-xs font-bold text-orange-600 uppercase">Total Students</p>
+                        <p className="text-xs font-bold text-orange-600 uppercase">{t('Total Students')}</p>
                         <p className="text-2xl font-black text-orange-700">{teacherStats.totalStudents || students.length}</p>
                      </div>
                   </div>
@@ -519,12 +520,12 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
       {activeTab === 'performance' && (
         <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
            <Card padding="xl">
-              <h3 className="text-xl font-bold mb-6">Class Performance Overview</h3>
+              <h3 className="text-xl font-bold mb-6">{t('Class Performance Overview')}</h3>
               <PerformanceChart data={performanceData.length > 0 ? performanceData.map((p, i) => ({
-                 date: p.subject || `Subject ${i + 1}`,
+                 date: p.subject || `${t('Subject')} ${i + 1}`,
                  score: p.avgScore || 0,
               })) : [
-                 { date: 'No Data', score: 0 },
+                 { date: t('No Data'), score: 0 },
               ]} />
            </Card>
             <GradeBook 
@@ -546,11 +547,11 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
                  <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center text-primary mb-6">
                     <Zap size={24} />
                  </div>
-                 <h3 className="text-xl font-bold mb-2">AI Quiz Generator</h3>
-                 <p className="text-gray-500 mb-6">Generate assessment questions instantly using Google Gemini AI.</p>
+                 <h3 className="text-xl font-bold mb-2">{t('AI Quiz Generator')}</h3>
+                 <p className="text-gray-500 mb-6">{t('Generate assessment questions instantly using Google Gemini AI.')}</p>
                  <div className="space-y-4">
                     <Input 
-                      placeholder="Enter topic or paste content..." 
+                      placeholder={t('Enter topic or paste content...')}
                       value={quizTopic}
                       onChange={(e) => setQuizTopic(e.target.value)}
                     />
@@ -560,10 +561,10 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
                          value={quizQuestionCount}
                          onChange={(e) => setQuizQuestionCount(parseInt(e.target.value))}
                        >
-                         <option value={5}>5 Questions</option>
-                         <option value={10}>10 Questions</option>
-                         <option value={15}>15 Questions</option>
-                         <option value={20}>20 Questions</option>
+                         <option value={5}>5 {t('Questions')}</option>
+                         <option value={10}>10 {t('Questions')}</option>
+                         <option value={15}>15 {t('Questions')}</option>
+                         <option value={20}>20 {t('Questions')}</option>
                        </select>
                        <Button 
                           variant="primary" 
@@ -575,10 +576,10 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
                               const result = await generateQuizWorker({ notesText: quizTopic, subject: selectedSubject });
                               const quizArray = result?.quiz || [];
                               setGeneratedQuiz(quizArray);
-                              setSuccessMessage(`Generated ${quizArray.length} questions!`);
+                              setSuccessMessage(`${t('Generated')} ${quizArray.length} ${t('questions')}!`);
                               setTimeout(() => setSuccessMessage(null), 3000);
                             } catch (err) {
-                              setError('Failed to generate quiz');
+                              setError(t('Failed to generate quiz'));
                             } finally {
                               setIsGeneratingQuiz(false);
                             }
@@ -587,7 +588,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
                           disabled={!quizTopic.trim()}
                           icon={<Zap size={16} />}
                         >
-                          {isGeneratingQuiz || workerGenerating ? 'Generating...' : `Generate ${quizQuestionCount} Questions`}
+                          {isGeneratingQuiz || workerGenerating ? t('Generating...') : `${t('Generate')} ${quizQuestionCount} ${t('Questions')}`}
                        </Button>
                     </div>
                     {workerError && <p className="text-sm text-red-500">{workerError}</p>}
@@ -602,10 +603,10 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
                  <div className="w-12 h-12 rounded-xl bg-secondary/10 flex items-center justify-center text-secondary mb-6">
                     <HelpCircle size={24} />
                  </div>
-                 <h3 className="text-xl font-bold mb-2">Live Quiz Control</h3>
-                 <p className="text-gray-500 mb-6">Monitor student progress in real-time during a live quiz.</p>
+                 <h3 className="text-xl font-bold mb-2">{t('Live Quiz Control')}</h3>
+                 <p className="text-gray-500 mb-6">{t('Monitor student progress in real-time during a live quiz.')}</p>
                  <div className="p-12 text-center bg-gray-50 dark:bg-gray-800/50 rounded-2xl border-2 border-dashed border-gray-200 dark:border-gray-700">
-                    <p className="text-gray-400 font-medium">No quiz active</p>
+                    <p className="text-gray-400 font-medium">{t('No quiz active')}</p>
                  </div>
               </Card>
            </div>
@@ -613,16 +614,16 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
            {generatedQuiz.length > 0 && (
              <Card padding="xl">
                <div className="flex justify-between items-center mb-6">
-                 <h3 className="text-xl font-bold">Generated Questions</h3>
+                 <h3 className="text-xl font-bold">{t('Generated Questions')}</h3>
                  <div className="flex gap-2">
                    <Button variant="secondary" size="sm" onClick={async () => {
                      try {
                        await import('../services/dataService').then(m => m.upsertQuizToBank(generatedQuiz, selectedSubject));
-                       setSuccessMessage('Questions saved to bank!');
+                       setSuccessMessage(t('Questions saved to bank!'));
                        setTimeout(() => setSuccessMessage(null), 3000);
                      } catch (err) { console.error('Save failed:', err); }
-                   }} icon={<Download size={14} />}>Save to Bank</Button>
-                   <Button variant="ghost" size="sm" onClick={() => setGeneratedQuiz([])}>Clear</Button>
+                   }} icon={<Download size={14} />}>{t('Save to Bank')}</Button>
+                   <Button variant="ghost" size="sm" onClick={() => setGeneratedQuiz([])}>{t('Clear')}</Button>
                  </div>
                </div>
                <div className="space-y-4">
@@ -656,8 +657,8 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
            <Card padding="xl">
               <div className="flex justify-between items-center mb-6">
                  <div>
-                    <h3 className="text-xl font-bold">Class Notes</h3>
-                    <p className="text-sm text-gray-500">Upload and manage teaching materials</p>
+                    <h3 className="text-xl font-bold">{t('Class Notes')}</h3>
+                    <p className="text-sm text-gray-500">{t('Upload and manage teaching materials')}</p>
                  </div>
               </div>
               
@@ -666,20 +667,20 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
                   onClick={() => setNotesTab('session')}
                   className={`px-4 py-2 rounded-lg font-medium transition-colors ${notesTab === 'session' ? 'bg-primary text-white' : 'bg-gray-100 dark:bg-gray-800'}`}
                 >
-                  Session Notes
+                  {t('Session Notes')}
                 </button>
                 <button
                   onClick={() => setNotesTab('centralized')}
                   className={`px-4 py-2 rounded-lg font-medium transition-colors ${notesTab === 'centralized' ? 'bg-primary text-white' : 'bg-gray-100 dark:bg-gray-800'}`}
                 >
-                  Centralized Notes
+                  {t('Centralized Notes')}
                 </button>
               </div>
               
               {notesTab === 'session' && (
                 <div className="space-y-4">
                   <div>
-                    <label className="block text-sm font-bold mb-2">Upload File</label>
+                    <label className="block text-sm font-bold mb-2">{t('Upload File')}</label>
                     <input
                       type="file"
                       accept=".pdf,.doc,.docx,.txt,.png,.jpg,.jpeg"
@@ -702,13 +703,13 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
                           });
                           
                           if (res.ok) {
-                            setSuccessMessage('File uploaded successfully!');
+                            setSuccessMessage(t('File uploaded successfully!'));
                             setTimeout(() => setSuccessMessage(null), 3000);
                           } else {
-                            setError('Upload failed');
+                            setError(t('Upload failed'));
                           }
                         } catch (err) {
-                          setError('Upload failed');
+                          setError(t('Upload failed'));
                         } finally {
                           setIsUploading(false);
                         }
@@ -717,12 +718,12 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-bold mb-2">Quick Notes</label>
+                    <label className="block text-sm font-bold mb-2">{t('Quick Notes')}</label>
                     <textarea
                       value={notesText}
                       onChange={(e) => setNotesText(e.target.value)}
                       className="w-full px-4 py-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 h-40"
-                      placeholder="Type your notes here..."
+                      placeholder={t('Type your notes here...')}
                     />
                     <Button
                       variant="primary"
@@ -738,17 +739,17 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
                               content: notesText,
                             })
                           );
-                          setSuccessMessage('Notes saved!');
+                          setSuccessMessage(t('Notes saved!'));
                           setTimeout(() => setSuccessMessage(null), 3000);
                         } catch (err) {
-                          setError('Failed to save notes');
+                          setError(t('Failed to save notes'));
                         } finally {
                           setIsUploading(false);
                         }
                       }}
                       loading={isUploading}
                     >
-                      Save Notes
+                      {t('Save Notes')}
                     </Button>
                   </div>
                 </div>
@@ -760,25 +761,25 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
                     {centralizedNotes.length === 0 ? (
                       <div className="col-span-2 p-8 text-center bg-gray-50 dark:bg-gray-800/50 rounded-xl">
                         <FileText size={48} className="mx-auto mb-4 text-gray-300" />
-                        <p className="text-gray-500">No centralized notes yet</p>
+                        <p className="text-gray-500">{t('No centralized notes yet')}</p>
                       </div>
                     ) : (
                       centralizedNotes.map((note: any, idx: number) => (
                         <div key={note.id || idx} className="p-4 bg-gray-50 dark:bg-gray-800/50 rounded-xl border border-gray-100 dark:border-gray-700">
                           <div className="flex items-start justify-between">
                             <div className="flex-1">
-                              <h4 className="font-medium">{note.title || 'Untitled'}</h4>
+                              <h4 className="font-medium">{note.title || t('Untitled')}</h4>
                               <p className="text-sm text-gray-500">{note.subjectId || selectedSubject}</p>
                               {note.createdAt && <p className="text-xs text-gray-400 mt-1">{new Date(note.createdAt).toLocaleDateString()}</p>}
                             </div>
-                            <a href={note.url} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline text-sm">View</a>
+                            <a href={note.url} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline text-sm">{t('View')}</a>
                           </div>
                         </div>
                       ))
                     )}
                   </div>
                   <div className="border-t border-gray-100 dark:border-gray-800 pt-4 mt-4">
-                    <h4 className="font-bold mb-2">Upload to Centralized Bank</h4>
+                    <h4 className="font-bold mb-2">{t('Upload to Centralized Bank')}</h4>
                     <input
                       type="file"
                       accept=".pdf,.doc,.docx,.txt,.png,.jpg,.jpeg"
@@ -802,11 +803,11 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
                           });
                           
                           if (res.ok) {
-                            setSuccessMessage('Uploaded to centralized bank!');
+                            setSuccessMessage(t('Uploaded to centralized bank!'));
                             setTimeout(() => setSuccessMessage(null), 3000);
                           }
                         } catch (err) {
-                          setError('Upload failed');
+                          setError(t('Upload failed'));
                         } finally {
                           setIsUploading(false);
                         }

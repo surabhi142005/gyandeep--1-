@@ -98,6 +98,11 @@ export const saveUsers = async (users: any[]) => {
 
 export const bulkImportUsers = async (users: any[]) => saveUsers(users);
 
+export const fetchBadges = async (userId: string): Promise<string[]> => {
+  const data = await apiRequest(`/api/users/${userId}/badges`, { method: 'GET' });
+  return Array.isArray(data?.badges) ? data.badges : [];
+};
+
 // ─── Classes ─────────────────────────────────────────────────────────────────
 
 export const fetchClasses = async (): Promise<ClassConfig[]> => {

@@ -2,14 +2,16 @@ import React, { useState, useMemo, useEffect, lazy, Suspense } from 'react';
 import type { Student, Teacher, AnyUser, Admin, SubjectConfig, ClassConfig } from './types';
 import { UserRole as UserRoleEnum } from './types';
 import Login from './components/Login';
+import Register from './components/Register';
 import ToastNotification from './components/ToastNotification';
 import type { ToastType } from './components/ToastNotification';
 import { fetchUsers, fetchClasses, saveUsers } from './services/dataService';
-import { setLocale } from './services/i18n';
+import { setLocale, t } from './services/i18n';
 import AdminSetup from './components/AdminSetup';
 import UserProfile from './components/UserProfile';
 import LiquidChrome from './components/LiquidChrome';
 import AccessibilityPanel from './components/AccessibilityPanel';
+import { skipLinkStyle } from './hooks/useAccessibility';
 import { SkeletonDashboard } from './components/ui/Skeletons';
 import { useThemeEngine } from './hooks/useThemeEngine';
 import Header from './components/Header';
@@ -32,6 +34,23 @@ const StudentDashboard = lazy(() => import('./components/StudentDashboard'));
 const AdminDashboard = lazy(() => import('./components/AdminDashboard').then(m => ({ default: m.default })));
 const Chatbot = lazy(() => import('./components/Chatbot'));
 const LandingPage = lazy(() => import('./components/LandingPage'));
+
+const getCurrentPath = () => {
+    if (typeof window === 'undefined') return '/';
+    return window.location.pathname || '/';
+};
+
+const getDashboardPathForRole = (role: UserRoleEnum) => {
+    switch (role) {
+        case UserRoleEnum.ADMIN:
+            return '/admin';
+        case UserRoleEnum.TEACHER:
+            return '/teacher/dashboard';
+        case UserRoleEnum.STUDENT:
+        default:
+            return '/student/dashboard';
+    }
+};
 
 // ── localStorage helper (preferences only) ─────────────────────────────────────
 function useLocalStorage<T>(key: string, initialValue: T): [T, React.Dispatch<React.SetStateAction<T>>] {
@@ -64,6 +83,7 @@ const App: React.FC = () => {
     const [currentLocale, setCurrentLocale] = useState('en');
     const [showProfile, setShowProfile] = useState(false);
     const [showLanding, setShowLanding] = useState(true);
+    const [routePath, setRoutePath] = useState(getCurrentPath);
     const [notification, setNotification] = useState<{ message: string; type: ToastType } | null>(null);
     const [showLiquid, setShowLiquid] = useState(false);
 
@@ -76,6 +96,12 @@ const App: React.FC = () => {
     useEffect(() => {
         const timer = setTimeout(() => setShowLiquid(true), 500);
         return () => clearTimeout(timer);
+    }, []);
+
+    useEffect(() => {
+        const handlePopState = () => setRoutePath(getCurrentPath());
+        window.addEventListener('popstate', handlePopState);
+        return () => window.removeEventListener('popstate', handlePopState);
     }, []);
 
     // ── App data (from backend API) ───────────────────────────────────────────
@@ -96,6 +122,14 @@ const App: React.FC = () => {
     const students = useMemo(() => allUsers.filter(u => u.role === UserRoleEnum.STUDENT) as Student[], [allUsers]);
 
     const showNotification = (message: string, type: ToastType = 'info') => setNotification({ message, type });
+
+    const navigateTo = (path: string) => {
+        if (typeof window === 'undefined') return;
+        if (window.location.pathname !== path) {
+            window.history.pushState({}, '', path);
+        }
+        setRoutePath(path);
+    };
 
     // ── Extracted hooks ───────────────────────────────────────────────────────
     const {
@@ -201,12 +235,14 @@ const App: React.FC = () => {
     // ── Login wrapper (init teacher session on login) ─────────────────────────
     const handleLogin = (user: AnyUser) => {
         _handleLogin(user);
+        navigateTo(getDashboardPathForRole(user.role));
         if (user.role === UserRoleEnum.TEACHER) initTeacherSession(user as Teacher);
     };
 
     const handleLogoutWithReset = () => {
         handleLogout();
         resetSession();
+        navigateTo('/login');
     };
 
     // ── Admin setup ───────────────────────────────────────────────────────────
@@ -266,7 +302,24 @@ const App: React.FC = () => {
             return <AdminSetup onSetupComplete={handleAdminSetup} theme={theme} />;
         }
         if (!currentUser) {
-            return <Login onLogin={handleLogin} users={allUsers} theme={theme} onPasswordReset={handlePasswordResetSync} />;
+            if (routePath === '/register') {
+                return (
+                    <Register
+                        onRegister={handleLogin}
+                        theme={theme}
+                        onNavigateToLogin={() => navigateTo('/login')}
+                    />
+                );
+            }
+            return (
+                <Login
+                    onLogin={handleLogin}
+                    users={allUsers}
+                    theme={theme}
+                    onPasswordReset={handlePasswordResetSync}
+                    onNavigateToRegister={() => navigateTo('/register')}
+                />
+            );
         }
         return (
             <Suspense fallback={<SkeletonDashboard />}>
@@ -337,12 +390,14 @@ const App: React.FC = () => {
         );
     };
 
-    const showLandingPage = showLanding && !currentUser && isSetupComplete;
+    const showLandingPage = showLanding && !currentUser && isSetupComplete && routePath === '/';
 
     return (
         <ErrorBoundary>
             <TawkTo />
             <RealtimeProvider userId={currentUser?.id} userRole={currentUser?.role}>
+            <style>{skipLinkStyle()}</style>
+            <a href="#main-content" className="skip-link">{t('Skip to content')}</a>
             {showLiquid && (
                 <LiquidChrome
                     color={currentUser ? [0.62, 0.62, 0.62] : [0.56, 0.56, 0.56]}

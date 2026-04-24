@@ -34,19 +34,20 @@ import Leaderboard from './Leaderboard';
 import AnnouncementBoard from './AnnouncementBoard';
 import TicketPanel from './TicketPanel';
 import type { Announcement } from './AnnouncementBoard';
-import { fetchCentralizedNotesCombined } from '../services/dataService';
+import { fetchBadges, fetchCentralizedNotesCombined } from '../services/dataService';
 import { realtimeClient } from '../services/realtimeClient';
 const Dashboard3D = React.lazy(() => import('./Dashboard3D'));
 import StudentLearningTwin from './StudentLearningTwin';
 import { DashboardLayout, Card, Button, Badge, Input } from './ui';
+import { t } from '../services/i18n';
 
 const SIDEBAR_ITEMS = [
-  { id: 'learning', label: 'Learning Hub', icon: BookOpen },
-  { id: 'quiz', label: 'Quizzes', icon: HelpCircle },
-  { id: 'performance', label: 'My Progress', icon: LineChart },
-  { id: 'twin', label: 'Learning Twin', icon: Zap },
-  { id: 'announcements', label: 'Notice Board', icon: Bell },
-  { id: 'profile', label: 'Profile', icon: User },
+  { id: 'learning', label: t('Learning Hub'), icon: BookOpen },
+  { id: 'quiz', label: t('Quizzes'), icon: HelpCircle },
+  { id: 'performance', label: t('My Progress'), icon: LineChart },
+  { id: 'twin', label: t('Learning Twin'), icon: Zap },
+  { id: 'announcements', label: t('Notice Board'), icon: Bell },
+  { id: 'profile', label: t('Profile'), icon: User },
 ];
 
 const StudentDashboard: React.FC<StudentDashboardProps> = ({ 
@@ -71,6 +72,7 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({
   const [examNotesLoading, setExamNotesLoading] = useState(false);
   const [expandedUnit, setExpandedUnit] = useState<number | null>(null);
   const [notesTab, setNotesTab] = useState<'session' | 'centralized'>('session');
+  const [badges, setBadges] = useState<string[]>(Array.isArray(student.badges) ? student.badges : []);
 
   const sessionEnded = !!classSession.endedAt;
 
@@ -98,6 +100,32 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({
   useEffect(() => {
     if (examNotesSubject) loadExamNotes(examNotesSubject);
   }, [examNotesSubject, loadExamNotes]);
+
+  useEffect(() => {
+    setBadges(Array.isArray(student.badges) ? student.badges : []);
+  }, [student.id, student.badges]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    if (!student?.id) return () => { cancelled = true; };
+
+    fetchBadges(student.id)
+      .then((nextBadges) => {
+        if (!cancelled) {
+          setBadges(Array.isArray(nextBadges) ? nextBadges : []);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setBadges(Array.isArray(student.badges) ? student.badges : []);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [student?.id]);
 
   useEffect(() => {
     setQuizTaken(false);
@@ -171,7 +199,7 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({
                   <Star size={24} className="fill-white text-white" />
                 </div>
                 <div>
-                  <p className="text-xs font-bold uppercase tracking-wider opacity-80 text-white">Experience Points</p>
+                  <p className="text-xs font-bold uppercase tracking-wider opacity-80 text-white">{t('Experience Points')}</p>
                   <p className="text-2xl font-black text-white">{stats.xp} XP</p>
                 </div>
               </div>
@@ -182,8 +210,8 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({
                   <Award size={24} style={{ color: 'var(--color-secondary)' }} />
                 </div>
                 <div>
-                  <p className="text-xs font-bold uppercase tracking-wider" style={{ color: 'var(--color-text-muted)' }}>Current Level</p>
-                  <p className="text-2xl font-black" style={{ color: 'var(--color-secondary)' }}>Level {stats.level}</p>
+                  <p className="text-xs font-bold uppercase tracking-wider" style={{ color: 'var(--color-text-muted)' }}>{t('Current Level')}</p>
+                  <p className="text-2xl font-black" style={{ color: 'var(--color-secondary)' }}>{t('Level')} {stats.level}</p>
                 </div>
               </div>
            </Card>
@@ -193,7 +221,7 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({
                   <Coins size={24} style={{ color: '#D97706' }} />
                 </div>
                 <div>
-                  <p className="text-xs font-bold uppercase tracking-wider" style={{ color: 'var(--color-text-muted)' }}>Gyandeep Coins</p>
+                  <p className="text-xs font-bold uppercase tracking-wider" style={{ color: 'var(--color-text-muted)' }}>{t('Gyandeep Coins')}</p>
                   <p className="text-2xl font-black" style={{ color: '#D97706' }}>{stats.coins} GDC</p>
                 </div>
               </div>
@@ -206,20 +234,20 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({
                <Card padding="xl">
                   <div className="flex justify-between items-start mb-8">
                     <div>
-                      <h2 className="text-2xl font-bold mb-1">Active Session</h2>
-                      <p className="text-sm" style={{ color: 'var(--color-text-muted)' }}>Join your live classroom session</p>
+                      <h2 className="text-2xl font-bold mb-1">{t('Active Session')}</h2>
+                      <p className="text-sm" style={{ color: 'var(--color-text-muted)' }}>{t('Join your live classroom session')}</p>
                     </div>
                     {classSession.isActive ? (
-                      <Badge variant="xp" size="lg" animated>LIVE SESSION</Badge>
+                      <Badge variant="xp" size="lg" animated>{t('LIVE SESSION')}</Badge>
                     ) : (
-                      <Badge variant="default" size="lg">NO ACTIVE SESSION</Badge>
+                      <Badge variant="default" size="lg">{t('NO ACTIVE SESSION')}</Badge>
                     )}
                   </div>
 
                   {!classSession.isActive ? (
                     <div className="py-12 text-center rounded-2xl border-2 border-dashed" style={{ backgroundColor: 'var(--color-bg)', borderColor: 'var(--color-border)' }}>
                        <Activity size={48} className="mx-auto mb-4" style={{ color: 'var(--color-text-muted)' }} />
-                       <h3 className="text-lg font-bold" style={{ color: 'var(--color-text-muted)' }}>Wait for your teacher to start</h3>
+                       <h3 className="text-lg font-bold" style={{ color: 'var(--color-text-muted)' }}>{t('Wait for your teacher to start')}</h3>
                     </div>
                   ) : (
                     <div className="space-y-6">
@@ -229,35 +257,35 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({
                                 <BookOpen size={28} />
                              </div>
                              <div>
-                                <p className="text-sm font-bold uppercase tracking-tighter" style={{ color: 'var(--color-primary)' }}>Current Subject</p>
+                                <p className="text-sm font-bold uppercase tracking-tighter" style={{ color: 'var(--color-primary)' }}>{t('Current Subject')}</p>
                                 <p className="text-xl font-black">{classSession.subject}</p>
                              </div>
                           </div>
                           <div className="text-right">
-                             <p className="text-xs font-bold uppercase" style={{ color: 'var(--color-text-muted)' }}>Started At</p>
+                             <p className="text-xs font-bold uppercase" style={{ color: 'var(--color-text-muted)' }}>{t('Started At')}</p>
                              <p className="text-sm font-medium">{new Date(classSession.startedAt!).toLocaleTimeString()}</p>
                           </div>
                        </div>
 
                         {!student.attendanceMarked ? (
                           <div className="space-y-4">
-                             <label className="block text-sm font-bold" style={{ color: 'var(--color-text)' }}>Enter Attendance Code</label>
+                             <label className="block text-sm font-bold" style={{ color: 'var(--color-text)' }}>{t('Enter Attendance Code')}</label>
                              <div className="flex flex-col sm:flex-row gap-3">
                                 <Input 
                                   value={code} 
                                   onChange={e => setCode(e.target.value)} 
-                                  placeholder="e.g. 4829" 
+                                  placeholder={t('e.g. 4829')} 
                                   className="text-center text-2xl font-black tracking-widest h-11 sm:h-14"
                                 />
                                 <Button variant="primary" className="h-11 sm:h-14 px-6 sm:px-8 text-base" onClick={() => setShowWebcam(true)}>
-                                  Verify & Mark
+                                  {t('Verify & Mark')}
                                 </Button>
                              </div>
                           </div>
                         ) : (
                          <div className="p-4 rounded-xl flex items-center gap-3" style={{ backgroundColor: 'rgba(34, 197, 94, 0.1)', border: '1px solid rgba(34, 197, 94, 0.2)', color: '#16A34A' }}>
                             <CheckCircle2 size={24} />
-                            <p className="font-bold">Attendance marked for this session!</p>
+                            <p className="font-bold">{t('Attendance marked for this session!')}</p>
                          </div>
                        )}
                     </div>
@@ -271,8 +299,8 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({
                             <HelpCircle size={24} />
                          </div>
                          <div>
-                            <h3 className="font-bold">Live Quiz</h3>
-                            <p className="text-sm" style={{ color: 'var(--color-text-muted)' }}>Take the session quiz</p>
+                            <h3 className="font-bold">{t('Live Quiz')}</h3>
+                            <p className="text-sm" style={{ color: 'var(--color-text-muted)' }}>{t('Take the session quiz')}</p>
                          </div>
                          <ChevronRight className="ml-auto" size={20} style={{ color: 'var(--color-text-muted)' }} />
                       </div>
@@ -283,8 +311,8 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({
                             <Zap size={24} />
                          </div>
                          <div>
-                            <h3 className="font-bold">Digital Twin</h3>
-                            <p className="text-sm" style={{ color: 'var(--color-text-muted)' }}>AI Learning Assistant</p>
+                            <h3 className="font-bold">{t('Digital Twin')}</h3>
+                            <p className="text-sm" style={{ color: 'var(--color-text-muted)' }}>{t('AI Learning Assistant')}</p>
                          </div>
                          <ChevronRight className="ml-auto" size={20} style={{ color: 'var(--color-text-muted)' }} />
                       </div>
@@ -296,8 +324,27 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({
                 <AnnouncementBoard announcements={announcements} canPost={false} theme={theme} />
                 <Card padding="lg">
                    <h3 className="text-lg font-bold mb-4 flex items-center gap-2">
+                     <Award size={20} style={{ color: 'var(--color-secondary)' }} />
+                     {t('Achievement Badges')}
+                   </h3>
+                   {badges.length > 0 ? (
+                     <div className="flex flex-wrap gap-2">
+                       {badges.map((badgeName) => (
+                         <Badge key={badgeName} variant="secondary" size="sm">
+                           {badgeName}
+                         </Badge>
+                       ))}
+                     </div>
+                   ) : (
+                     <p className="text-sm italic" style={{ color: 'var(--color-text-muted)' }}>
+                       {t('No badges earned yet. Complete quizzes and keep your streak going.')}
+                     </p>
+                   )}
+                </Card>
+                <Card padding="lg">
+                   <h3 className="text-lg font-bold mb-4 flex items-center gap-2">
                      <Activity size={20} style={{ color: 'var(--color-secondary)' }} />
-                     Session Notes
+                     {t('Session Notes')}
                    </h3>
                    <div className="space-y-3">
                       {classSession.notes ? (
@@ -305,7 +352,7 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({
                           "{classSession.notes}"
                         </p>
                       ) : (
-                        <p className="text-sm italic" style={{ color: 'var(--color-text-muted)' }}>No notes from teacher yet.</p>
+                        <p className="text-sm italic" style={{ color: 'var(--color-text-muted)' }}>{t('No notes from teacher yet.')}</p>
                       )}
                    </div>
                 </Card>
@@ -318,10 +365,10 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({
               <Card padding="xl">
                  <div className="flex justify-between items-center mb-8">
                     <div>
-                       <h2 className="text-2xl font-bold">Quiz Center</h2>
-                       <p className="text-sm" style={{ color: 'var(--color-text-muted)' }}>Challenge yourself and earn XP</p>
+                       <h2 className="text-2xl font-bold">{t('Quiz Center')}</h2>
+                       <p className="text-sm" style={{ color: 'var(--color-text-muted)' }}>{t('Challenge yourself and earn XP')}</p>
                     </div>
-                    <Badge variant="xp" size="lg">Ready to play</Badge>
+                    <Badge variant="xp" size="lg">{t('Ready to play')}</Badge>
                  </div>
                  
                  {quizTaken ? (
@@ -329,9 +376,9 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({
                       <div className="w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-6" style={{ backgroundColor: 'rgba(34, 197, 94, 0.1)', color: '#22C55E' }}>
                          <CheckCircle2 size={40} />
                       </div>
-                      <h3 className="text-xl font-bold mb-2">Quiz Completed!</h3>
-                      <p className="text-sm" style={{ color: 'var(--color-text-muted)' }}>You've earned 50 XP for completing today's quiz.</p>
-                      <Button variant="secondary" className="mt-8" onClick={() => setQuizTaken(false)}>Review Answers</Button>
+                      <h3 className="text-xl font-bold mb-2">{t('Quiz Completed!')}</h3>
+                      <p className="text-sm" style={{ color: 'var(--color-text-muted)' }}>{t("You've earned 50 XP for completing today's quiz.")}</p>
+                      <Button variant="secondary" className="mt-8" onClick={() => setQuizTaken(false)}>{t('Review Answers')}</Button>
                    </div>
                  ) : (
                     <QuizView 
@@ -355,16 +402,16 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                  <div className="lg:col-span-2 space-y-8">
                     <Card padding="xl">
-                       <h3 className="text-xl font-bold mb-6">Your Progress</h3>
+                       <h3 className="text-xl font-bold mb-6">{t('Your Progress')}</h3>
                        <PerformanceChart data={student.performance || []} />
                     </Card>
                     <Card padding="xl">
-                       <h3 className="text-xl font-bold mb-6">Subject Breakdown</h3>
+                       <h3 className="text-xl font-bold mb-6">{t('Subject Breakdown')}</h3>
                        <div className="space-y-4">
                           {['Mathematics', 'Science', 'English'].map(sub => (
                             <div key={sub}>
                                <div className="flex justify-between text-sm mb-2">
-                                  <span className="font-bold">{sub}</span>
+                                  <span className="font-bold">{t(sub)}</span>
                                   <span className="font-bold" style={{ color: 'var(--color-primary)' }}>85%</span>
                                </div>
                                <div className="w-full h-2 rounded-full overflow-hidden" style={{ backgroundColor: 'var(--color-primary-10)' }}>
@@ -391,11 +438,11 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({
                           <Zap size={20} />
                        </div>
                        <div>
-                          <h3 className="font-bold">AI Learning Twin</h3>
-                          <p className="text-xs" style={{ color: 'var(--color-text-muted)' }}>Personalized study partner</p>
+                          <h3 className="font-bold">{t('AI Learning Twin')}</h3>
+                          <p className="text-xs" style={{ color: 'var(--color-text-muted)' }}>{t('Personalized study partner')}</p>
                        </div>
                     </div>
-                    <Badge variant="success" size="sm">Online</Badge>
+                    <Badge variant="success" size="sm">{t('Online')}</Badge>
                  </div>
                  <div className="flex-1 overflow-hidden relative">
                     <StudentLearningTwin student={student} theme={theme} />
@@ -406,7 +453,7 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({
 
          {activeTab === 'announcements' && (
            <div className="max-w-4xl mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-              <h2 className="text-2xl font-bold mb-6">Important Notices</h2>
+              <h2 className="text-2xl font-bold mb-6">{t('Important Notices')}</h2>
               {announcements.map((ann, idx) => (
                 <Card key={idx} padding="lg" hover>
                    <div className="flex gap-4">
@@ -419,10 +466,10 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({
                       <div>
                          <div className="flex items-center gap-3 mb-1">
                             <h3 className="font-bold">{ann.title}</h3>
-                            {ann.priority === 'high' && <Badge variant="danger" size="xs">Priority</Badge>}
+                            {ann.priority === 'high' && <Badge variant="danger" size="xs">{t('Priority')}</Badge>}
                          </div>
                          <p className="mb-3 leading-relaxed" style={{ color: 'var(--color-text)' }}>{ann.content}</p>
-                         <p className="text-xs" style={{ color: 'var(--color-text-muted)' }}>{new Date(ann.createdAt).toLocaleDateString()} • By {ann.author}</p>
+                         <p className="text-xs" style={{ color: 'var(--color-text-muted)' }}>{new Date(ann.createdAt).toLocaleDateString()} • {t('By')} {ann.author}</p>
                       </div>
                    </div>
                 </Card>
@@ -437,7 +484,7 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({
                     <div className="relative group">
                        <div className="w-32 h-32 rounded-3xl overflow-hidden shadow-2xl" style={{ border: '4px solid var(--color-primary)', padding: '2px', background: 'var(--color-surface)' }}>
                           {student.faceImage ? (
-                            <img src={student.faceImage} alt="Profile" className="w-full h-full object-cover rounded-2xl" />
+                            <img src={student.faceImage} alt={t('Profile')} className="w-full h-full object-cover rounded-2xl" />
                           ) : (
                             <div className="w-full h-full rounded-2xl flex items-center justify-center text-white text-4xl font-black" style={{ background: 'var(--gradient)' }}>
                                {student.name[0]}
@@ -448,6 +495,7 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({
                          onClick={() => setShowFaceRegistration(true)}
                          className="absolute -bottom-2 -right-2 w-10 h-10 shadow-lg rounded-xl flex items-center justify-center hover:scale-110 transition-transform"
                          style={{ backgroundColor: 'var(--color-surface)', color: 'var(--color-primary)' }}
+                         aria-label={t('Update Face ID')}
                        >
                           <Camera size={20} />
                        </button>
@@ -460,11 +508,11 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({
                        <p className="font-medium mb-4" style={{ color: 'var(--color-text-muted)' }}>{student.email} • ID: {student.id}</p>
                        <div className="flex flex-wrap justify-center md:justify-start gap-4">
                           <div className="px-4 py-2 rounded-xl" style={{ backgroundColor: 'var(--color-bg)', border: '1px solid var(--color-border)' }}>
-                             <p className="text-[10px] font-bold uppercase" style={{ color: 'var(--color-text-muted)' }}>Class</p>
-                             <p className="font-bold">{student.classId || 'Not Assigned'}</p>
+                             <p className="text-[10px] font-bold uppercase" style={{ color: 'var(--color-text-muted)' }}>{t('Class')}</p>
+                             <p className="font-bold">{student.classId || t('Not Assigned')}</p>
                           </div>
                          <div className="px-4 py-2 bg-gray-50 rounded-xl border border-gray-100">
-                            <p className="text-[10px] font-bold text-gray-400 uppercase">Member Since</p>
+                            <p className="text-[10px] font-bold text-gray-400 uppercase">{t('Member Since')}</p>
                             <p className="font-bold">Aug 2025</p>
                          </div>
                       </div>
@@ -474,18 +522,18 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({
              
              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                 <Card padding="lg">
-                   <h3 className="font-bold mb-4">Account Settings</h3>
+                   <h3 className="font-bold mb-4">{t('Account Settings')}</h3>
                    <div className="space-y-3">
-                      <Button variant="ghost" className="w-full justify-start" icon={<Settings size={18} />}>Security & Password</Button>
-                      <Button variant="ghost" className="w-full justify-start" icon={<Bell size={18} />}>Notification Preferences</Button>
-                      <Button variant="ghost" className="w-full justify-start text-red-500" onClick={onLogout} icon={<LogOut size={18} />}>Sign Out</Button>
+                      <Button variant="ghost" className="w-full justify-start" icon={<Settings size={18} />}>{t('Security & Password')}</Button>
+                      <Button variant="ghost" className="w-full justify-start" icon={<Bell size={18} />}>{t('Notification Preferences')}</Button>
+                      <Button variant="ghost" className="w-full justify-start text-red-500" onClick={onLogout} icon={<LogOut size={18} />}>{t('Sign Out')}</Button>
                    </div>
                 </Card>
                 <Card padding="lg">
-                   <h3 className="font-bold mb-4">Learning Preferences</h3>
+                   <h3 className="font-bold mb-4">{t('Learning Preferences')}</h3>
                    <div className="space-y-3">
-                      <Button variant="ghost" className="w-full justify-start" icon={<Activity size={18} />}>Accessibility Options</Button>
-                      <Button variant="ghost" className="w-full justify-start" icon={<PlayCircle size={18} />}>Auto-play Quizzes</Button>
+                      <Button variant="ghost" className="w-full justify-start" icon={<Activity size={18} />}>{t('Accessibility Options')}</Button>
+                      <Button variant="ghost" className="w-full justify-start" icon={<PlayCircle size={18} />}>{t('Auto-play Quizzes')}</Button>
                    </div>
                 </Card>
              </div>

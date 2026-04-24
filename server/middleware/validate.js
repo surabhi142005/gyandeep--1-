@@ -3,7 +3,7 @@
  * Validation middleware for Express routes
  */
 
-import { validate, ValidationError } from '../utils/validators.js';
+import { validate, ValidationError, validators } from '../utils/validators.js';
 
 export function validateBody(schema) {
   return (req, res, next) => {
@@ -65,7 +65,6 @@ export function validateParams(schema) {
 export function validateId(paramName = 'id') {
   const schema = {
     [paramName]: [function(value, fieldName) {
-      const { validators } = require('../utils/validators.js');
       return validators.isMongoId(value, fieldName);
     }],
   };

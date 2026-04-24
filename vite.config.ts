@@ -125,8 +125,9 @@ export default defineConfig(({ mode }) => {
       rollupOptions: {
         output: {
           manualChunks: {
-            vendor: ['react', 'react-dom', 'react-router-dom'],
-            faceapi: ['@vladmandic/face-api'],
+            'vendor-react': ['react', 'react-dom'],
+            'vendor-utils': ['framer-motion', 'lucide-react', 'recharts'],
+            'faceapi': ['@vladmandic/face-api'],
           },
         },
       },
