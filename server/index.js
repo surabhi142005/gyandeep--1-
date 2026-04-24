@@ -287,10 +287,8 @@ const getDistPath = () => {
     path.join(process.cwd(), '..', 'app', 'dist'),
     path.join('/app', 'dist'),
   ];
-  for (const distPath of candidates) {
-    try {
-      if (require('fs').existsSync(distPath)) return distPath;
-    } catch { /* ignore */ }
+  for (const candidate of candidates) {
+    if (fs.existsSync(candidate)) return candidate;
   }
   return path.join(process.cwd(), 'dist');
 };
@@ -335,12 +333,26 @@ if (process.env.NODE_ENV === 'production' && hasFrontend) {
 
 // Start server only if not running on Vercel
 if (!process.env.VERCEL) {
-  server.listen(PORT, () => {
+  // Bind to 0.0.0.0 for Render compatibility
+  server.listen(PORT, '0.0.0.0', () => {
     const isProd = process.env.NODE_ENV === 'production';
-    const host = process.env.API_URL || (isProd ? `https://${process.env.RENDER_EXTERNAL_URL?.split(':')[0] || 'api.gyandeep.edu'}` : `http://localhost:${PORT}`);
-    const wsHost = process.env.WS_URL || (isProd ? `wss://${process.env.RENDER_EXTERNAL_URL?.split(':')[0] || 'api.gyandeep.edu'}` : `ws://localhost:${PORT}`);
     
-    console.log(`🚀 Server running on ${host}`);
+    // Fix broken host calculation logic
+    let externalHost = 'api.gyandeep.edu';
+    if (process.env.RENDER_EXTERNAL_URL) {
+      try {
+        const url = new URL(process.env.RENDER_EXTERNAL_URL);
+        externalHost = url.hostname;
+      } catch (e) {
+        externalHost = process.env.RENDER_EXTERNAL_URL.replace(/^https?:\/\//, '').split('/')[0];
+      }
+    }
+    
+    const host = process.env.API_URL || (isProd ? `https://${externalHost}` : `http://localhost:${PORT}`);
+    const wsHost = process.env.WS_URL || (isProd ? `wss://${externalHost}` : `ws://localhost:${PORT}`);
+    
+    console.log(`🚀 Server listening on 0.0.0.0:${PORT}`);
+    console.log(`🌍 Public URL: ${host}`);
     console.log(`📊 Health check: ${host}/api/health`);
     console.log(`🔌 WebSocket: ${wsHost}/ws`);
     console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);

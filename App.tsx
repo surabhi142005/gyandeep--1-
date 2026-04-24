@@ -133,7 +133,7 @@ const App: React.FC = () => {
 
     // ── Extracted hooks ───────────────────────────────────────────────────────
     const {
-        currentUser, userLocation,
+        currentUser, setCurrentUser, userLocation,
         handleLogin: _handleLogin, handleLogout,
         handleUpdateFaceImage, handleUpdateUser, handlePasswordReset,
     } = useAuth({ allUsers, setAllUsers, showNotification });
@@ -167,8 +167,18 @@ const App: React.FC = () => {
                     localStorage.setItem('gyandeep_setup_complete', 'true');
                     setAllUsers(users);
                     localStorage.setItem('gyandeep_cached_users', JSON.stringify(users));
-                } else if (!isSetupComplete) {
+                } else {
+                    setIsSetupComplete(false);
                     setAllUsers([]);
+                    setCurrentUser(null);
+                    try {
+                        localStorage.removeItem('gyandeep_setup_complete');
+                        localStorage.removeItem('gyandeep_cached_users');
+                        localStorage.removeItem('gyandeep_current_user');
+                        localStorage.removeItem('gyandeep_token');
+                    } catch (storageError) {
+                        console.warn('Failed to clear stale setup state:', storageError);
+                    }
                 }
             } catch (err) {
                 console.warn('Initial setup check failed (backend might be offline):', err);
@@ -180,7 +190,11 @@ const App: React.FC = () => {
                         if (parsed.length > 0) {
                             setAllUsers(parsed);
                             setIsSetupComplete(true);
+                        } else {
+                            setIsSetupComplete(false);
                         }
+                    } else {
+                        setIsSetupComplete(false);
                     }
                 } catch (e) {}
             }

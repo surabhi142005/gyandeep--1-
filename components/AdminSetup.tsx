@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import type { Admin } from '../types';
 import { UserRole as UserRoleEnum } from '../types';
 import Spinner from './Spinner';
@@ -31,17 +31,17 @@ const AdminSetup: React.FC<AdminSetupProps> = ({ onSetupComplete, theme }) => {
     setError(null);
 
     if (!adminName.trim() || !adminEmail.trim() || !adminPassword.trim() || !confirmPassword.trim()) {
-      setError("All fields are required.");
+      setError('All fields are required.');
       return;
     }
 
-    if (adminPassword.length < 6) {
-      setError("Password must be at least 6 characters long.");
+    if (adminPassword.length < 8 || !/[A-Z]/.test(adminPassword) || !/[a-z]/.test(adminPassword) || !/[0-9]/.test(adminPassword)) {
+      setError('Password must be at least 8 characters and include uppercase, lowercase, and a number.');
       return;
     }
 
     if (adminPassword !== confirmPassword) {
-      setError("Passwords do not match.");
+      setError('Passwords do not match.');
       return;
     }
 
@@ -49,53 +49,35 @@ const AdminSetup: React.FC<AdminSetupProps> = ({ onSetupComplete, theme }) => {
     (async () => {
       try {
         const apiBase = (import.meta as any).env?.VITE_API_URL || '';
-        // Register via server API so password is bcrypt-hashed in the DB
-        // First user is automatically admin
         const res = await fetch(`${apiBase}/api/auth/register`, {
           method: 'POST',
+          credentials: 'include',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email: adminEmail.trim(), password: adminPassword, name: adminName.trim(), role: 'admin' }),
-        });
-        if (res.ok) {
-          const { token, user } = await res.json();
-          try { window.localStorage.setItem('gyandeep_token', token); } catch (err) { console.warn('localStorage token save failed', err); }
-          const newAdmin: Omit<Admin, 'faceImage'> = {
-            id: user.id,
-            name: user.name,
-            role: UserRoleEnum.ADMIN,
-            email: user.email,
+          body: JSON.stringify({
+            email: adminEmail.trim(),
             password: adminPassword,
-          };
-          onSetupComplete(newAdmin);
-        } else {
-          // Server unavailable — fallback to local-only setup
-          const { hashPassword } = await import('../services/authService');
-          const hashed = await hashPassword(adminPassword);
-          const newAdmin: Omit<Admin, 'faceImage'> = {
-            id: 'a1',
             name: adminName.trim(),
-            role: UserRoleEnum.ADMIN,
-            email: adminEmail.trim(),
-            password: hashed,
-          };
-          onSetupComplete(newAdmin);
+            role: 'admin',
+          }),
+        });
+
+        if (!res.ok) {
+          const body = await res.json().catch(() => ({}));
+          setError(body.error || 'Failed to create administrator account.');
+          return;
         }
-      } catch {
-        // Server unreachable — fallback to local-only setup
-        try {
-          const { hashPassword } = await import('../services/authService');
-          const hashed = await hashPassword(adminPassword);
-          const newAdmin: Omit<Admin, 'faceImage'> = {
-            id: 'a1',
-            name: adminName.trim(),
-            role: UserRoleEnum.ADMIN,
-            email: adminEmail.trim(),
-            password: hashed,
-          };
-          onSetupComplete(newAdmin);
-        } catch (err: any) {
-          setError("Error securing password: " + err.message);
-        }
+
+        const { user } = await res.json();
+        const newAdmin: Omit<Admin, 'faceImage'> = {
+          id: user.id,
+          name: user.name,
+          role: UserRoleEnum.ADMIN,
+          email: user.email,
+          password: adminPassword,
+        };
+        onSetupComplete(newAdmin);
+      } catch (err: any) {
+        setError(err?.message || 'Could not reach the server. Administrator setup requires a working backend connection.');
       } finally {
         setIsLoading(false);
       }
@@ -147,7 +129,7 @@ const AdminSetup: React.FC<AdminSetupProps> = ({ onSetupComplete, theme }) => {
                 value={adminPassword}
                 onChange={(e) => setAdminPassword(e.target.value)}
                 required
-                placeholder={t('Password (min. 6 characters)')}
+                placeholder={t('Password (min. 8 chars, upper/lower/number)')}
                 className={`w-full p-3 border border-gray-300 rounded-md shadow-sm focus:ring-1 ${colors.ring} ${colors.border}`}
                 disabled={isLoading}
               />
