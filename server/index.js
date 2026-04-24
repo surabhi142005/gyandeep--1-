@@ -295,20 +295,34 @@ const getDistPath = () => {
 
 const distPath = getDistPath();
 const hasFrontend = fs.existsSync(path.join(distPath, 'index.html'));
+const assetsPath = path.join(distPath, 'assets');
 
 // Serve static files from dist folder in production (if built)
 if (process.env.NODE_ENV === 'production' && hasFrontend) {
+  if (fs.existsSync(assetsPath)) {
+    app.use('/assets', express.static(assetsPath, {
+      immutable: true,
+      maxAge: '1y',
+      fallthrough: false,
+    }));
+  }
+
   app.use(express.static(distPath, {
+    index: false,
     setHeaders: (res, filePath) => {
       if (filePath.endsWith('.webmanifest')) {
         res.setHeader('Content-Type', 'application/manifest+json');
+      }
+      if (filePath.endsWith('index.html') || filePath.endsWith('sw.js') || filePath.endsWith('registerSW.js')) {
+        res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
       }
     }
   }));
 
   // SPA fallback - serve index.html for non-API routes
   app.get('*', (req, res) => {
-    if (!req.path.startsWith('/api/') && !req.path.startsWith('/auth/') && !req.path.startsWith('/storage/')) {
+    const isAssetRequest = /\.[a-z0-9]+$/i.test(req.path);
+    if (!req.path.startsWith('/api/') && !req.path.startsWith('/auth/') && !req.path.startsWith('/storage/') && !req.path.startsWith('/assets/') && !isAssetRequest) {
       res.sendFile(path.join(distPath, 'index.html'));
     } else {
       res.status(404).json({ error: 'Not found' });
