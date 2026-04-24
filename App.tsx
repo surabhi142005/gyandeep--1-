@@ -52,6 +52,9 @@ const getDashboardPathForRole = (role: UserRoleEnum) => {
     }
 };
 
+const hasAdminAccount = (users: AnyUser[]) =>
+    Array.isArray(users) && users.some(user => user.role === UserRoleEnum.ADMIN);
+
 // ── localStorage helper (preferences only) ─────────────────────────────────────
 function useLocalStorage<T>(key: string, initialValue: T): [T, React.Dispatch<React.SetStateAction<T>>] {
     const [storedValue, setStoredValue] = useState<T>(() => {
@@ -150,7 +153,7 @@ const App: React.FC = () => {
 
     // ── Data initialisation from backend API ─────────────────────────────────
     /**
-     * Initial check to see if setup is complete by checking if any users exist
+     * Initial check to see if setup is complete by checking if an admin exists.
      */
     useEffect(() => {
         const checkSetup = async () => {
@@ -162,18 +165,16 @@ const App: React.FC = () => {
             
             try {
                 const users = await fetchUsers();
-                if (Array.isArray(users) && users.length > 0) {
+                setAllUsers(users);
+                if (hasAdminAccount(users)) {
                     setIsSetupComplete(true);
                     localStorage.setItem('gyandeep_setup_complete', 'true');
-                    setAllUsers(users);
                     localStorage.setItem('gyandeep_cached_users', JSON.stringify(users));
                 } else {
                     setIsSetupComplete(false);
-                    setAllUsers([]);
                     setCurrentUser(null);
                     try {
                         localStorage.removeItem('gyandeep_setup_complete');
-                        localStorage.removeItem('gyandeep_cached_users');
                         localStorage.removeItem('gyandeep_current_user');
                         localStorage.removeItem('gyandeep_token');
                     } catch (storageError) {
@@ -186,8 +187,9 @@ const App: React.FC = () => {
                 try {
                     const cached = localStorage.getItem('gyandeep_cached_users');
                     if (cached) {
-                        const parsed = JSON.parse(cached);
-                        if (parsed.length > 0) {
+                        const parsed = JSON.parse(cached) as AnyUser[];
+                        setAllUsers(Array.isArray(parsed) ? parsed : []);
+                        if (hasAdminAccount(Array.isArray(parsed) ? parsed : [])) {
                             setAllUsers(parsed);
                             setIsSetupComplete(true);
                         } else {
@@ -221,9 +223,19 @@ const App: React.FC = () => {
                 setAllUsers(users || []);
                 try { localStorage.setItem('gyandeep_cached_users', JSON.stringify(users || [])); } catch (e) { console.warn('Failed to cache users:', e); }
                 setAllClasses(classes || []);
-                if (Array.isArray(users) && users.length > 0) {
+                if (hasAdminAccount(users || [])) {
                     setIsSetupComplete(true);
                     try { localStorage.setItem('gyandeep_setup_complete', 'true'); } catch (e) { console.warn('Failed to save setup status:', e); }
+                } else {
+                    setIsSetupComplete(false);
+                    setCurrentUser(null);
+                    try {
+                        localStorage.removeItem('gyandeep_setup_complete');
+                        localStorage.removeItem('gyandeep_current_user');
+                        localStorage.removeItem('gyandeep_token');
+                    } catch (storageError) {
+                        console.warn('Failed to clear stale setup state:', storageError);
+                    }
                 }
             } catch (err) {
                 console.error('Failed to fetch data from server:', err);
@@ -232,10 +244,12 @@ const App: React.FC = () => {
                 try {
                     const cached = localStorage.getItem('gyandeep_cached_users');
                     if (cached) {
-                        const parsed = JSON.parse(cached);
+                        const parsed = JSON.parse(cached) as AnyUser[];
                         setAllUsers(parsed || []);
-                        if (Array.isArray(parsed) && parsed.length > 0) {
+                        if (hasAdminAccount(Array.isArray(parsed) ? parsed : [])) {
                             setIsSetupComplete(true);
+                        } else {
+                            setIsSetupComplete(false);
                         }
                     }
                 } catch (e) { console.warn('Failed to load cached users:', e); }
