@@ -4,7 +4,7 @@ import { UserRole as UserRoleEnum, ROLE_DISPLAY_NAMES } from '../types';
 import Spinner from './Spinner';
 import WebcamCapture from './WebcamCapture';
 import AdminFaceViewer from './AdminFaceViewer';
-import { bulkImportUsers, checkEmailServiceHealth, sendEmailNotification, fetchQuestionBank, fetchTagPresets } from '../services/dataService';
+import { bulkImportUsers, checkEmailServiceHealth, sendEmailNotification, fetchQuestionBank, fetchTagPresets, assignUserToClass } from '../services/dataService';
 import { registerFace, verifyFace, hashPassword } from '../services/authService';
 import { getCurrentPosition } from '../services/locationService';
 import TicketPanel from './TicketPanel';
@@ -383,14 +383,21 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
     }
   };
 
-  const handleAssignClass = async (studentId: string, classId: string) => {
-    const updatedUsers = users.map(u => {
-      if (u.id === studentId && u.role === UserRoleEnum.STUDENT) {
-        return { ...u, classId } as Student;
-      }
-      return u;
-    });
-    onUpdateUsers(updatedUsers);
+  const handleAssignClass = async (userId: string, classId: string | null) => {
+    try {
+      await assignUserToClass(userId, classId);
+      const updatedUsers = users.map(u => {
+        if (u.id === userId && (u.role === UserRoleEnum.STUDENT || u.role === UserRoleEnum.TEACHER)) {
+          return { ...u, classId } as AnyUser;
+        }
+        return u;
+      });
+      onUpdateUsers(updatedUsers);
+    } catch (err) {
+      console.error('Failed to assign class:', err);
+      setClassError('Failed to assign class. Please try again.');
+      return;
+    }
   };
 
   async function handleCaptureForUser(imageDataUrl: string) {
@@ -669,6 +676,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   <tr>
                     <th className="px-6 py-4">{t('User')}</th>
                     <th className="px-6 py-4">{t('Role')}</th>
+                    <th className="px-6 py-4">{t('Class')}</th>
                     <th className="px-6 py-4">{t('Status')}</th>
                     <th className="px-6 py-4">{t('Face ID')}</th>
                     <th className="px-6 py-4 text-right">{t('Actions')}</th>
@@ -692,6 +700,24 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
                         <Badge variant={user.role === UserRoleEnum.ADMIN ? 'primary' : user.role === UserRoleEnum.TEACHER ? 'info' : 'success' as any} size="sm">
                           {ROLE_DISPLAY_NAMES[user.role]}
                         </Badge>
+                      </td>
+                      <td className="px-6 py-4">
+                        {(user.role === UserRoleEnum.STUDENT || user.role === UserRoleEnum.TEACHER) ? (
+                          <select
+                            value={(user.classId as string | null) || ''}
+                            onChange={(e) => handleAssignClass(user.id, e.target.value || null)}
+                            className="min-w-[160px] px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-sm"
+                          >
+                            <option value="">{t('Unassigned')}</option>
+                            {allClasses.map((cls) => (
+                              <option key={cls.id} value={cls.id}>
+                                {cls.name}
+                              </option>
+                            ))}
+                          </select>
+                        ) : (
+                          <span className="text-sm text-gray-400">{t('N/A')}</span>
+                        )}
                       </td>
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-2">

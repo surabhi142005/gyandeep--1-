@@ -92,7 +92,7 @@ export const fetchUsers = async (): Promise<AnyUser[]> => {
 export const saveUsers = async (users: any[]) => {
   return apiRequest('/api/users/bulk', {
     method: 'POST',
-    body: JSON.stringify(users),
+    body: JSON.stringify({ users }),
   });
 };
 
@@ -120,7 +120,14 @@ export const saveClasses = async (classes: any[]) => {
 export const assignStudentToClass = async (studentId: string, classId: string | null) => {
   return apiRequest('/api/classes/assign', {
     method: 'POST',
-    body: JSON.stringify({ studentId, classId }),
+    body: JSON.stringify({ userId: studentId, classId }),
+  });
+};
+
+export const assignUserToClass = async (userId: string, classId: string | null) => {
+  return apiRequest('/api/classes/assign', {
+    method: 'POST',
+    body: JSON.stringify({ userId, classId }),
   });
 };
 

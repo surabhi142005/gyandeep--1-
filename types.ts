@@ -25,6 +25,7 @@ export interface User {
   password?: string;
   emailVerified?: boolean;
   active?: boolean; // false = deactivated by admin
+  classId?: string | null;
   preferences?: UserPreferences;
   history?: UserHistory[];
   

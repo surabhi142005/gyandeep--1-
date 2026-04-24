@@ -89,23 +89,25 @@ router.post('/', authMiddleware, async (req, res) => {
 
 router.post('/assign', authMiddleware, async (req, res) => {
   try {
-    const { studentId, classId } = req.body;
-    if (!studentId) {
-      return res.status(400).json({ error: 'Student ID is required' });
+    const userId = req.body.userId || req.body.studentId;
+    const { classId } = req.body;
+    if (!userId) {
+      return res.status(400).json({ error: 'User ID is required' });
     }
 
     const db = await connectToDatabase();
-    const updateData = classId
-      ? { classId: new ObjectId(classId), updatedAt: new Date() }
-      : { $unset: { classId: '' }, updatedAt: new Date() };
+    const updateData = {
+      classId: classId ? new ObjectId(classId) : null,
+      updatedAt: new Date(),
+    };
 
     const result = await db.collection(COLLECTIONS.USERS).updateOne(
-      { _id: new ObjectId(studentId) },
+      { _id: new ObjectId(userId) },
       { $set: updateData }
     );
 
     if (result.matchedCount === 0) {
-      return res.status(404).json({ error: 'Student not found' });
+      return res.status(404).json({ error: 'User not found' });
     }
 
     res.json({ ok: true });
