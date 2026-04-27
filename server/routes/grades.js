@@ -33,15 +33,9 @@ router.get('/', authMiddleware, validatePaginationParams, async (req, res) => {
     
     const filter = {};
     if (studentId) {
-      if (!validators.isMongoId(studentId).isValid()) {
-        return res.status(400).json({ error: 'Invalid studentId format' });
-      }
       filter.studentId = studentId;
     }
     if (subjectId) {
-      if (!validators.isMongoId(subjectId).isValid()) {
-        return res.status(400).json({ error: 'Invalid subjectId format' });
-      }
       filter.subjectId = subjectId;
     }
 

@@ -278,6 +278,7 @@ router.post('/:id/quiz/start', async (req, res) => {
 
     const quiz = {
       sessionId: new ObjectId(sessionId),
+      classId: session.classId || null,
       questions,
       title: title || 'Quick Quiz',
       published: true,
@@ -741,6 +742,136 @@ router.post('/:id/quiz/submit',
   } catch (error) {
     console.error('Quiz submit error:', error);
     res.status(500).json({ error: 'Failed to submit quiz' });
+  }
+});
+
+/**
+ * GET /api/quiz/available/:classId
+ * Get available quizzes for a specific class
+ */
+router.get('/quiz/available/:classId', async (req, res) => {
+  try {
+    const db = await connectToDatabase();
+    const { classId } = req.params;
+
+    const quizzes = await db.collection(COLLECTIONS.QUIZZES)
+      .find({
+        classId: classId,
+        published: true,
+      })
+      .sort({ createdAt: -1 })
+      .limit(20)
+      .toArray();
+
+    // Get session info for each quiz
+    const quizzesWithInfo = await Promise.all(quizzes.map(async (quiz) => {
+      const session = await db.collection(COLLECTIONS.CLASS_SESSIONS).findOne(
+        { _id: quiz.sessionId },
+        { projection: { subjectId: 1, code: 1, sessionStatus: 1, expiry: 1 } }
+      );
+
+      // Check if student already attempted this quiz
+      const attempt = await db.collection(COLLECTIONS.QUIZ_ATTEMPTS).findOne({
+        sessionId: quiz.sessionId,
+        studentId: req.user?.id,
+      });
+
+      return {
+        id: quiz._id?.toString() || quiz.id,
+        sessionId: quiz.sessionId?.toString() || quiz.sessionId,
+        title: quiz.title || 'Quiz',
+        subject: session?.subjectId || null,
+        sessionCode: session?.code || null,
+        sessionStatus: session?.sessionStatus || null,
+        questionCount: quiz.questions?.length || 0,
+        createdAt: quiz.createdAt,
+        alreadyAttempted: !!attempt,
+        attemptScore: attempt?.score || null,
+      };
+    }));
+
+    res.json({
+      quizzes: quizzesWithInfo,
+      total: quizzesWithInfo.length,
+    });
+  } catch (error) {
+    console.error('Get available quizzes error:', error);
+    res.status(500).json({ error: 'Failed to get available quizzes' });
+  }
+});
+
+/**
+ * GET /api/quiz/:id/results
+ * Get quiz results for a specific quiz
+ */
+router.get('/quiz/:id/results', authMiddleware, async (req, res) => {
+  try {
+    const db = await connectToDatabase();
+    const { id: quizId } = req.params;
+
+    const quiz = await db.collection(COLLECTIONS.QUIZZES).findOne(
+      { _id: new ObjectId(quizId) }
+    );
+
+    if (!quiz) {
+      return res.status(404).json({ error: 'Quiz not found' });
+    }
+
+    // Get all attempts for this quiz
+    const attempts = await db.collection(COLLECTIONS.QUIZ_ATTEMPTS)
+      .find({ quizId: new ObjectId(quizId) })
+      .sort({ submittedAt: -1 })
+      .toArray();
+
+    // Enrich with student info
+    const results = await Promise.all(attempts.map(async (attempt) => {
+      const student = await db.collection(COLLECTIONS.USERS).findOne(
+        { _id: new ObjectId(attempt.studentId) },
+        { projection: { name: 1, email: 1 } }
+      );
+
+      const timeTaken = attempt.submittedAt && attempt.createdAt
+        ? Math.round((new Date(attempt.submittedAt) - new Date(attempt.createdAt)) / 1000)
+        : null;
+
+      return {
+        attemptId: attempt._id?.toString() || attempt.id,
+        studentId: attempt.studentId,
+        studentName: student?.name || student?.email || 'Unknown',
+        score: attempt.score,
+        totalQuestions: attempt.totalQuestions,
+        correctCount: attempt.correctCount,
+        percentage: attempt.score,
+        submittedAt: attempt.submittedAt,
+        timeTakenSeconds: timeTaken,
+      };
+    }));
+
+    // Calculate summary stats
+    const summary = {
+      totalAttempts: results.length,
+      averageScore: results.length > 0
+        ? Math.round(results.reduce((sum, r) => sum + r.score, 0) / results.length)
+        : 0,
+      highestScore: results.length > 0 ? Math.max(...results.map(r => r.score)) : 0,
+      lowestScore: results.length > 0 ? Math.min(...results.map(r => r.score)) : 0,
+      passRate: results.length > 0
+        ? Math.round((results.filter(r => r.score >= 60).length / results.length) * 100)
+        : 0,
+    };
+
+    res.json({
+      quiz: {
+        id: quiz._id?.toString(),
+        title: quiz.title,
+        questionCount: quiz.questions?.length || 0,
+      },
+      results,
+      summary,
+    });
+  } catch (error) {
+    console.error('Get quiz results error:', error);
+    res.status(500).json({ error: 'Failed to get quiz results' });
   }
 });
 

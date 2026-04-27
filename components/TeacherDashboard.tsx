@@ -21,17 +21,26 @@ import Spinner from './Spinner';
 import PerformanceChart from './PerformanceChart';
 import AttendanceChart from './AttendanceChart';
 import WebcamCapture from './WebcamCapture';
-import { uploadClassNotes, fetchTagPresets, fetchCentralizedNotesCombined, fetchUsers, fetchActiveSession, fetchSessionAttendance } from '../services/dataService';
+import {
+  fetchActiveSession,
+  fetchAvailableQuizzes,
+  fetchCentralizedNotesCombined,
+  fetchQuizResults,
+  fetchSessionAttendance,
+  fetchTagPresets,
+  fetchUsers,
+  uploadClassNotes
+} from '../services/dataService';
 import { TeacherDashboardProps } from './TeacherDashboardProps';
 import GradeBook from './GradeBook';
 import TicketPanel from './TicketPanel';
+import AnalyticsDashboard from './AnalyticsDashboard';
 import { useTeacherSession } from '../hooks/useTeacherSession';
 import { useQuizWorker } from '../hooks/useQuizWorker';
 import { DashboardLayout, Card, Button, Badge, Input } from './ui';
 import { fetchTeacherStats, fetchQuizStats, fetchWeeklyAttendance, fetchPerformanceBySubject } from '../services/dataService';
 import { realtimeClient } from '../services/realtimeClient';
 import { t } from '../services/i18n';
-
 const SIDEBAR_ITEMS = [
   { id: 'session', label: t('Session Control'), icon: Play },
   { id: 'attendance', label: t('Attendance'), icon: UserCheck },
@@ -40,6 +49,7 @@ const SIDEBAR_ITEMS = [
   { id: 'notes', label: t('Class Notes'), icon: FileText },
   { id: 'announcements', label: t('Board'), icon: Bell },
   { id: 'analytics', label: t('Analytics'), icon: BarChart3 },
+  { id: 'tickets', label: t('Tickets'), icon: HelpCircle },
 ];
 
 const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ 
@@ -123,6 +133,10 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
   const [expiryWarning, setExpiryWarning] = useState<string | null>(null);
   const [timeRemaining, setTimeRemaining] = useState<string>('--:--');
   const [serverExpiryTime, setServerExpiryTime] = useState<number | null>(null);
+  const [publishedQuizzes, setPublishedQuizzes] = useState<any[]>([]);
+  const [selectedQuizId, setSelectedQuizId] = useState<string>('');
+  const [quizResultsSummary, setQuizResultsSummary] = useState<any>(null);
+  const [quizResultsRows, setQuizResultsRows] = useState<any[]>([]);
   
   // RT-1: Sync session with server every 10 seconds for accurate timer
   useEffect(() => {
@@ -191,6 +205,44 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
   
   useEffect(() => { fetchTagPresets().then(setTagPresets).catch((err) => { console.error('Failed to load tag presets:', err); }) }, []);
   useEffect(() => setNotesText(classSession.notes || ''), [classSession.notes]);
+
+  useEffect(() => {
+    if (!classSession.classId) {
+      setPublishedQuizzes([]);
+      setSelectedQuizId('');
+      return;
+    }
+
+    fetchAvailableQuizzes(classSession.classId)
+      .then((data) => {
+        const quizzes = Array.isArray(data?.quizzes) ? data.quizzes : [];
+        setPublishedQuizzes(quizzes);
+        setSelectedQuizId((current) => current || quizzes[0]?.id || '');
+      })
+      .catch((err) => {
+        console.error('Failed to load published quizzes:', err);
+        setPublishedQuizzes([]);
+      });
+  }, [classSession.classId, classSession.quizPublished]);
+
+  useEffect(() => {
+    if (!selectedQuizId) {
+      setQuizResultsSummary(null);
+      setQuizResultsRows([]);
+      return;
+    }
+
+    fetchQuizResults(selectedQuizId)
+      .then((data) => {
+        setQuizResultsSummary(data?.summary || null);
+        setQuizResultsRows(Array.isArray(data?.results) ? data.results : []);
+      })
+      .catch((err) => {
+        console.error('Failed to load quiz results:', err);
+        setQuizResultsSummary(null);
+        setQuizResultsRows([]);
+      });
+  }, [selectedQuizId]);
   
   // RT-2: Real-time attendance updates with live table
   useEffect(() => {
@@ -337,6 +389,26 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
     }
   };
 
+  const handleExportReport = async () => {
+    try {
+      const headers = [t('Student ID'), t('Student Name'), t('Status'), t('Time')];
+      const rows = attendance.map(a => [
+        a.studentId,
+        a.studentName,
+        a.status,
+        a.timestamp ? new Date(a.timestamp).toLocaleTimeString() : '-'
+      ]);
+
+      const { exportToCSV } = await import('../services/exportService');
+      exportToCSV([headers, ...rows], `session-report-${classSession.subject || 'class'}-${new Date().toISOString().split('T')[0]}.csv`);
+      
+      setSuccessMessage(t('Report exported successfully!'));
+      setTimeout(() => setSuccessMessage(null), 3000);
+    } catch (err) {
+      setError(t('Failed to export report'));
+    }
+  };
+
   return (
     <DashboardLayout
       sidebarItems={SIDEBAR_ITEMS}
@@ -408,7 +480,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
                         <Button variant="danger" className="flex-1 h-12" onClick={handleEndSession} icon={<XCircle size={18} />}>
                           {t('End Session')}
                         </Button>
-                        <Button variant="secondary" className="flex-1 h-12" onClick={() => exportSession()} icon={<Download size={18} />}>
+                        <Button variant="secondary" className="flex-1 h-12" onClick={handleExportReport} icon={<Download size={18} />}>
                           {t('Export Report')}
                         </Button>
                       </div>
@@ -604,10 +676,50 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
                     <HelpCircle size={24} />
                  </div>
                  <h3 className="text-xl font-bold mb-2">{t('Live Quiz Control')}</h3>
-                 <p className="text-gray-500 mb-6">{t('Monitor student progress in real-time during a live quiz.')}</p>
-                 <div className="p-12 text-center bg-gray-50 dark:bg-gray-800/50 rounded-2xl border-2 border-dashed border-gray-200 dark:border-gray-700">
-                    <p className="text-gray-400 font-medium">{t('No quiz active')}</p>
-                 </div>
+                 <p className="text-gray-500 mb-6">{t('Monitor student progress and review class quiz performance.')}</p>
+                 {publishedQuizzes.length > 0 ? (
+                   <div className="space-y-3">
+                     <select
+                       value={selectedQuizId}
+                       onChange={(e) => setSelectedQuizId(e.target.value)}
+                       className="w-full h-12 px-4 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-sm"
+                     >
+                       {publishedQuizzes.map((quiz) => (
+                         <option key={quiz.id} value={quiz.id}>
+                           {quiz.title} • {quiz.subject || t('General')}
+                         </option>
+                       ))}
+                     </select>
+                     {quizResultsSummary ? (
+                       <div className="grid grid-cols-2 gap-3">
+                         <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-100">
+                           <p className="text-[10px] font-bold uppercase text-emerald-600">{t('Attempts')}</p>
+                           <p className="text-2xl font-black text-emerald-700">{quizResultsSummary.totalAttempts || 0}</p>
+                         </div>
+                         <div className="p-3 rounded-xl bg-indigo-50 border border-indigo-100">
+                           <p className="text-[10px] font-bold uppercase text-indigo-600">{t('Average Score')}</p>
+                           <p className="text-2xl font-black text-indigo-700">{quizResultsSummary.averageScore || 0}%</p>
+                         </div>
+                         <div className="p-3 rounded-xl bg-amber-50 border border-amber-100">
+                           <p className="text-[10px] font-bold uppercase text-amber-600">{t('Highest')}</p>
+                           <p className="text-2xl font-black text-amber-700">{quizResultsSummary.highestScore || 0}%</p>
+                         </div>
+                         <div className="p-3 rounded-xl bg-rose-50 border border-rose-100">
+                           <p className="text-[10px] font-bold uppercase text-rose-600">{t('Pass Rate')}</p>
+                           <p className="text-2xl font-black text-rose-700">{quizResultsSummary.passRate || 0}%</p>
+                         </div>
+                       </div>
+                     ) : (
+                       <div className="p-12 text-center bg-gray-50 dark:bg-gray-800/50 rounded-2xl border-2 border-dashed border-gray-200 dark:border-gray-700">
+                         <p className="text-gray-400 font-medium">{t('No quiz results available yet')}</p>
+                       </div>
+                     )}
+                   </div>
+                 ) : (
+                   <div className="p-12 text-center bg-gray-50 dark:bg-gray-800/50 rounded-2xl border-2 border-dashed border-gray-200 dark:border-gray-700">
+                      <p className="text-gray-400 font-medium">{t('No quiz active')}</p>
+                   </div>
+                 )}
               </Card>
            </div>
            
@@ -649,6 +761,45 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
                </div>
              </Card>
            )}
+
+           <Card padding="xl">
+             <div className="flex justify-between items-center mb-6">
+               <h3 className="text-xl font-bold">{t('Quiz Results')}</h3>
+               {selectedQuizId && (
+                 <Badge variant="secondary" size="sm">
+                   {publishedQuizzes.find((quiz) => quiz.id === selectedQuizId)?.title || t('Selected Quiz')}
+                 </Badge>
+               )}
+             </div>
+             {quizResultsRows.length > 0 ? (
+               <div className="overflow-x-auto">
+                 <table className="min-w-full text-sm">
+                   <thead>
+                     <tr className="text-left border-b border-gray-200 dark:border-gray-700">
+                       <th className="py-3 pr-4">{t('Student')}</th>
+                       <th className="py-3 pr-4">{t('Score')}</th>
+                       <th className="py-3 pr-4">{t('Correct')}</th>
+                       <th className="py-3 pr-4">{t('Submitted')}</th>
+                     </tr>
+                   </thead>
+                   <tbody>
+                     {quizResultsRows.map((result) => (
+                       <tr key={result.attemptId} className="border-b border-gray-100 dark:border-gray-800">
+                         <td className="py-3 pr-4 font-medium">{result.studentName}</td>
+                         <td className="py-3 pr-4">{result.score}%</td>
+                         <td className="py-3 pr-4">{result.correctCount}/{result.totalQuestions}</td>
+                         <td className="py-3 pr-4">{result.submittedAt ? new Date(result.submittedAt).toLocaleString() : t('Pending')}</td>
+                       </tr>
+                     ))}
+                   </tbody>
+                 </table>
+               </div>
+             ) : (
+               <div className="p-10 text-center rounded-2xl border-2 border-dashed border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50">
+                 <p className="text-gray-500">{t('Students have not submitted attempts for this quiz yet.')}</p>
+               </div>
+             )}
+           </Card>
         </div>
       )}
 
@@ -696,9 +847,10 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
                           formData.append('type', 'session_notes');
                           formData.append('userId', teacher.id);
                           
-                          const res = await fetch('/api/notes/upload', {
+                          const accessToken = (await import('../services/tokenManager')).tokenManager.getAccessToken();
+                          const res = await fetch('/api/storage/upload', {
                             method: 'POST',
-                            headers: { Authorization: `Bearer ${localStorage.getItem('gyandeep_token')}` },
+                            headers: { Authorization: `Bearer ${accessToken}` },
                             body: formData,
                           });
                           
@@ -796,9 +948,10 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
                           formData.append('noteType', 'centralized_notes');
                           formData.append('userId', teacher.id);
                           
-                          const res = await fetch('/api/notes/centralized', {
+                          const accessToken = (await import('../services/tokenManager')).tokenManager.getAccessToken();
+                          const res = await fetch('/api/storage/centralized', {
                             method: 'POST',
-                            headers: { Authorization: `Bearer ${localStorage.getItem('gyandeep_token')}` },
+                            headers: { Authorization: `Bearer ${accessToken}` },
                             body: formData,
                           });
                           
@@ -821,7 +974,34 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
         </div>
       )}
 
-      <TicketPanel userId={teacher.id} role="teacher" />
+      {activeTab === 'analytics' && (
+        <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+          <AnalyticsDashboard 
+             students={students.map((student) => ({
+               id: student.id,
+               name: student.name,
+               performance: Array.isArray(student.performance)
+                 ? student.performance.map((entry) => ({
+                     subject: entry.subject || selectedSubject || t('General'),
+                     date: entry.date,
+                     score: entry.score,
+                   }))
+                 : [],
+               xp: student.xp,
+               badges: student.badges,
+               classId: student.classId || undefined,
+             }))}
+             attendance={attendance}
+             subjects={allSubjects}
+             currentUserRole="teacher"
+             theme={theme}
+          />
+        </div>
+      )}
+
+      {activeTab === 'tickets' && (
+        <TicketPanel userId={teacher.id} role="teacher" />
+      )}
       
       {showFaceRegistration && (
         <WebcamCapture

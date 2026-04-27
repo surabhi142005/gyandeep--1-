@@ -84,7 +84,7 @@ export function securityHeaders(req, res, next) {
 
 const cspDirectives = {
     'default-src': ["'self'", 'https:'],
-    'script-src': ["'self'", "'unsafe-inline'", "'unsafe-eval'", 'https:', "https://*.tawk.to", "https://cdnjs.cloudflare.com"],
+    'script-src': ["'self'", "'unsafe-inline'", "'unsafe-eval'", 'https:', "https://cdnjs.cloudflare.com"],
     'style-src': ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com", "https:"],
     'img-src': ["'self'", 'data:', 'blob:', 'https:'],
     'font-src': ["'self'", 'https://fonts.gstatic.com', 'https:'],

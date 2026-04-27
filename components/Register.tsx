@@ -1,9 +1,10 @@
-import React, { useMemo, useState } from 'react';
-import type { User } from '../types';
+import React, { useMemo, useState, useEffect } from 'react';
+import type { ClassConfig, User } from '../types';
 import { ROLE_DISPLAY_NAMES, UserRole as UserRoleEnum } from '../types';
 import WebcamCapture from './WebcamCapture';
 import Spinner from './Spinner';
 import { register as registerAccount, registerFace } from '../services/authService';
+import { fetchClasses } from '../services/dataService';
 import { t } from '../services/i18n';
 
 interface RegisterProps {
@@ -53,11 +54,35 @@ const Register: React.FC<RegisterProps> = ({ onRegister, theme, onNavigateToLogi
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [role, setRole] = useState<RegisterableRole>(UserRoleEnum.STUDENT);
+  const [classId, setClassId] = useState<string>('');
+  const [classes, setClasses] = useState<ClassConfig[]>([]);
+  const [isLoadingClasses, setIsLoadingClasses] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isRegisteringFace, setIsRegisteringFace] = useState(false);
   const [registeredUser, setRegisteredUser] = useState<User | null>(null);
   const [showWebcam, setShowWebcam] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Fetch classes when component mounts or role changes to student
+  useEffect(() => {
+    const loadClasses = async () => {
+      if (role === UserRoleEnum.STUDENT) {
+        setIsLoadingClasses(true);
+        try {
+          const response = await fetchClasses();
+          setClasses(Array.isArray(response) ? response : []);
+        } catch (err) {
+          console.error('Failed to load classes:', err);
+          setClasses([]);
+        } finally {
+          setIsLoadingClasses(false);
+        }
+      } else {
+        setClassId('');
+      }
+    };
+    loadClasses();
+  }, [role]);
 
   const colors = useMemo(() => THEME_COLORS[theme] || THEME_COLORS.indigo, [theme]);
 
@@ -79,9 +104,14 @@ const Register: React.FC<RegisterProps> = ({ onRegister, theme, onNavigateToLogi
       return;
     }
 
+    if (role === UserRoleEnum.STUDENT && classes.length > 0 && !classId) {
+      setError('Please select your class.');
+      return;
+    }
+
     setIsSubmitting(true);
     try {
-      const user = await registerAccount(email.trim(), password, name.trim(), role);
+      const user = await registerAccount(email.trim(), password, name.trim(), role, classId || undefined);
       setRegisteredUser(normalizeRegisteredUser(user));
     } catch (e: any) {
       setError(e.message || 'Registration failed. Please try again.');
@@ -170,7 +200,10 @@ const Register: React.FC<RegisterProps> = ({ onRegister, theme, onNavigateToLogi
                   <select
                     id="register-role"
                     value={role}
-                    onChange={(e) => setRole(e.target.value as RegisterableRole)}
+                    onChange={(e) => {
+                      setRole(e.target.value as RegisterableRole);
+                      setError(null);
+                    }}
                     className={`w-full p-3 text-base border border-gray-300 rounded-xl shadow-sm focus:outline-none focus:ring-2 ${colors.ring} bg-white`}
                   >
                     {REGISTERABLE_ROLES.map((option) => (
@@ -181,6 +214,34 @@ const Register: React.FC<RegisterProps> = ({ onRegister, theme, onNavigateToLogi
                   </select>
                   <p className="text-xs text-gray-500 mt-1">{t('Administrator accounts are created during initial setup.')}</p>
                 </div>
+
+                {role === UserRoleEnum.STUDENT && (
+                  <div>
+                    <label htmlFor="register-class" className="block text-sm font-medium text-gray-700 mb-1">{t('Class')}</label>
+                    <select
+                      id="register-class"
+                      value={classId}
+                      onChange={(e) => {
+                        setClassId(e.target.value);
+                        setError(null);
+                      }}
+                      disabled={isLoadingClasses}
+                      className={`w-full p-3 text-base border border-gray-300 rounded-xl shadow-sm focus:outline-none focus:ring-2 ${colors.ring} bg-white disabled:bg-gray-100 disabled:text-gray-500`}
+                    >
+                      <option value="">
+                        {isLoadingClasses ? t('Loading classes...') : t('Select your class')}
+                      </option>
+                      {classes.map((cls) => (
+                        <option key={cls.id} value={cls.id}>
+                          {cls.name}
+                        </option>
+                      ))}
+                    </select>
+                    {!isLoadingClasses && classes.length === 0 && (
+                      <p className="text-xs text-gray-500 mt-1">{t('No classes are available yet. Contact an administrator.')}</p>
+                    )}
+                  </div>
+                )}
 
                 <div>
                   <label htmlFor="register-password" className="block text-sm font-medium text-gray-700 mb-1">{t('Password')}</label>

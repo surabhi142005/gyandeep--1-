@@ -82,6 +82,18 @@ export function useTeacherSession({ classSession, onUpdateSession, historicalRec
             records: historicalRecords,
             exportedAt: new Date().toISOString()
         };
+        
+        // Trigger download
+        const blob = new Blob([JSON.stringify(sessionData, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `session-report-${classSession.subject || 'class'}-${new Date().toISOString().split('T')[0]}.json`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+        
         return sessionData;
     };
 

@@ -124,23 +124,26 @@ Subject: [your subject line here]
 
 router.post('/chat', async (req, res) => {
   try {
-    const { message, history } = req.body;
+    const { message, prompt, history, location, model } = req.body;
+    const inputMessage = message || prompt;
     
-    if (!message) {
-      return res.status(400).json({ error: 'Message is required' });
+    if (!inputMessage) {
+      return res.status(400).json({ error: 'Message or prompt is required' });
     }
 
     if (!GEMINI_API_KEY) {
       return res.json({ 
-        reply: 'AI chat requires API key to be configured. Please set GEMINI_API_KEY.'
+        reply: 'AI chat requires API key to be configured. Please set GEMINI_API_KEY.',
+        text: 'AI chat requires API key to be configured. Please set GEMINI_API_KEY.'
       });
     }
 
     const chatHistory = history || [];
-    const reply = await callGemini(message, chatHistory);
+    const reply = await callGemini(inputMessage, chatHistory);
 
     res.json({ 
       reply,
+      text: reply, // Add 'text' field for frontend compatibility
       sources: [],
     });
   } catch (error) {
@@ -164,7 +167,7 @@ router.post('/quiz/generate', async (req, res) => {
       });
     }
 
-    const quizPrompt = `Generate 5 multiple choice quiz questions based on the following content about ${subject || 'the topic'}:
+    const quizPrompt = `Generate 10 multiple choice quiz questions based on the following content about ${subject || 'the topic'}:
 
 ${notesText.slice(0, 5000)}
 
@@ -182,11 +185,20 @@ Format your response ONLY as a JSON array:
     const response = await callGemini(quizPrompt, [], { temperature: 0.3 });
     
     try {
-      const jsonMatch = response.match(/\[[\s\S]*\]/);
-      if (jsonMatch) {
-        let quiz = JSON.parse(jsonMatch[0]);
+      // Find JSON block more reliably
+      const startBracket = response.indexOf('[');
+      const endBracket = response.lastIndexOf(']');
+      
+      if (startBracket !== -1 && endBracket !== -1) {
+        const jsonStr = response.substring(startBracket, endBracket + 1);
+        let quiz = JSON.parse(jsonStr);
         if (Array.isArray(quiz)) {
-          return res.json({ quiz: quiz.slice(0, 5), subject });
+          // Normalize IDs and return
+          const normalizedQuiz = quiz.map((q, i) => ({
+            ...q,
+            id: q.id || `q${i + 1}`,
+          }));
+          return res.json({ quiz: normalizedQuiz, subject });
         }
       }
     } catch (parseError) {

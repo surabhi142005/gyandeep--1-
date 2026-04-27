@@ -22,7 +22,7 @@ const getAuthHeaders = (): Record<string, string> => {
 
 export const generateQuizFromNotes = async ({ notesText, subject, enableThinkingMode }: QuizGenerationOptions): Promise<QuizQuestion[]> => {
   const headers = getAuthHeaders();
-  const res = await fetch(`${getApiBase()}/api/quiz`, {
+  const res = await fetch(`${getApiBase()}/api/quiz/generate`, {
     method: 'POST',
     headers,
     body: JSON.stringify({ notesText, subject, enableThinkingMode })

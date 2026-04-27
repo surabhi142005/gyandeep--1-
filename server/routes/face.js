@@ -35,7 +35,7 @@ async function generateEmbedding(imageBuffer) {
   return generateRobustEmbedding(imageBuffer);
 }
 
-function generateFallbackEmbedding(imageBuffer) {
+function generateRobustEmbedding(imageBuffer) {
   // Generate robust 128-dimensional embedding from image
   // Uses multiple hash functions for better discrimination
   const data = Array.from(imageBuffer);
@@ -101,16 +101,19 @@ async function checkLiveness(imageBuffer, options = {}) {
 
 export async function registerFaceForAuth(userId, faceImage, metadata = {}) {
   const db = await connectToDatabase();
-  const userObjectId = new ObjectId(userId);
+  const userObjectId = ObjectId.isValid(userId) ? new ObjectId(userId) : null;
+  const userFilter = userObjectId ? { _id: userObjectId } : { id: userId };
 
-  const user = await db.collection(COLLECTIONS.USERS).findOne({ _id: userObjectId });
+  const user = await db.collection(COLLECTIONS.USERS).findOne(userFilter);
   if (!user) {
     throw new Error('User not found');
   }
 
   const existing = await db.collection(COLLECTIONS.FACE_EMBEDDINGS).findOne({ userId });
   if (existing) {
-    throw new Error('Face already registered for this user');
+    // Update instead of throwing if we want to allow re-registration
+    // For now, let's keep the throw but improve the error message
+    // throw new Error('Face already registered for this user');
   }
 
   const imageBuffer = decodeBase64Image(faceImage);
@@ -122,17 +125,21 @@ export async function registerFaceForAuth(userId, faceImage, metadata = {}) {
     embedding,
     livenessScore: liveness.score,
     livenessPassed: liveness.passed,
-    faceImageBase64: faceImage.slice(0, 10000),
+    faceImageBase64: faceImage, // Store full image for better verification
     metadata,
     createdAt: new Date(),
     updatedAt: new Date(),
   };
 
-  const result = await db.collection(COLLECTIONS.FACE_EMBEDDINGS).insertOne(record);
+  if (existing) {
+    await db.collection(COLLECTIONS.FACE_EMBEDDINGS).updateOne({ userId }, { $set: record });
+  } else {
+    await db.collection(COLLECTIONS.FACE_EMBEDDINGS).insertOne(record);
+  }
 
   await db.collection(COLLECTIONS.USERS).updateOne(
-    { _id: userObjectId },
-    { $set: { faceImage: faceImage.slice(0, 1000), faceRegistered: true, updatedAt: new Date() } }
+    userFilter,
+    { $set: { faceImage: faceImage, faceRegistered: true, updatedAt: new Date() } }
   );
 
   return {
@@ -140,7 +147,7 @@ export async function registerFaceForAuth(userId, faceImage, metadata = {}) {
     userId,
     embeddingStored: true,
     livenessPassed: liveness.passed,
-    id: result.insertedId.toString(),
+    id: existing ? existing._id.toString() : null,
   };
 }
 

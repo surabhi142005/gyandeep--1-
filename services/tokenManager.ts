@@ -27,7 +27,7 @@ class TokenManager {
   private onLogoutCallbacks: Set<() => void> = new Set();
 
   getTokens(): TokenData | null {
-    const stored = localStorage.getItem(TOKEN_KEY);
+    const stored = sessionStorage.getItem(TOKEN_KEY);
     if (!stored) return null;
     try {
       return JSON.parse(stored);
@@ -37,12 +37,12 @@ class TokenManager {
   }
 
   setTokens(tokens: TokenData): void {
-    localStorage.setItem(TOKEN_KEY, JSON.stringify(tokens));
+    sessionStorage.setItem(TOKEN_KEY, JSON.stringify(tokens));
     this.onTokenRefreshCallbacks.forEach(cb => cb(tokens));
   }
 
   clearTokens(): void {
-    localStorage.removeItem(TOKEN_KEY);
+    sessionStorage.removeItem(TOKEN_KEY);
     this.onLogoutCallbacks.forEach(cb => cb());
   }
 

@@ -20,7 +20,6 @@ import { ThemeSwitcher, ToastQueue } from './components/ui';
 import ErrorBoundary from './components/ErrorBoundary';
 import { RealtimeProvider } from './services/RealtimeProvider';
 import { ConnectionStatus, NotificationCenter, NotificationToastList } from './components/realtime';
-import TawkTo from './components/TawkTo';
 
 
 // Extracted hooks
@@ -422,7 +421,6 @@ const App: React.FC = () => {
 
     return (
         <ErrorBoundary>
-            <TawkTo />
             <RealtimeProvider userId={currentUser?.id} userRole={currentUser?.role}>
             <style>{skipLinkStyle()}</style>
             <a href="#main-content" className="skip-link">{t('Skip to content')}</a>

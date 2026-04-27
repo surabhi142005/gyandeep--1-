@@ -20,7 +20,8 @@ import {
   ChevronRight,
   PlayCircle,
   FileText,
-  Camera
+  Camera,
+  Download
 } from 'lucide-react';
 import type { Student, ClassSession, HistoricalSessionRecord } from '../types';
 import WebcamCapture from './WebcamCapture';
@@ -34,12 +35,81 @@ import Leaderboard from './Leaderboard';
 import AnnouncementBoard from './AnnouncementBoard';
 import TicketPanel from './TicketPanel';
 import type { Announcement } from './AnnouncementBoard';
-import { fetchBadges, fetchCentralizedNotesCombined } from '../services/dataService';
+import {
+  fetchAvailableQuizzes,
+  fetchBadges,
+  fetchCentralizedNotesCombined,
+  fetchCentralizedNotes,
+  fetchStudentAttendanceHistory,
+  fetchStudentNotes,
+  listClassNotes
+} from '../services/dataService';
 import { realtimeClient } from '../services/realtimeClient';
 const Dashboard3D = React.lazy(() => import('./Dashboard3D'));
 import StudentLearningTwin from './StudentLearningTwin';
 import { DashboardLayout, Card, Button, Badge, Input } from './ui';
 import { t } from '../services/i18n';
+
+const NotesList: React.FC<{ classId?: string; subjectId: string }> = ({ classId, subjectId }) => {
+  const [notes, setNotes] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const loadNotes = async () => {
+      if (!subjectId) {
+        setLoading(false);
+        return;
+      }
+      setLoading(true);
+      try {
+        const [sessionNotes, centralizedNotes] = await Promise.all([
+          classId ? listClassNotes({ classId, subjectId }) : Promise.resolve({ data: [] }),
+          fetchCentralizedNotes({ subjectId, classId })
+        ]);
+        
+        const combined = [
+          ...(Array.isArray(sessionNotes.data) ? sessionNotes.data : []),
+          ...(Array.isArray(centralizedNotes) ? centralizedNotes : [])
+        ];
+        setNotes(combined);
+      } catch (err) {
+        console.error('Failed to load notes:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    loadNotes();
+  }, [classId, subjectId]);
+
+  if (loading) return <Spinner size="sm" />;
+  if (notes.length === 0) return <p className="text-xs italic text-gray-500">No downloadable notes found.</p>;
+
+  return (
+    <div className="space-y-2 mt-4">
+      <h4 className="text-xs font-bold uppercase tracking-wider text-gray-400 mb-2">Downloadable Files</h4>
+      {notes.map((note, idx) => (
+        <div key={note.id || idx} className="flex items-center justify-between p-3 rounded-xl bg-gray-50 dark:bg-gray-800 border border-gray-100 dark:border-gray-700">
+          <div className="flex items-center gap-3">
+            <FileText size={18} className="text-primary" />
+            <div>
+              <p className="text-sm font-medium line-clamp-1">{note.title || note.fileName || 'Untitled Note'}</p>
+              <p className="text-[10px] text-gray-500">{note.noteType === 'centralized_notes' ? 'Centralized' : 'Session'}</p>
+            </div>
+          </div>
+          <a 
+            href={note.url} 
+            target="_blank" 
+            rel="noopener noreferrer"
+            className="p-2 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 text-primary transition-colors"
+            title="Download/View"
+          >
+            <Download size={16} />
+          </a>
+        </div>
+      ))}
+    </div>
+  );
+};
 
 const SIDEBAR_ITEMS = [
   { id: 'learning', label: t('Learning Hub'), icon: BookOpen },
@@ -73,6 +143,11 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({
   const [expandedUnit, setExpandedUnit] = useState<number | null>(null);
   const [notesTab, setNotesTab] = useState<'session' | 'centralized'>('session');
   const [badges, setBadges] = useState<string[]>(Array.isArray(student.badges) ? student.badges : []);
+  const [attendanceHistory, setAttendanceHistory] = useState<any[]>([]);
+  const [attendanceSummary, setAttendanceSummary] = useState<any>(null);
+  const [availableQuizzes, setAvailableQuizzes] = useState<any[]>([]);
+  const [selectedQuiz, setSelectedQuiz] = useState<any | null>(null);
+  const [studentNotes, setStudentNotes] = useState<any[]>([]);
 
   const sessionEnded = !!classSession.endedAt;
 
@@ -131,6 +206,10 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({
     setQuizTaken(false);
   }, [classSession.code]);
 
+  useEffect(() => {
+    setQuizTaken(false);
+  }, [selectedQuiz?.id]);
+
   // RT-4: Subscribe to XP updates in real-time
   useEffect(() => {
     if (!student?.id) return;
@@ -148,6 +227,53 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({
       unsubXp();
     };
   }, [student?.id]);
+
+  useEffect(() => {
+    if (!student?.id) return;
+
+    fetchStudentAttendanceHistory(student.id, { limit: 6 })
+      .then((data) => {
+        setAttendanceHistory(Array.isArray(data?.records) ? data.records : []);
+        setAttendanceSummary(data?.stats || null);
+      })
+      .catch((err) => {
+        console.error('Failed to load attendance history:', err);
+        setAttendanceHistory([]);
+        setAttendanceSummary(null);
+      });
+  }, [student?.id, student.attendanceMarked]);
+
+  useEffect(() => {
+    if (!student.classId) {
+      setAvailableQuizzes([]);
+      return;
+    }
+
+    fetchAvailableQuizzes(student.classId)
+      .then((data) => {
+        setAvailableQuizzes(Array.isArray(data?.quizzes) ? data.quizzes : []);
+      })
+      .catch((err) => {
+        console.error('Failed to load available quizzes:', err);
+        setAvailableQuizzes([]);
+      });
+  }, [student.classId, quizTaken]);
+
+  useEffect(() => {
+    if (!student.classId) {
+      setStudentNotes([]);
+      return;
+    }
+
+    fetchStudentNotes(student.classId, classSession.subject || undefined)
+      .then((data) => {
+        setStudentNotes(Array.isArray(data?.notes) ? data.notes : []);
+      })
+      .catch((err) => {
+        console.error('Failed to load student notes:', err);
+        setStudentNotes([]);
+      });
+  }, [student.classId, classSession.subject]);
 
   const handleAttendance = async (imageDataUrl: string) => {
     setIsVerifying(true);
@@ -346,14 +472,110 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({
                      <Activity size={20} style={{ color: 'var(--color-secondary)' }} />
                      {t('Session Notes')}
                    </h3>
-                   <div className="space-y-3">
+                   <div className="space-y-4">
                       {classSession.notes ? (
                         <p className="text-sm leading-relaxed p-4 rounded-xl italic" style={{ backgroundColor: 'var(--color-bg)', color: 'var(--color-text)' }}>
                           "{classSession.notes}"
                         </p>
                       ) : (
-                        <p className="text-sm italic" style={{ color: 'var(--color-text-muted)' }}>{t('No notes from teacher yet.')}</p>
+                        <p className="text-sm italic text-gray-500">{t('No session notes available.')}</p>
                       )}
+                      
+                      {classSession.subject && (
+                        <NotesList classId={student.classId} subjectId={classSession.subject} />
+                      )}
+                   </div>
+                </Card>
+
+                <Card padding="lg">
+                   <h3 className="text-lg font-bold mb-4 flex items-center gap-2">
+                     <Calendar size={20} style={{ color: 'var(--color-primary)' }} />
+                     {t('My Attendance')}
+                   </h3>
+                   {attendanceSummary ? (
+                     <div className="space-y-3">
+                       <div className="grid grid-cols-3 gap-3">
+                         <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-100">
+                           <p className="text-[10px] font-bold uppercase text-emerald-600">{t('Present')}</p>
+                           <p className="text-lg font-black text-emerald-700">{attendanceSummary.present || 0}</p>
+                         </div>
+                         <div className="p-3 rounded-xl bg-amber-50 border border-amber-100">
+                           <p className="text-[10px] font-bold uppercase text-amber-600">{t('Late')}</p>
+                           <p className="text-lg font-black text-amber-700">{attendanceSummary.late || 0}</p>
+                         </div>
+                         <div className="p-3 rounded-xl bg-rose-50 border border-rose-100">
+                           <p className="text-[10px] font-bold uppercase text-rose-600">{t('Absent')}</p>
+                           <p className="text-lg font-black text-rose-700">{attendanceSummary.absent || 0}</p>
+                         </div>
+                       </div>
+                       <p className="text-xs font-medium" style={{ color: 'var(--color-text-muted)' }}>
+                         {t('Attendance Rate')}: {attendanceSummary.attendanceRate || 0}%
+                       </p>
+                       <div className="space-y-2">
+                         {attendanceHistory.length > 0 ? attendanceHistory.map((record) => (
+                           <div key={record.id} className="flex items-center justify-between p-3 rounded-xl bg-gray-50 dark:bg-gray-800 border border-gray-100 dark:border-gray-700">
+                             <div>
+                               <p className="text-sm font-semibold">{record.subject || t('General Session')}</p>
+                               <p className="text-xs" style={{ color: 'var(--color-text-muted)' }}>{record.date || t('Unknown date')}</p>
+                             </div>
+                             <Badge variant={record.status === 'Present' ? 'success' : record.status === 'Late' ? 'secondary' : 'danger'} size="sm">
+                               {record.status}
+                             </Badge>
+                           </div>
+                         )) : (
+                           <p className="text-sm italic text-gray-500">{t('No attendance records yet.')}</p>
+                         )}
+                       </div>
+                     </div>
+                   ) : (
+                     <p className="text-sm italic text-gray-500">{t('Attendance history is loading or unavailable.')}</p>
+                   )}
+                </Card>
+
+                <Card padding="lg">
+                   <h3 className="text-lg font-bold mb-4 flex items-center gap-2">
+                     <BookOpen size={20} style={{ color: 'var(--color-primary)' }} />
+                     {t('Centralized Library')}
+                   </h3>
+                   <div className="space-y-4">
+                      <div className="flex gap-2 mb-2 overflow-x-auto pb-2">
+                        {['Mathematics', 'Science', 'English', 'History'].map(sub => (
+                          <button
+                            key={sub}
+                            onClick={() => setExamNotesSubject(sub)}
+                            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all whitespace-nowrap ${examNotesSubject === sub ? 'bg-primary text-white shadow-md' : 'bg-gray-100 dark:bg-gray-800 text-gray-500'}`}
+                          >
+                            {t(sub)}
+                          </button>
+                        ))}
+                      </div>
+                      <NotesList classId={student.classId} subjectId={examNotesSubject} />
+                   </div>
+                </Card>
+
+                <Card padding="lg">
+                   <h3 className="text-lg font-bold mb-4 flex items-center gap-2">
+                     <FileText size={20} style={{ color: 'var(--color-secondary)' }} />
+                     {t('My Notes')}
+                   </h3>
+                   <div className="space-y-3">
+                     {studentNotes.length > 0 ? studentNotes.slice(0, 5).map((note) => (
+                       <div key={note.id} className="flex items-center justify-between p-3 rounded-xl bg-gray-50 dark:bg-gray-800 border border-gray-100 dark:border-gray-700">
+                         <div>
+                           <p className="text-sm font-semibold">{note.fileName || t('Shared note')}</p>
+                           <p className="text-xs" style={{ color: 'var(--color-text-muted)' }}>{note.subject || t('General')}</p>
+                         </div>
+                         {note.fileUrl ? (
+                           <a href={note.fileUrl} target="_blank" rel="noopener noreferrer" className="text-sm font-semibold text-primary hover:underline">
+                             {t('Open')}
+                           </a>
+                         ) : (
+                           <span className="text-xs text-gray-400">{t('No file')}</span>
+                         )}
+                       </div>
+                     )) : (
+                       <p className="text-sm italic text-gray-500">{t('No class notes have been shared yet.')}</p>
+                     )}
                    </div>
                 </Card>
              </div>
@@ -378,9 +600,9 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({
                       </div>
                       <h3 className="text-xl font-bold mb-2">{t('Quiz Completed!')}</h3>
                       <p className="text-sm" style={{ color: 'var(--color-text-muted)' }}>{t("You've earned 50 XP for completing today's quiz.")}</p>
-                      <Button variant="secondary" className="mt-8" onClick={() => setQuizTaken(false)}>{t('Review Answers')}</Button>
+                      <Button variant="secondary" className="mt-8" onClick={() => setQuizTaken(false)}>{t('Back to Quizzes')}</Button>
                    </div>
-                 ) : (
+                 ) : classSession.quiz && classSession.quiz.length > 0 ? (
                     <QuizView 
                       quiz={classSession.quiz || []}
                       subject={classSession.subject || 'General'}
@@ -392,6 +614,47 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({
                       }}
                       theme={theme}
                     />
+                 ) : selectedQuiz ? (
+                    <QuizView
+                      quiz={selectedQuiz.questions || []}
+                      subject={selectedQuiz.subject || 'General'}
+                      sessionId={selectedQuiz.sessionId}
+                      studentId={student.id}
+                      onSubmit={(score) => {
+                        onUpdatePerformance(student.id, selectedQuiz.subject || 'General', score);
+                        setQuizTaken(true);
+                      }}
+                      theme={theme}
+                    />
+                 ) : (
+                    <div className="space-y-4">
+                      {availableQuizzes.length > 0 ? availableQuizzes.map((quiz) => (
+                        <div key={quiz.id} className="p-4 rounded-2xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                          <div>
+                            <p className="text-lg font-bold">{quiz.title}</p>
+                            <p className="text-sm" style={{ color: 'var(--color-text-muted)' }}>
+                              {quiz.subject || t('General')} • {quiz.questionCount || 0} {t('questions')}
+                            </p>
+                            {quiz.alreadyAttempted && (
+                              <p className="text-xs mt-1 text-emerald-600 font-semibold">
+                                {t('Completed')} {quiz.attemptScore != null ? `• ${quiz.attemptScore}%` : ''}
+                              </p>
+                            )}
+                          </div>
+                          <Button
+                            variant={quiz.alreadyAttempted ? 'secondary' : 'primary'}
+                            onClick={() => setSelectedQuiz(quiz)}
+                          >
+                            {quiz.alreadyAttempted ? t('Review Quiz') : t('Start Quiz')}
+                          </Button>
+                        </div>
+                      )) : (
+                        <div className="py-12 text-center rounded-2xl border-2 border-dashed border-gray-200 dark:border-gray-700">
+                          <HelpCircle size={40} className="mx-auto mb-4 text-gray-300" />
+                          <p className="font-semibold">{t('No published quizzes available right now.')}</p>
+                        </div>
+                      )}
+                    </div>
                  )}
               </Card>
            </div>

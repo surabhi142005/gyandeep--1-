@@ -41,6 +41,7 @@ import metricsRouter from './routes/metrics.js';
 import auditLogsRouter from './routes/auditLogs.js';
 import announcementsRouter from './routes/announcements.js';
 import sessionsRouter from './routes/sessions.js';
+import quizRouter from './routes/quiz.js';
 import faceRouter from './routes/face.js';
 import emailRouter from './routes/email.js';
 import teacherStatsRouter from './routes/teacherStats.js';
@@ -239,6 +240,9 @@ app.use('/api/announcements', announcementsRouter);
 
 // Sessions routes (quiz, attendance) - no CSRF
 app.use('/api/sessions', sessionsRouter);
+
+// Quiz routes exposed separately for dashboard contract compatibility
+app.use('/api/quiz', quizRouter);
 
 // Face routes (registration/verification) - no CSRF
 app.use('/api/face', faceRouter);

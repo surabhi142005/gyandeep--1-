@@ -149,7 +149,7 @@ export async function ensureValidToken(): Promise<boolean> {
 
 // ── Public API ────────────────────────────────────────────────────────────────
 
-export async function register(email: string, password: string, name: string, role = 'student') {
+export async function register(email: string, password: string, name: string, role = 'student', classId?: string) {
   updateAuthState({ isLoading: true });
 
   await getCSRFToken();
@@ -162,7 +162,7 @@ export async function register(email: string, password: string, name: string, ro
       'Content-Type': 'application/json',
       ...csrfHeaders,
     },
-    body: JSON.stringify({ email, password, name, role }),
+    body: JSON.stringify({ email, password, name, role, classId }),
   });
 
   if (!res.ok) {

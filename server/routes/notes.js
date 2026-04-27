@@ -136,4 +136,61 @@ router.delete('/:id', authMiddleware, async (req, res) => {
   }
 });
 
+/**
+ * GET /api/notes/student/:classId
+ * Get notes for a specific class (student view)
+ */
+router.get('/student/:classId', authMiddleware, async (req, res) => {
+  try {
+    const db = await connectToDatabase();
+    const { classId } = req.params;
+    const { subjectId } = req.query;
+
+    const filter = {
+      classId,
+      deletedAt: null,
+    };
+    if (subjectId) filter.subjectId = subjectId;
+
+    const notes = await db.collection(COLLECTIONS.SESSION_NOTES)
+      .find(filter)
+      .sort({ createdAt: -1 })
+      .toArray();
+
+    // Enrich with subject info
+    const notesWithSubject = await Promise.all(notes.map(async (note) => {
+      let subjectName = note.subjectId;
+      if (note.subjectId) {
+        const subject = await db.collection(COLLECTIONS.SUBJECTS).findOne(
+          { _id: new ObjectId(note.subjectId) },
+          { projection: { name: 1 } }
+        );
+        subjectName = subject?.name || note.subjectId;
+      }
+      return {
+        id: note._id?.toString() || note.id,
+        fileName: note.fileName || null,
+        subject: subjectName,
+        uploadedAt: note.createdAt,
+        fileUrl: note.url || null,
+        content: note.content?.slice(0, 200) || null,
+      };
+    }));
+
+    if (notesWithSubject.length === 0) {
+      return res.json({
+        notes: [],
+        message: 'No notes uploaded yet for this class',
+      });
+    }
+
+    res.json({
+      notes: notesWithSubject,
+    });
+  } catch (error) {
+    console.error('Get student notes error:', error);
+    res.status(500).json({ error: 'Failed to get student notes' });
+  }
+});
+
 export default router;

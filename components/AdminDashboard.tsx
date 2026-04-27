@@ -802,6 +802,26 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     <option value={UserRoleEnum.ADMIN}>{t('Administrator')}</option>
                   </select>
                 </div>
+                
+                {newUserRole === UserRoleEnum.TEACHER && (
+                  <div className="md:col-span-2 p-4 bg-gray-50 dark:bg-gray-800/50 rounded-xl border border-gray-100 dark:border-gray-700">
+                    <label className="block text-sm font-bold mb-3">{t('Assign Subjects')}</label>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                      {allSubjects.map(subject => (
+                        <label key={subject.id} className="flex items-center gap-2 cursor-pointer group">
+                          <input
+                            type="checkbox"
+                            className="w-4 h-4 rounded border-gray-300 text-primary focus:ring-primary"
+                            checked={newUserAssignedSubjects.includes(subject.id)}
+                            onChange={(e) => handleNewTeacherSubjectChange(subject.id, e.target.checked)}
+                          />
+                          <span className="text-sm group-hover:text-primary transition-colors">{subject.name}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
                 <div className="md:col-span-2">
                   <label className="block text-sm font-bold mb-2">{t('Password')}</label>
                   <Input
@@ -1247,6 +1267,26 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
               <form onSubmit={handleSaveEdit} className="space-y-4">
                 <Input value={editedName} onChange={e => setEditedName(e.target.value)} label="Full Name" />
                 <Input value={editedId} onChange={e => setEditedId(e.target.value)} label="User ID" />
+                
+                {editingUser.role === UserRoleEnum.TEACHER && (
+                  <div className="p-4 bg-gray-50 dark:bg-gray-800/50 rounded-xl border border-gray-100 dark:border-gray-700">
+                    <label className="block text-sm font-bold mb-3">{t('Assigned Subjects')}</label>
+                    <div className="grid grid-cols-2 gap-3">
+                      {allSubjects.map(subject => (
+                        <label key={subject.id} className="flex items-center gap-2 cursor-pointer group">
+                          <input
+                            type="checkbox"
+                            className="w-4 h-4 rounded border-gray-300 text-primary focus:ring-primary"
+                            checked={editedAssignedSubjects.includes(subject.id)}
+                            onChange={(e) => handleEditTeacherSubjectChange(subject.id, e.target.checked)}
+                          />
+                          <span className="text-sm group-hover:text-primary transition-colors">{subject.name}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
                 {editUserError && <p className="text-xs text-red-500">{editUserError}</p>}
                 <div className="flex justify-end gap-3 pt-4">
                   <Button variant="ghost" onClick={handleCancelEdit}>Cancel</Button>

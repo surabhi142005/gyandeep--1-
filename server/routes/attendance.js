@@ -539,4 +539,98 @@ router.get('/weekly', authMiddleware, async (req, res) => {
   }
 });
 
+/**
+ * GET /api/attendance/student/:id
+ * Get attendance history for a specific student
+ */
+router.get('/student/:id', authMiddleware, async (req, res) => {
+  try {
+    const db = await connectToDatabase();
+    const { id: studentId } = req.params;
+    const { startDate, endDate, limit = '50' } = req.query;
+
+    const limitNum = Math.min(100, Math.max(1, parseInt(limit, 10) || 50));
+
+    const filter = { studentId };
+    if (startDate || endDate) {
+      filter.timestamp = {};
+      if (startDate) filter.timestamp.$gte = new Date(startDate);
+      if (endDate) filter.timestamp.$lte = new Date(endDate);
+    }
+
+    const records = await db.collection(COLLECTIONS.ATTENDANCE)
+      .find(filter)
+      .sort({ timestamp: -1 })
+      .limit(limitNum)
+      .toArray();
+
+    // Get subject info for each record
+    const recordsWithSubject = await Promise.all(records.map(async (record) => {
+      let subjectName = null;
+      if (record.sessionId) {
+        const session = await db.collection(COLLECTIONS.CLASS_SESSIONS).findOne(
+          { _id: record.sessionId },
+          { projection: { subjectId: 1 } }
+        );
+        subjectName = session?.subjectId || null;
+      }
+      return {
+        id: record._id?.toString() || record.id,
+        date: record.timestamp?.toISOString().split('T')[0] || null,
+        subject: subjectName,
+        status: record.status,
+        time: record.timestamp?.toISOString().slice(11, 19) || null,
+        markedAt: record.timestamp,
+      };
+    }));
+
+    // Calculate stats
+    const stats = {
+      total: records.length,
+      present: records.filter(r => r.status === 'Present').length,
+      absent: records.filter(r => r.status === 'Absent').length,
+      late: records.filter(r => r.status === 'Late').length,
+      excused: records.filter(r => r.status === 'Excused').length,
+    };
+    stats.attendanceRate = stats.total > 0
+      ? ((stats.present + stats.late + stats.excused) / stats.total * 100).toFixed(1)
+      : 0;
+
+    // Calculate streak (consecutive days present)
+    let streak = 0;
+    const sortedDates = [...new Set(records
+      .filter(r => r.status === 'Present' || r.status === 'Late')
+      .map(r => r.timestamp?.toISOString().split('T')[0])
+    )].sort().reverse();
+
+    if (sortedDates.length > 0) {
+      const today = new Date().toISOString().split('T')[0];
+      const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0];
+
+      if (sortedDates[0] === today || sortedDates[0] === yesterday) {
+        streak = 1;
+        for (let i = 1; i < sortedDates.length; i++) {
+          const prevDate = new Date(sortedDates[i - 1]);
+          const currDate = new Date(sortedDates[i]);
+          const diffDays = (prevDate - currDate) / 86400000;
+          if (diffDays === 1) {
+            streak++;
+          } else {
+            break;
+          }
+        }
+      }
+    }
+
+    res.json({
+      records: recordsWithSubject,
+      stats,
+      streak,
+    });
+  } catch (error) {
+    console.error('Get student attendance error:', error);
+    res.status(500).json({ error: 'Failed to get student attendance' });
+  }
+});
+
 export default router;

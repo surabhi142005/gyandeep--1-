@@ -98,6 +98,13 @@ export const saveUsers = async (users: any[]) => {
 
 export const bulkImportUsers = async (users: any[]) => saveUsers(users);
 
+export const updateUserProfile = async (userId: string, updates: any) => {
+  return apiRequest('/api/users/profile', {
+    method: 'PUT',
+    body: JSON.stringify({ userId, updates }),
+  });
+};
+
 export const fetchBadges = async (userId: string): Promise<string[]> => {
   const data = await apiRequest(`/api/users/${userId}/badges`, { method: 'GET' });
   return Array.isArray(data?.badges) ? data.badges : [];
@@ -163,6 +170,13 @@ export const uploadClassNotes = async (params: { classId: string; subjectId: str
 export const listClassNotes = async (params: { classId: string; subjectId: string }) => {
   const qs = new URLSearchParams({ classId: params.classId, subjectId: params.subjectId });
   return await apiRequest(`/api/notes?${qs.toString()}`, { method: 'GET' });
+};
+
+export const fetchStudentNotes = async (classId: string, subjectId?: string) => {
+  const params = new URLSearchParams();
+  if (subjectId) params.set('subjectId', subjectId);
+  const query = params.toString();
+  return apiRequest(`/api/notes/student/${classId}${query ? `?${query}` : ''}`, { method: 'GET' });
 };
 
 // ─── Centralized Notes ──────────────────────────────────────────────────────
@@ -707,6 +721,15 @@ export const fetchSessionAttendance = async (sessionId: string) => {
   return Array.isArray(data) ? data : (data?.items || []);
 };
 
+export const fetchStudentAttendanceHistory = async (studentId: string, options?: { startDate?: string; endDate?: string; limit?: number }) => {
+  const params = new URLSearchParams();
+  if (options?.startDate) params.set('startDate', options.startDate);
+  if (options?.endDate) params.set('endDate', options.endDate);
+  if (options?.limit) params.set('limit', String(options.limit));
+  const query = params.toString();
+  return apiRequest(`/api/attendance/student/${studentId}${query ? `?${query}` : ''}`, { method: 'GET' });
+};
+
 export const verifySessionCode = async (code: string) => {
   return apiRequest(`/api/sessions/code/${code.toUpperCase()}/verify`, { method: 'GET' });
 };
@@ -724,6 +747,14 @@ export const submitQuiz = async (sessionId: string, studentId: string, answers: 
     method: 'POST',
     body: JSON.stringify({ studentId, answers }),
   });
+};
+
+export const fetchAvailableQuizzes = async (classId: string) => {
+  return apiRequest(`/api/quiz/available/${classId}`, { method: 'GET' });
+};
+
+export const fetchQuizResults = async (quizId: string) => {
+  return apiRequest(`/api/quiz/${quizId}/results`, { method: 'GET' });
 };
 
 export const fetchLeaderboard = async (classId?: string, limit?: number) => {

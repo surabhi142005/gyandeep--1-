@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { User, UserPreferences } from '../types';
 import { t } from '../services/i18n';
+import { updateUserProfile } from '../services/dataService';
 
 interface UserProfileProps {
     user: User;
@@ -24,26 +25,14 @@ const UserProfile: React.FC<UserProfileProps> = ({ user, onUpdateUser, onClose, 
                 preferences
             };
 
-            const API_BASE = import.meta.env.VITE_API_URL || '';
-            const response = await fetch(`${API_BASE}/api/users/profile`, {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ userId: user.id, updates })
-            });
-
-            const data = await response.json();
-            if (response.ok) {
-                setMessage({ text: 'Profile updated successfully!', type: 'success' });
-                // Update local user state
-                onUpdateUser({ ...user, ...updates });
-                setTimeout(onClose, 1500);
-            } else {
-                setMessage({ text: data.error || 'Failed to update profile', type: 'error' });
-            }
+            const data = await updateUserProfile(user.id, updates);
+            
+            setMessage({ text: 'Profile updated successfully!', type: 'success' });
+            // Update local user state
+            onUpdateUser({ ...user, ...updates });
+            setTimeout(onClose, 1500);
         } catch (error: any) {
-            const msg = error instanceof TypeError && error.message === 'Failed to fetch'
-                ? 'Unable to connect to the server. Please check your connection.'
-                : (error.message || 'Error saving profile');
+            const msg = error.message || 'Error saving profile';
             setMessage({ text: msg, type: 'error' });
         } finally {
             setSaving(false);

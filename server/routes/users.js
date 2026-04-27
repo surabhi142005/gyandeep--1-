@@ -66,6 +66,79 @@ router.get('/', async (req, res) => {
   }
 });
 
+/**
+ * POST /api/users
+ * Create a new user (admin function)
+ */
+router.post('/', authMiddleware, async (req, res) => {
+  try {
+    const db = await connectToDatabase();
+    const { name, email, password, role, classId, assignedSubjects } = req.body;
+
+    if (!name || !email || !password) {
+      return res.status(400).json({ error: 'Name, email, and password are required' });
+    }
+
+    // Validate email format
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      return res.status(400).json({ error: 'Invalid email format' });
+    }
+
+    // Check if user already exists
+    const existing = await db.collection(COLLECTIONS.USERS).findOne({ email });
+    if (existing) {
+      return res.status(409).json({ error: 'Email already registered' });
+    }
+
+    // Validate password
+    if (password.length < 8) {
+      return res.status(400).json({ error: 'Password must be at least 8 characters' });
+    }
+
+    const hashedPassword = await bcrypt.hash(password, 12);
+
+    const newUser = {
+      name,
+      email,
+      password: hashedPassword,
+      role: role || 'student',
+      classId: classId ? (ObjectId.isValid(classId) ? new ObjectId(classId) : classId) : null,
+      assignedSubjects: Array.isArray(assignedSubjects) ? assignedSubjects : [],
+      faceImage: null,
+      badges: [],
+      xp: 0,
+      level: 1,
+      coins: 0,
+      streak: 0,
+      active: true,
+      emailVerified: false,
+      preferences: {},
+      history: [],
+      performance: [],
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+
+    const result = await db.collection(COLLECTIONS.USERS).insertOne(newUser);
+
+    res.status(201).json({
+      ok: true,
+      id: result.insertedId.toString(),
+      user: {
+        id: result.insertedId.toString(),
+        name,
+        email,
+        role: newUser.role,
+        classId: newUser.classId?.toString() || null,
+        active: true,
+      },
+    });
+  } catch (error) {
+    console.error('Create user error:', error);
+    res.status(500).json({ error: 'Failed to create user' });
+  }
+});
+
 router.post('/bulk', authMiddleware, async (req, res) => {
   try {
     const users = Array.isArray(req.body) ? req.body : req.body?.users;
@@ -123,11 +196,18 @@ router.post('/bulk', authMiddleware, async (req, res) => {
   }
 });
 
+const getUserQuery = (id) => {
+  if (ObjectId.isValid(id)) {
+    return { _id: new ObjectId(id) };
+  }
+  return { $or: [{ id: id }, { odId: id }] };
+};
+
 router.get('/:id', authMiddleware, async (req, res) => {
   try {
     const db = await connectToDatabase();
     const user = await db.collection(COLLECTIONS.USERS).findOne(
-      { _id: new ObjectId(req.params.id) },
+      getUserQuery(req.params.id),
       { projection: { password: 0 } }
     );
     if (!user) {
@@ -150,7 +230,7 @@ router.patch('/:id', authMiddleware, async (req, res) => {
     }
     
     await db.collection(COLLECTIONS.USERS).updateOne(
-      { _id: new ObjectId(req.params.id) },
+      getUserQuery(req.params.id),
       { $set: { ...normalizeUserPayload(updates), updatedAt: new Date() } }
     );
     res.json({ ok: true });
@@ -163,7 +243,7 @@ router.patch('/:id', authMiddleware, async (req, res) => {
 router.delete('/:id', authMiddleware, async (req, res) => {
   try {
     const db = await connectToDatabase();
-    await db.collection(COLLECTIONS.USERS).deleteOne({ _id: new ObjectId(req.params.id) });
+    await db.collection(COLLECTIONS.USERS).deleteOne(getUserQuery(req.params.id));
     res.json({ ok: true });
   } catch (error) {
     console.error('Delete user error:', error);
@@ -175,7 +255,7 @@ router.get('/:id/badges', authMiddleware, async (req, res) => {
   try {
     const db = await connectToDatabase();
     const user = await db.collection(COLLECTIONS.USERS).findOne(
-      { _id: new ObjectId(req.params.id) },
+      getUserQuery(req.params.id),
       { projection: { badges: 1, name: 1 } }
     );
     if (!user) {
@@ -185,6 +265,38 @@ router.get('/:id/badges', authMiddleware, async (req, res) => {
   } catch (error) {
     console.error('Get badges error:', error);
     res.status(500).json({ error: 'Failed to fetch badges' });
+  }
+});
+
+router.put('/profile', authMiddleware, async (req, res) => {
+  try {
+    const { userId, updates } = req.body;
+    if (!userId) {
+      return res.status(400).json({ error: 'userId is required' });
+    }
+
+    const db = await connectToDatabase();
+    const normalizedUpdates = normalizeUserPayload(updates);
+    
+    // We only want to allow specific fields to be updated via this endpoint
+    const allowedUpdates = {};
+    if (updates.name) allowedUpdates.name = updates.name;
+    if (updates.preferences) allowedUpdates.preferences = updates.preferences;
+    allowedUpdates.updatedAt = new Date();
+
+    const result = await db.collection(COLLECTIONS.USERS).updateOne(
+      getUserQuery(userId),
+      { $set: allowedUpdates }
+    );
+
+    if (result.matchedCount === 0) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    res.json({ ok: true });
+  } catch (error) {
+    console.error('Update profile error:', error);
+    res.status(500).json({ error: 'Failed to update profile' });
   }
 });
 

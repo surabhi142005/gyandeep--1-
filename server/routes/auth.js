@@ -55,7 +55,7 @@ function buildSafeUser(user) {
     email: user.email,
     role: user.role,
     faceImage: user.faceImage || null,
-    classId: user.classId || null,
+    classId: user.classId?.toString?.() || user.classId || null,
     assignedSubjects: Array.isArray(user.assignedSubjects) ? user.assignedSubjects : [],
     performance: Array.isArray(user.performance) ? user.performance : [],
     badges: Array.isArray(user.badges) ? user.badges : [],
@@ -181,6 +181,7 @@ router.post('/register', async (req, res) => {
     const email = sanitize(req.body.email);
     const password = req.body.password;
     const role = sanitize(req.body.role) || 'student';
+    const rawClassId = sanitize(req.body.classId);
 
     if (!name || !email || !password) {
       return res.status(400).json({ error: 'Name, email, and password are required' });
@@ -205,6 +206,9 @@ router.post('/register', async (req, res) => {
     }
 
     const hashedPassword = await bcrypt.hash(password, 12);
+    const classId = role === 'student' && rawClassId
+      ? (ObjectId.isValid(rawClassId) ? new ObjectId(rawClassId) : rawClassId)
+      : null;
     const result = await db.collection(COLLECTIONS.USERS).insertOne({
       name,
       email,
@@ -216,7 +220,7 @@ router.post('/register', async (req, res) => {
       level: 1,
       coins: 0,
       streak: 0,
-      classId: null,
+      classId,
       active: true,
       emailVerified: false,
       preferences: {},
@@ -238,7 +242,7 @@ router.post('/register', async (req, res) => {
 
     res.status(201).json({
       ...tokens,
-      user: buildSafeUser({ _id: result.insertedId, name, email, role, faceImage: null, assignedSubjects: [], performance: [], badges: [], xp: 0, level: 1, coins: 0, classId: null, active: true }),
+      user: buildSafeUser({ _id: result.insertedId, name, email, role, faceImage: null, assignedSubjects: [], performance: [], badges: [], xp: 0, level: 1, coins: 0, classId, active: true }),
     });
   } catch (error) {
     console.error('Register error:', error);
@@ -347,7 +351,7 @@ router.post('/login-face', async (req, res) => {
   }
 });
 
-router.post('/password/request', async (req, res) => {
+const handlePasswordRequest = async (req, res) => {
   try {
     const { email } = req.body;
     if (!email) {
@@ -385,6 +389,13 @@ router.post('/password/request', async (req, res) => {
     console.error('Password request error:', error);
     res.status(500).json({ error: 'Failed to process request' });
   }
+};
+
+router.post('/password/request', handlePasswordRequest);
+
+router.post('/forgot-password', async (req, res) => {
+  req.body = { ...req.body, email: sanitize(req.body?.email) };
+  return handlePasswordRequest(req, res);
 });
 
 router.post('/password/verify', async (req, res) => {

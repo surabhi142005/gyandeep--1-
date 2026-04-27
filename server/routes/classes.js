@@ -96,13 +96,19 @@ router.post('/assign', authMiddleware, async (req, res) => {
     }
 
     const db = await connectToDatabase();
+    
+    // Create query based on whether userId is a valid ObjectId
+    const query = ObjectId.isValid(userId) 
+      ? { _id: new ObjectId(userId) }
+      : { $or: [{ id: userId }, { odId: userId }] };
+
     const updateData = {
-      classId: classId ? new ObjectId(classId) : null,
+      classId: classId ? (ObjectId.isValid(classId) ? new ObjectId(classId) : classId) : null,
       updatedAt: new Date(),
     };
 
     const result = await db.collection(COLLECTIONS.USERS).updateOne(
-      { _id: new ObjectId(userId) },
+      query,
       { $set: updateData }
     );
 
@@ -110,6 +116,9 @@ router.post('/assign', authMiddleware, async (req, res) => {
       return res.status(404).json({ error: 'User not found' });
     }
 
+    // If it's a teacher, we might want to also update ClassSubject mappings
+    // but for now, updating the user's classId is what the frontend expects
+    
     res.json({ ok: true });
   } catch (error) {
     console.error('Assign student error:', error);
