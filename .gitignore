@@ -45,3 +45,6 @@ node_modules
 ignition/deployments/chain-31337
 .vercel
 .env*.local
+
+# graphify / lean-ctx code-graph output (machine-generated, project-local)
+graphify-out/
