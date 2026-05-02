@@ -52,12 +52,21 @@ async function callOpenAI(
   ];
 
   try {
+    const isOpenRouter = OPENAI_API_URL.includes('openrouter');
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${OPENAI_API_KEY}`,
+    };
+    
+    // OpenRouter requires these extra headers
+    if (isOpenRouter) {
+      headers['HTTP-Referer'] = import.meta.env.VITE_API_URL || 'https://gyandeep.edu';
+      headers['X-Title'] = 'Gyandeep';
+    }
+
     const response = await fetch(`${OPENAI_API_URL}/chat/completions`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${OPENAI_API_KEY}`,
-      },
+      headers,
       body: JSON.stringify({
         model: OPENAI_MODEL,
         messages: chatMessages,
@@ -93,12 +102,15 @@ async function callAI(
   messages: ChatMessage[] = [],
   config: AIConfig = {}
 ): Promise<AIResponse> {
+  const errors: { provider: string; error: Error }[] = [];
+
   // Try Gemini first
   if (GEMINI_API_KEY) {
     try {
       return await callGemini(prompt, messages, config);
     } catch (geminiError) {
       console.warn('[AI] Gemini failed, falling back to OpenAI:', geminiError.message);
+      errors.push({ provider: 'gemini', error: geminiError });
     }
   }
 
@@ -107,12 +119,14 @@ async function callAI(
     try {
       return await callOpenAI(prompt, messages, config);
     } catch (openaiError) {
-      console.error('[AI] Both Gemini and OpenAI failed:', openaiError.message);
-      throw new Error(`AI request failed: ${openaiError.message}`);
+      console.error('[AI] OpenAI also failed:', openaiError.message);
+      errors.push({ provider: 'openai', error: openaiError });
     }
   }
 
-  throw new Error('No AI provider configured. Please set VITE_GEMINI_API_KEY or VITE_OPENAI_API_KEY');
+  // Both failed - report the last error (OpenAI's error)
+  const lastError = errors[errors.length - 1];
+  throw new Error(`AI request failed: ${lastError?.error?.message || 'No AI provider available'}`);
 }
 
 async function callGemini(

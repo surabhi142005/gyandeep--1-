@@ -55,12 +55,21 @@ async function callOpenAI({ prompt, history = [], temperature = 0.7, maxTokens =
     { role: 'user', content: prompt },
   ];
 
+  const isOpenRouter = OPENAI_API_URL.includes('openrouter');
+  const headers = {
+    'Content-Type': 'application/json',
+    'Authorization': `Bearer ${apiKey}`,
+  };
+  
+  // OpenRouter requires these extra headers
+  if (isOpenRouter) {
+    headers['HTTP-Referer'] = process.env.FRONTEND_URL || 'https://gyandeep.edu';
+    headers['X-Title'] = 'Gyandeep';
+  }
+
   const response = await fetch(`${OPENAI_API_URL}/chat/completions`, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${apiKey}`,
-    },
+    headers,
     body: JSON.stringify({
       model: OPENAI_MODEL,
       messages,
@@ -132,17 +141,33 @@ async function callGemini({
 }
 
 async function callAI(params) {
-  try {
-    return await callGemini(params);
-  } catch (geminiError) {
-    console.warn('[AI] Gemini failed, falling back to OpenAI:', geminiError.message);
+  const results = { gemini: null, openai: null };
+  
+  // Try Gemini first
+  if (getGeminiApiKey()) {
     try {
-      return await callOpenAI(params);
-    } catch (openaiError) {
-      console.error('[AI] Both Gemini and OpenAI failed:', openaiError.message);
-      throw buildAiError(`AI request failed: ${geminiError.message}`, geminiError.status || 502);
+      results.gemini = await callGemini(params);
+      return results.gemini;
+    } catch (geminiError) {
+      console.warn('[AI] Gemini failed, falling back to OpenAI:', geminiError.message);
+      results.gemini = geminiError;
     }
   }
+
+  // Fallback to OpenAI
+  if (getOpenAiApiKey()) {
+    try {
+      results.openai = await callOpenAI(params);
+      return results.openai;
+    } catch (openaiError) {
+      console.error('[AI] OpenAI also failed:', openaiError.message);
+      results.openai = openaiError;
+    }
+  }
+
+  // Both failed
+  const errorMsg = results.openai?.message || results.gemini?.message || 'Unknown error';
+  throw buildAiError(`AI request failed: ${errorMsg}`, results.openai?.status || results.gemini?.status || 502);
 }
 
 function parseQuizResponse(rawResponse, count) {
@@ -217,6 +242,52 @@ Subject: [your subject line here]
   }
 });
 
+async function callOpenRouterChat({ message, history = [], temperature = 0.7, maxTokens = 1024, userName = 'Student', userRole = 'student' }) {
+  const apiKey = getOpenAiApiKey();
+  if (!apiKey) {
+    throw buildAiError('OPENAI_API_KEY (OpenRouter) is not configured.', 503);
+  }
+
+  const messages = [
+    {
+      role: 'system',
+      content: `You are Gyandeep AI, a concise educational assistant for students and teachers. Current user: ${userName} (${userRole}). Answer clearly, accurately, and in a classroom-safe way.`
+    },
+    ...history.map((msg) => ({
+      role: msg.role === 'model' || msg.role === 'assistant' ? 'assistant' : 'user',
+      content: msg.content || msg.text || '',
+    })),
+    { role: 'user', content: message },
+  ];
+
+  const headers = {
+    'Content-Type': 'application/json',
+    'Authorization': `Bearer ${apiKey}`,
+    'HTTP-Referer': process.env.FRONTEND_URL || 'https://gyandeep.edu',
+    'X-Title': 'Gyandeep',
+  };
+
+  const response = await fetch(`${OPENAI_API_URL}/chat/completions`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({
+      model: process.env.OPENAI_MODEL || 'openrouter/free',
+      messages,
+      temperature,
+      max_tokens: maxTokens,
+    }),
+  });
+
+  if (!response.ok) {
+    const errorBody = await response.json().catch(() => ({}));
+    const message = errorBody?.error?.message || `OpenRouter request failed with status ${response.status}`;
+    throw buildAiError(message, response.status === 429 ? 429 : 502);
+  }
+
+  const data = await response.json();
+  return data?.choices?.[0]?.message?.content?.trim() || '';
+}
+
 router.post('/chat', async (req, res) => {
   try {
     const { message, prompt, history, userName = 'Student', userRole = 'student', model } = req.body;
@@ -226,19 +297,13 @@ router.post('/chat', async (req, res) => {
       return res.status(400).json({ error: 'Message or prompt is required' });
     }
 
-    const chatPrompt = `You are Gyandeep AI, a concise educational assistant for students and teachers.
-Current user: ${userName} (${userRole}).
-Answer clearly, accurately, and in a classroom-safe way.
-
-User message:
-${inputMessage}`;
-
-    const reply = await callAI({
-      prompt: chatPrompt,
+    const reply = await callOpenRouterChat({
+      message: inputMessage,
       history,
-      model: model === 'smart' ? DEFAULT_MODEL : DEFAULT_MODEL,
       temperature: model === 'smart' ? 0.5 : 0.7,
       maxTokens: 1024,
+      userName,
+      userRole,
     });
 
     res.json({
