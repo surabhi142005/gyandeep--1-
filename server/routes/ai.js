@@ -1,6 +1,6 @@
 /**
  * server/routes/ai.js
- * AI-powered routes using Google Gemini API
+ * AI-powered routes using Google Gemini API with OpenAI fallback
  */
 
 import express from 'express';
@@ -9,9 +9,15 @@ const router = express.Router();
 
 const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models';
 const DEFAULT_MODEL = process.env.GEMINI_MODEL || 'gemini-2.0-flash';
+const OPENAI_API_URL = process.env.OPENAI_BASE_URL || 'https://api.together.xyz/v1';
+const OPENAI_MODEL = process.env.OPENAI_MODEL || 'meta-llama/Llama-3.3-70B-Instruct-Turbo';
 
 function getGeminiApiKey() {
   return process.env.GEMINI_API_KEY?.trim() || '';
+}
+
+function getOpenAiApiKey() {
+  return process.env.OPENAI_API_KEY?.trim() || '';
 }
 
 function extractGeminiText(data) {
@@ -33,6 +39,44 @@ function normalizeHistory(history = []) {
     }))
     .filter((item) => item.text.trim().length > 0)
     .slice(-10);
+}
+
+async function callOpenAI({ prompt, history = [], temperature = 0.7, maxTokens = 2048 }) {
+  const apiKey = getOpenAiApiKey();
+  if (!apiKey) {
+    throw buildAiError('OPENAI_API_KEY is not configured on the backend.', 503);
+  }
+
+  const messages = [
+    ...history.map((msg) => ({
+      role: msg.role === 'model' ? 'assistant' : 'user',
+      content: msg.text || msg.content || '',
+    })),
+    { role: 'user', content: prompt },
+  ];
+
+  const response = await fetch(`${OPENAI_API_URL}/chat/completions`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({
+      model: OPENAI_MODEL,
+      messages,
+      temperature,
+      max_tokens: maxTokens,
+    }),
+  });
+
+  if (!response.ok) {
+    const errorBody = await response.json().catch(() => ({}));
+    const message = errorBody?.error?.message || `OpenAI API request failed with status ${response.status}`;
+    throw buildAiError(message, response.status === 429 ? 429 : 502);
+  }
+
+  const data = await response.json();
+  return data?.choices?.[0]?.message?.content?.trim() || '';
 }
 
 async function callGemini({
@@ -85,6 +129,20 @@ async function callGemini({
 
   const data = await response.json();
   return extractGeminiText(data);
+}
+
+async function callAI(params) {
+  try {
+    return await callGemini(params);
+  } catch (geminiError) {
+    console.warn('[AI] Gemini failed, falling back to OpenAI:', geminiError.message);
+    try {
+      return await callOpenAI(params);
+    } catch (openaiError) {
+      console.error('[AI] Both Gemini and OpenAI failed:', openaiError.message);
+      throw buildAiError(`AI request failed: ${geminiError.message}`, geminiError.status || 502);
+    }
+  }
 }
 
 function parseQuizResponse(rawResponse, count) {
@@ -175,7 +233,7 @@ Answer clearly, accurately, and in a classroom-safe way.
 User message:
 ${inputMessage}`;
 
-    const reply = await callGemini({
+    const reply = await callAI({
       prompt: chatPrompt,
       history,
       model: model === 'smart' ? DEFAULT_MODEL : DEFAULT_MODEL,
@@ -226,7 +284,7 @@ JSON format:
 Study content:
 ${notesText.slice(0, 8000)}`;
 
-    const rawResponse = await callGemini({
+    const rawResponse = await callAI({
       prompt: quizPrompt,
       temperature: 0.3,
       maxTokens: 4096,
@@ -292,7 +350,7 @@ Max Score: ${questionMaxScore}
 Respond ONLY with a JSON object:
 { "score": number, "feedback": "string", "comment": "string" }`;
 
-      const response = await callGemini({
+      const response = await callAI({
         prompt: gradingPrompt,
         temperature: 0.2,
         maxTokens: 512,
@@ -342,7 +400,7 @@ router.post('/extract-text', async (req, res) => {
       return res.status(400).json({ error: 'Image base64 data is required' });
     }
 
-    const text = await callGemini({
+    const text = await callAI({
       prompt: 'Extract all readable text from this image. Preserve structure when possible.',
       temperature: 0.1,
       maxTokens: 2048,
@@ -375,7 +433,7 @@ router.post('/summarize', async (req, res) => {
       flashcards: 'Create flashcards with question-answer pairs.',
     };
 
-    const result = await callGemini({
+    const result = await callAI({
       prompt: `Summarize the following notes about ${subject || 'the topic'}:
 
 ${text.slice(0, 8000)}

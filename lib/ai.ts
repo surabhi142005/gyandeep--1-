@@ -1,10 +1,13 @@
 /**
  * lib/ai.ts
- * Gemini AI integration for chat and content generation
+ * Gemini AI integration with OpenAI fallback for chat and content generation
  */
 
 const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY || import.meta.env.GEMINI_API_KEY;
 const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models';
+const OPENAI_API_KEY = import.meta.env.VITE_OPENAI_API_KEY || '';
+const OPENAI_API_URL = import.meta.env.VITE_OPENAI_BASE_URL || 'https://api.together.xyz/v1';
+const OPENAI_MODEL = import.meta.env.VITE_OPENAI_MODEL || 'meta-llama/Llama-3.3-70B-Instruct-Turbo';
 
 export interface AIConfig {
   model?: string;
@@ -31,6 +34,85 @@ export interface AIResponse {
     completionTokens: number;
     totalTokens: number;
   };
+}
+
+async function callOpenAI(
+  prompt: string,
+  messages: ChatMessage[] = [],
+  config: AIConfig = {}
+): Promise<AIResponse> {
+  const { temperature, maxTokens } = { ...DEFAULT_CONFIG, ...config };
+
+  const chatMessages = [
+    ...messages.map(m => ({
+      role: m.role === 'user' ? 'user' : 'assistant',
+      content: m.content,
+    })),
+    { role: 'user', content: prompt },
+  ];
+
+  try {
+    const response = await fetch(`${OPENAI_API_URL}/chat/completions`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${OPENAI_API_KEY}`,
+      },
+      body: JSON.stringify({
+        model: OPENAI_MODEL,
+        messages: chatMessages,
+        temperature,
+        max_tokens: maxTokens,
+      }),
+    });
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({}));
+      throw new Error(error.error?.message || `OpenAI API error: ${response.status}`);
+    }
+
+    const data = await response.json();
+    const text = data?.choices?.[0]?.message?.content || '';
+
+    return {
+      text,
+      usage: data.usage ? {
+        promptTokens: data.usage.prompt_tokens,
+        completionTokens: data.usage.completion_tokens,
+        totalTokens: data.usage.total_tokens,
+      } : undefined,
+    };
+  } catch (error) {
+    console.error('OpenAI API error:', error);
+    throw error;
+  }
+}
+
+async function callAI(
+  prompt: string,
+  messages: ChatMessage[] = [],
+  config: AIConfig = {}
+): Promise<AIResponse> {
+  // Try Gemini first
+  if (GEMINI_API_KEY) {
+    try {
+      return await callGemini(prompt, messages, config);
+    } catch (geminiError) {
+      console.warn('[AI] Gemini failed, falling back to OpenAI:', geminiError.message);
+    }
+  }
+
+  // Fallback to OpenAI
+  if (OPENAI_API_KEY) {
+    try {
+      return await callOpenAI(prompt, messages, config);
+    } catch (openaiError) {
+      console.error('[AI] Both Gemini and OpenAI failed:', openaiError.message);
+      throw new Error(`AI request failed: ${openaiError.message}`);
+    }
+  }
+
+  throw new Error('No AI provider configured. Please set VITE_GEMINI_API_KEY or VITE_OPENAI_API_KEY');
 }
 
 async function callGemini(
@@ -94,11 +176,11 @@ export async function generateChatResponse(
   history: ChatMessage[] = [],
   config?: AIConfig
 ): Promise<string> {
-  if (!GEMINI_API_KEY) {
-    return 'AI chat is not configured. Please set GEMINI_API_KEY in your environment variables.';
+  if (!GEMINI_API_KEY && !OPENAI_API_KEY) {
+    return 'AI chat is not configured. Please set VITE_GEMINI_API_KEY or VITE_OPENAI_API_KEY in your environment variables.';
   }
 
-  const response = await callGemini(message, history, config);
+  const response = await callAI(message, history, config);
   return response.text;
 }
 
@@ -106,11 +188,11 @@ export async function generateContent(
   prompt: string,
   config?: AIConfig
 ): Promise<string> {
-  if (!GEMINI_API_KEY) {
-    throw new Error('GEMINI_API_KEY is not configured');
+  if (!GEMINI_API_KEY && !OPENAI_API_KEY) {
+    throw new Error('No AI provider configured. Please set VITE_GEMINI_API_KEY or VITE_OPENAI_API_KEY');
   }
 
-  const response = await callGemini(prompt, [], config);
+  const response = await callAI(prompt, [], config);
   return response.text;
 }
 
@@ -119,8 +201,8 @@ export async function generateEmail(
   recipients: string[],
   additionalContext?: string
 ): Promise<{ subject: string; body: string }> {
-  if (!GEMINI_API_KEY) {
-    throw new Error('GEMINI_API_KEY is not configured');
+  if (!GEMINI_API_KEY && !OPENAI_API_KEY) {
+    throw new Error('No AI provider configured. Please set VITE_GEMINI_API_KEY or VITE_OPENAI_API_KEY');
   }
 
   const prompt = `You are an AI assistant helping with email communication.
@@ -138,7 +220,7 @@ Subject: [your subject line here]
 ---
 [your email body here]`;
 
-  const response = await callGemini(prompt, [], { temperature: 0.5 });
+  const response = await callAI(prompt, [], { temperature: 0.5 });
   const [subjectLine, ...bodyParts] = response.text.split('---');
   
   return {
@@ -152,8 +234,8 @@ export async function generateQuizQuestions(
   count: number = 5,
   difficulty: 'easy' | 'medium' | 'hard' = 'medium'
 ): Promise<any[]> {
-  if (!GEMINI_API_KEY) {
-    throw new Error('GEMINI_API_KEY is not configured');
+  if (!GEMINI_API_KEY && !OPENAI_API_KEY) {
+    throw new Error('No AI provider configured. Please set VITE_GEMINI_API_KEY or VITE_OPENAI_API_KEY');
   }
 
   const prompt = `Generate ${count} quiz questions about "${topic}" with ${difficulty} difficulty.
@@ -174,7 +256,7 @@ Format as JSON array:
   }
 ]`;
 
-  const response = await callGemini(prompt, [], { temperature: 0.3 });
+  const response = await callAI(prompt, [], { temperature: 0.3 });
   
   try {
     const jsonMatch = response.text.match(/\[[\s\S]*\]/);
@@ -197,11 +279,11 @@ export async function analyzeStudentPerformance(
   recommendations: string[];
   summary: string;
 }> {
-  if (!GEMINI_API_KEY) {
+  if (!GEMINI_API_KEY && !OPENAI_API_KEY) {
     return {
-      insights: [{ type: 'info', message: 'Configure GEMINI_API_KEY for AI-powered insights', priority: 'low' }],
+      insights: [{ type: 'info', message: 'Configure AI API keys for AI-powered insights', priority: 'low' }],
       recommendations: [],
-      summary: 'AI insights are not available. Please configure Gemini API.',
+      summary: 'AI insights are not available. Please configure VITE_GEMINI_API_KEY or VITE_OPENAI_API_KEY.',
     };
   }
 
@@ -221,7 +303,7 @@ Provide a JSON response with:
   "summary": "..."
 }`;
 
-  const response = await callGemini(prompt, [], { temperature: 0.3 });
+  const response = await callAI(prompt, [], { temperature: 0.3 });
   
   try {
     const jsonMatch = response.text.match(/\{[\s\S]*\}/);
@@ -243,7 +325,13 @@ Provide a JSON response with:
 }
 
 export function isAIConfigured(): boolean {
-  return !!GEMINI_API_KEY;
+  return !!(GEMINI_API_KEY || OPENAI_API_KEY);
+}
+
+export function getAIProvider(): string {
+  if (GEMINI_API_KEY) return 'gemini';
+  if (OPENAI_API_KEY) return 'openai';
+  return 'none';
 }
 
 export interface GradingResult {
@@ -261,7 +349,7 @@ export async function autoGradeAnswer(
   maxScore: number = 10,
   questionType: 'mcq' | 'short' | 'long' = 'short'
 ): Promise<GradingResult> {
-  if (!GEMINI_API_KEY) {
+  if (!GEMINI_API_KEY && !OPENAI_API_KEY) {
     return {
       score: 0,
       maxScore,
@@ -310,7 +398,7 @@ Provide your response as a JSON object:
   "overallComment": "[Summary comment for the student]"
 }`;
 
-  const response = await callGemini(prompt, [], { temperature: 0.3 });
+  const response = await callAI(prompt, [], { temperature: 0.3 });
 
   try {
     const jsonMatch = response.text.match(/\{[\s\S]*\}/);
@@ -376,44 +464,85 @@ export async function gradeQuizSubmission(
 }
 
 export async function extractTextFromImage(imageBase64: string): Promise<string> {
-  if (!GEMINI_API_KEY) {
-    throw new Error('GEMINI_API_KEY is not configured');
+  if (!GEMINI_API_KEY && !OPENAI_API_KEY) {
+    throw new Error('No AI provider configured. Please set VITE_GEMINI_API_KEY or VITE_OPENAI_API_KEY');
   }
 
-  const prompt = 'Extract all text from this image. Preserve the structure and formatting as much as possible. If there is no readable text, describe what you see in the image.';
+  // Try Gemini first (supports vision)
+  if (GEMINI_API_KEY) {
+    try {
+      const prompt = 'Extract all text from this image. Preserve the structure and formatting as much as possible. If there is no readable text, describe what you see in the image.';
 
-  try {
-    const response = await fetch(
-      `${GEMINI_API_URL}/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`,
-      {
+      const response = await fetch(
+        `${GEMINI_API_URL}/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [{
+              role: 'user',
+              parts: [
+                { text: prompt },
+                { inlineData: { mimeType: 'image/jpeg', data: imageBase64.replace(/^data:image\/\w+;base64,/, '') } },
+              ],
+            }],
+            generationConfig: {
+              temperature: 0.1,
+              maxOutputTokens: 8192,
+            },
+          }),
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error(`Gemini API error: ${response.status}`);
+      }
+
+      const data = await response.json();
+      return data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+    } catch (geminiError) {
+      console.warn('[AI] Gemini OCR failed, trying OpenAI:', geminiError.message);
+    }
+  }
+
+  // Fallback to OpenAI (if it supports vision)
+  if (OPENAI_API_KEY) {
+    try {
+      const base64Data = imageBase64.replace(/^data:image\/\w+;base64,/, '');
+      
+      const response = await fetch(`${OPENAI_API_URL}/chat/completions`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${OPENAI_API_KEY}`,
+        },
         body: JSON.stringify({
-          contents: [{
+          model: OPENAI_MODEL,
+          messages: [{
             role: 'user',
-            parts: [
-              { text: prompt },
-              { inlineData: { mimeType: 'image/jpeg', data: imageBase64.replace(/^data:image\/\w+;base64,/, '') } },
+            content: [
+              { type: 'text', text: 'Extract all text from this image. Preserve the structure and formatting as much as possible.' },
+              { type: 'image_url', image_url: { url: `data:image/jpeg;base64,${base64Data}` } },
             ],
           }],
-          generationConfig: {
-            temperature: 0.1,
-            maxOutputTokens: 8192,
-          },
+          temperature: 0.1,
+          max_tokens: 8192,
         }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`OpenAI API error: ${response.status}`);
       }
-    );
 
-    if (!response.ok) {
-      throw new Error(`API error: ${response.status}`);
+      const data = await response.json();
+      return data?.choices?.[0]?.message?.content || '';
+    } catch (openaiError) {
+      console.error('[AI] Both Gemini and OpenAI failed for OCR:', openaiError.message);
+      throw new Error(`OCR extraction failed: ${openaiError.message}`);
     }
-
-    const data = await response.json();
-    return data.candidates?.[0]?.content?.parts?.[0]?.text || '';
-  } catch (error) {
-    console.error('OCR extraction error:', error);
-    throw error;
   }
+
+  throw new Error('No AI provider available for OCR');
 }
 
 export default {
@@ -426,4 +555,5 @@ export default {
   gradeQuizSubmission,
   extractTextFromImage,
   isAIConfigured,
+  getAIProvider,
 };

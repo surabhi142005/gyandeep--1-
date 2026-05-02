@@ -11,17 +11,6 @@ import { authMiddleware } from '../middleware/auth.js';
 router.post('/insights', authMiddleware, async (req, res) => {
   try {
     const { studentData, type } = req.body;
-    
-    if (!process.env.GEMINI_API_KEY) {
-      return res.json({
-        insights: [
-          { type: 'performance', message: 'Configure GEMINI_API_KEY for AI-powered insights' }
-        ]
-      });
-    }
-
-    const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
-    const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent';
 
     const prompt = `Analyze this student performance data and provide 3-5 concise, actionable insights.
     
@@ -33,30 +22,71 @@ Format your response ONLY as a JSON array of objects:
   { "type": "achievement|improvement|attendance|progress", "message": "Short actionable insight message" }
 ]`;
 
-    try {
-      const response = await fetch(`${GEMINI_API_URL}?key=${GEMINI_API_KEY}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: { temperature: 0.4, maxOutputTokens: 1024 }
-        })
-      });
+    // Try Gemini first
+    if (process.env.GEMINI_API_KEY) {
+      try {
+        const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+        const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent';
 
-      if (response.ok) {
-        const data = await response.json();
-        const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
-        const jsonMatch = text.match(/\[[\s\S]*\]/);
-        if (jsonMatch) {
-          const insights = JSON.parse(jsonMatch[0]);
-          return res.json({ insights });
+        const response = await fetch(`${GEMINI_API_URL}?key=${GEMINI_API_KEY}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: prompt }] }],
+            generationConfig: { temperature: 0.4, maxOutputTokens: 1024 }
+          })
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+          const jsonMatch = text.match(/\[[\s\S]*\]/);
+          if (jsonMatch) {
+            const insights = JSON.parse(jsonMatch[0]);
+            return res.json({ insights, provider: 'gemini' });
+          }
         }
+      } catch (err) {
+        console.warn('[Analytics] Gemini insight generation failed, trying OpenAI:', err.message);
       }
-    } catch (err) {
-      console.warn('[Analytics] Gemini insight generation failed, using fallback:', err.message);
     }
 
-    // Fallback manual insights if AI fails
+    // Fallback to OpenAI
+    if (process.env.OPENAI_API_KEY) {
+      try {
+        const OPENAI_API_URL = process.env.OPENAI_BASE_URL || 'https://api.together.xyz/v1';
+        const OPENAI_MODEL = process.env.OPENAI_MODEL || 'meta-llama/Llama-3.3-70B-Instruct-Turbo';
+        const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
+
+        const response = await fetch(`${OPENAI_API_URL}/chat/completions`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${OPENAI_API_KEY}`,
+          },
+          body: JSON.stringify({
+            model: OPENAI_MODEL,
+            messages: [{ role: 'user', content: prompt }],
+            temperature: 0.4,
+            max_tokens: 1024,
+          })
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          const text = data?.choices?.[0]?.message?.content || '';
+          const jsonMatch = text.match(/\[[\s\S]*\]/);
+          if (jsonMatch) {
+            const insights = JSON.parse(jsonMatch[0]);
+            return res.json({ insights, provider: 'openai' });
+          }
+        }
+      } catch (err) {
+        console.warn('[Analytics] OpenAI insight generation failed:', err.message);
+      }
+    }
+
+    // Fallback manual insights if both AI providers fail
     const insights = [];
     if (studentData?.grades?.length > 0) {
       const avgScore = studentData.grades.reduce((sum, g) => sum + (g.score / g.maxScore * 100), 0) / studentData.grades.length;
@@ -69,7 +99,7 @@ Format your response ONLY as a JSON array of objects:
       if (attendanceRate < 80) insights.push({ type: 'attendance', message: 'Attendance rate is below 80%. Regular attendance improves learning outcomes.' });
     }
 
-    res.json({ insights: insights.length > 0 ? insights : [{ type: 'progress', message: 'Keep consistent with your studies and attendance.' }] });
+    res.json({ insights: insights.length > 0 ? insights : [{ type: 'progress', message: 'Keep consistent with your studies and attendance.' }], provider: 'fallback' });
   } catch (error) {
     console.error('Analytics insights error:', error);
     res.status(500).json({ error: 'Failed to generate insights' });
