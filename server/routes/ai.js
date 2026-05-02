@@ -13,7 +13,7 @@ const OPENAI_API_URL = process.env.OPENAI_BASE_URL || 'https://api.together.xyz/
 const OPENAI_MODEL = process.env.OPENAI_MODEL || 'meta-llama/Llama-3.3-70B-Instruct-Turbo';
 
 // Groq API configuration for chatbot
-const GROQ_API_URL = process.env.GROQ_BASE_URL || 'https://api.groq.com/openai';
+const GROQ_API_URL = process.env.GROQ_BASE_URL || 'https://api.groq.com/openai/v1';
 const GROQ_MODEL = process.env.GROQ_MODEL || 'llama-3.3-70b-versatile';
 
 function getGeminiApiKey() {
