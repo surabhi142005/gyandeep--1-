@@ -1,13 +1,19 @@
 /**
  * lib/ai.ts
- * Gemini AI integration with OpenAI fallback for chat and content generation
+ * Groq AI integration with OpenRouter fallback for chat and content generation
  */
 
-const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY || import.meta.env.GEMINI_API_KEY;
-const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models';
+const GROQ_API_KEY = import.meta.env.VITE_GROQ_API_KEY || import.meta.env.GROQ_API_KEY;
+const GROQ_API_URL = import.meta.env.VITE_GROQ_BASE_URL || 'https://api.groq.com/openai/v1';
+const GROQ_MODEL = import.meta.env.VITE_GROQ_MODEL || 'llama-3.3-70b-versatile';
+
 const OPENAI_API_KEY = import.meta.env.VITE_OPENAI_API_KEY || '';
-const OPENAI_API_URL = import.meta.env.VITE_OPENAI_BASE_URL || 'https://api.together.xyz/v1';
+const OPENAI_API_URL = import.meta.env.VITE_OPENAI_BASE_URL || 'https://openrouter.ai/api/v1';
 const OPENAI_MODEL = import.meta.env.VITE_OPENAI_MODEL || 'meta-llama/Llama-3.3-70B-Instruct-Turbo';
+
+// Gemini kept for OCR/vision only
+const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY || '';
+const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models';
 
 export interface AIConfig {
   model?: string;
@@ -16,13 +22,13 @@ export interface AIConfig {
 }
 
 const DEFAULT_CONFIG: AIConfig = {
-  model: 'gemini-2.5-flash',
+  model: 'llama-3.3-70b-versatile',
   temperature: 0.7,
   maxTokens: 2048,
 };
 
 export interface ChatMessage {
-  role: 'user' | 'model';
+  role: 'user' | 'model' | 'assistant';
   content: string;
 }
 
@@ -36,6 +42,60 @@ export interface AIResponse {
   };
 }
 
+// Primary: Groq API call
+async function callGroq(
+  prompt: string,
+  messages: ChatMessage[] = [],
+  config: AIConfig = {}
+): Promise<AIResponse> {
+  const { temperature, maxTokens } = { ...DEFAULT_CONFIG, ...config };
+
+  const chatMessages = [
+    ...messages.map(m => ({
+      role: m.role === 'user' ? 'user' : 'assistant',
+      content: m.content,
+    })),
+    { role: 'user', content: prompt },
+  ];
+
+  try {
+    const response = await fetch(`${GROQ_API_URL}/chat/completions`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${GROQ_API_KEY}`,
+      },
+      body: JSON.stringify({
+        model: GROQ_MODEL,
+        messages: chatMessages,
+        temperature,
+        max_tokens: maxTokens,
+      }),
+    });
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({}));
+      throw new Error(error.error?.message || `Groq API error: ${response.status}`);
+    }
+
+    const data = await response.json();
+    const text = data?.choices?.[0]?.message?.content || '';
+
+    return {
+      text,
+      usage: data.usage ? {
+        promptTokens: data.usage.prompt_tokens,
+        completionTokens: data.usage.completion_tokens,
+        totalTokens: data.usage.total_tokens,
+      } : undefined,
+    };
+  } catch (error) {
+    console.error('Groq API error:', error);
+    throw error;
+  }
+}
+
+// Fallback: OpenRouter/OpenAI
 async function callOpenAI(
   prompt: string,
   messages: ChatMessage[] = [],
@@ -58,7 +118,6 @@ async function callOpenAI(
       'Authorization': `Bearer ${OPENAI_API_KEY}`,
     };
     
-    // OpenRouter requires these extra headers
     if (isOpenRouter) {
       headers['HTTP-Referer'] = import.meta.env.VITE_API_URL || 'https://gyandeep.edu';
       headers['X-Title'] = 'Gyandeep';
@@ -97,6 +156,41 @@ async function callOpenAI(
   }
 }
 
+// Gemini for vision/OCR only
+async function callGeminiVision(prompt: string, imageBase64: string): Promise<string> {
+  const model = 'gemini-2.0-flash';
+  
+  const response = await fetch(
+    `${GEMINI_API_URL}/${model}:generateContent?key=${GEMINI_API_KEY}`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{
+          role: 'user',
+          parts: [
+            { text: prompt },
+            { inline_data: { mime_type: 'image/jpeg', data: imageBase64.replace(/^data:image\/\w+;base64,/, '') } },
+          ],
+        }],
+        generationConfig: {
+          temperature: 0.1,
+          maxOutputTokens: 2048,
+        },
+      }),
+    }
+  );
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({}));
+    throw new Error(error.error?.message || `Gemini API error: ${response.status}`);
+  }
+
+  const data = await response.json();
+  return data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+}
+
+// Unified AI caller - Groq primary, OpenRouter fallback
 async function callAI(
   prompt: string,
   messages: ChatMessage[] = [],
@@ -104,85 +198,28 @@ async function callAI(
 ): Promise<AIResponse> {
   const errors: { provider: string; error: Error }[] = [];
 
-  // Try Gemini first
-  if (GEMINI_API_KEY) {
+  // Try Groq first (primary)
+  if (GROQ_API_KEY) {
     try {
-      return await callGemini(prompt, messages, config);
-    } catch (geminiError) {
-      console.warn('[AI] Gemini failed, falling back to OpenAI:', geminiError.message);
-      errors.push({ provider: 'gemini', error: geminiError });
+      return await callGroq(prompt, messages, config);
+    } catch (groqError) {
+      console.warn('[AI] Groq failed, falling back to OpenRouter:', groqError.message);
+      errors.push({ provider: 'groq', error: groqError });
     }
   }
 
-  // Fallback to OpenAI
+  // Fallback to OpenRouter/OpenAI
   if (OPENAI_API_KEY) {
     try {
       return await callOpenAI(prompt, messages, config);
     } catch (openaiError) {
-      console.error('[AI] OpenAI also failed:', openaiError.message);
+      console.error('[AI] OpenRouter also failed:', openaiError.message);
       errors.push({ provider: 'openai', error: openaiError });
     }
   }
 
-  // Both failed - report the last error (OpenAI's error)
   const lastError = errors[errors.length - 1];
   throw new Error(`AI request failed: ${lastError?.error?.message || 'No AI provider available'}`);
-}
-
-async function callGemini(
-  prompt: string,
-  messages: ChatMessage[] = [],
-  config: AIConfig = {}
-): Promise<AIResponse> {
-  const { model, temperature, maxTokens } = { ...DEFAULT_CONFIG, ...config };
-
-  const contents = [
-    ...messages.map(m => ({
-      role: m.role === 'user' ? 'user' : 'model',
-      parts: [{ text: m.content }],
-    })),
-    { role: 'user', parts: [{ text: prompt }] },
-  ];
-
-  try {
-    const response = await fetch(
-      `${GEMINI_API_URL}/${model}:generateContent?key=${GEMINI_API_KEY}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents,
-          generationConfig: {
-            temperature,
-            maxOutputTokens: maxTokens,
-            topP: 0.95,
-            topK: 40,
-          },
-        }),
-      }
-    );
-
-    if (!response.ok) {
-      const error = await response.json().catch(() => ({}));
-      throw new Error(error.error?.message || `API error: ${response.status}`);
-    }
-
-    const data = await response.json();
-    const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
-
-    return {
-      text,
-      candidates: data.candidates,
-      usage: data.usageMetadata ? {
-        promptTokens: data.usageMetadata.promptTokenCount,
-        completionTokens: data.usageMetadata.candidatesTokenCount,
-        totalTokens: data.usageMetadata.totalTokenCount,
-      } : undefined,
-    };
-  } catch (error) {
-    console.error('Gemini API error:', error);
-    throw error;
-  }
 }
 
 export async function generateChatResponse(
@@ -190,8 +227,8 @@ export async function generateChatResponse(
   history: ChatMessage[] = [],
   config?: AIConfig
 ): Promise<string> {
-  if (!GEMINI_API_KEY && !OPENAI_API_KEY) {
-    return 'AI chat is not configured. Please set VITE_GEMINI_API_KEY or VITE_OPENAI_API_KEY in your environment variables.';
+  if (!GROQ_API_KEY && !OPENAI_API_KEY) {
+    return 'AI chat is not configured. Please set VITE_GROQ_API_KEY or VITE_OPENAI_API_KEY in your environment variables.';
   }
 
   const response = await callAI(message, history, config);
@@ -202,8 +239,8 @@ export async function generateContent(
   prompt: string,
   config?: AIConfig
 ): Promise<string> {
-  if (!GEMINI_API_KEY && !OPENAI_API_KEY) {
-    throw new Error('No AI provider configured. Please set VITE_GEMINI_API_KEY or VITE_OPENAI_API_KEY');
+  if (!GROQ_API_KEY && !OPENAI_API_KEY) {
+    throw new Error('No AI provider configured. Please set VITE_GROQ_API_KEY or VITE_OPENAI_API_KEY');
   }
 
   const response = await callAI(prompt, [], config);
@@ -215,8 +252,8 @@ export async function generateEmail(
   recipients: string[],
   additionalContext?: string
 ): Promise<{ subject: string; body: string }> {
-  if (!GEMINI_API_KEY && !OPENAI_API_KEY) {
-    throw new Error('No AI provider configured. Please set VITE_GEMINI_API_KEY or VITE_OPENAI_API_KEY');
+  if (!GROQ_API_KEY && !OPENAI_API_KEY) {
+    throw new Error('No AI provider configured. Please set VITE_GROQ_API_KEY or VITE_OPENAI_API_KEY');
   }
 
   const prompt = `You are an AI assistant helping with email communication.
@@ -248,8 +285,8 @@ export async function generateQuizQuestions(
   count: number = 5,
   difficulty: 'easy' | 'medium' | 'hard' = 'medium'
 ): Promise<any[]> {
-  if (!GEMINI_API_KEY && !OPENAI_API_KEY) {
-    throw new Error('No AI provider configured. Please set VITE_GEMINI_API_KEY or VITE_OPENAI_API_KEY');
+  if (!GROQ_API_KEY && !OPENAI_API_KEY) {
+    throw new Error('No AI provider configured. Please set VITE_GROQ_API_KEY or VITE_OPENAI_API_KEY');
   }
 
   const prompt = `Generate ${count} quiz questions about "${topic}" with ${difficulty} difficulty.
@@ -293,11 +330,11 @@ export async function analyzeStudentPerformance(
   recommendations: string[];
   summary: string;
 }> {
-  if (!GEMINI_API_KEY && !OPENAI_API_KEY) {
+  if (!GROQ_API_KEY && !OPENAI_API_KEY) {
     return {
       insights: [{ type: 'info', message: 'Configure AI API keys for AI-powered insights', priority: 'low' }],
       recommendations: [],
-      summary: 'AI insights are not available. Please configure VITE_GEMINI_API_KEY or VITE_OPENAI_API_KEY.',
+      summary: 'AI insights are not available. Please configure VITE_GROQ_API_KEY or VITE_OPENAI_API_KEY.',
     };
   }
 
@@ -339,11 +376,11 @@ Provide a JSON response with:
 }
 
 export function isAIConfigured(): boolean {
-  return !!(GEMINI_API_KEY || OPENAI_API_KEY);
+  return !!(GROQ_API_KEY || OPENAI_API_KEY);
 }
 
 export function getAIProvider(): string {
-  if (GEMINI_API_KEY) return 'gemini';
+  if (GROQ_API_KEY) return 'groq';
   if (OPENAI_API_KEY) return 'openai';
   return 'none';
 }
@@ -363,7 +400,7 @@ export async function autoGradeAnswer(
   maxScore: number = 10,
   questionType: 'mcq' | 'short' | 'long' = 'short'
 ): Promise<GradingResult> {
-  if (!GEMINI_API_KEY && !OPENAI_API_KEY) {
+  if (!GROQ_API_KEY && !OPENAI_API_KEY) {
     return {
       score: 0,
       maxScore,
@@ -457,8 +494,8 @@ export async function gradeQuizSubmission(
     results.push(result);
   }
 
-  const totalScore = results.reduce((sum, r) => sum + r.score, 0);
-  const maxScore = results.reduce((sum, r) => sum + r.maxScore, 0);
+  const totalScore = results.reduce((sum, r) => sum + r.score,0);
+  const maxScore = results.reduce((sum, r) => sum + r.maxScore,0);
   const percentage = maxScore > 0 ? Math.round((totalScore / maxScore) * 100) : 0;
 
   let overallFeedback = '';
@@ -478,85 +515,17 @@ export async function gradeQuizSubmission(
 }
 
 export async function extractTextFromImage(imageBase64: string): Promise<string> {
-  if (!GEMINI_API_KEY && !OPENAI_API_KEY) {
-    throw new Error('No AI provider configured. Please set VITE_GEMINI_API_KEY or VITE_OPENAI_API_KEY');
+  if (!GEMINI_API_KEY) {
+    throw new Error('Gemini API key is required for OCR. Please set VITE_GEMINI_API_KEY');
   }
 
-  // Try Gemini first (supports vision)
-  if (GEMINI_API_KEY) {
-    try {
-      const prompt = 'Extract all text from this image. Preserve the structure and formatting as much as possible. If there is no readable text, describe what you see in the image.';
-
-      const response = await fetch(
-        `${GEMINI_API_URL}/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            contents: [{
-              role: 'user',
-              parts: [
-                { text: prompt },
-                { inlineData: { mimeType: 'image/jpeg', data: imageBase64.replace(/^data:image\/\w+;base64,/, '') } },
-              ],
-            }],
-            generationConfig: {
-              temperature: 0.1,
-              maxOutputTokens: 8192,
-            },
-          }),
-        }
-      );
-
-      if (!response.ok) {
-        throw new Error(`Gemini API error: ${response.status}`);
-      }
-
-      const data = await response.json();
-      return data.candidates?.[0]?.content?.parts?.[0]?.text || '';
-    } catch (geminiError) {
-      console.warn('[AI] Gemini OCR failed, trying OpenAI:', geminiError.message);
-    }
+  try {
+    const prompt = 'Extract all text from this image. Preserve the structure and formatting as much as possible. If there is no readable text, describe what you see in the image.';
+    return await callGeminiVision(prompt, imageBase64);
+  } catch (error) {
+    console.error('[AI] Gemini OCR failed:', error.message);
+    throw new Error(`OCR extraction failed: ${error.message}`);
   }
-
-  // Fallback to OpenAI (if it supports vision)
-  if (OPENAI_API_KEY) {
-    try {
-      const base64Data = imageBase64.replace(/^data:image\/\w+;base64,/, '');
-      
-      const response = await fetch(`${OPENAI_API_URL}/chat/completions`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${OPENAI_API_KEY}`,
-        },
-        body: JSON.stringify({
-          model: OPENAI_MODEL,
-          messages: [{
-            role: 'user',
-            content: [
-              { type: 'text', text: 'Extract all text from this image. Preserve the structure and formatting as much as possible.' },
-              { type: 'image_url', image_url: { url: `data:image/jpeg;base64,${base64Data}` } },
-            ],
-          }],
-          temperature: 0.1,
-          max_tokens: 8192,
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error(`OpenAI API error: ${response.status}`);
-      }
-
-      const data = await response.json();
-      return data?.choices?.[0]?.message?.content || '';
-    } catch (openaiError) {
-      console.error('[AI] Both Gemini and OpenAI failed for OCR:', openaiError.message);
-      throw new Error(`OCR extraction failed: ${openaiError.message}`);
-    }
-  }
-
-  throw new Error('No AI provider available for OCR');
 }
 
 export default {

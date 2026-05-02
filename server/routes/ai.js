@@ -1,35 +1,34 @@
 /**
  * server/routes/ai.js
- * AI-powered routes using Google Gemini API with OpenAI fallback
+ * AI-powered routes using Groq API as primary provider with OpenRouter fallback
  */
 
 import express from 'express';
 
 const router = express.Router();
 
-const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models';
-const DEFAULT_MODEL = process.env.GEMINI_MODEL || 'gemini-2.0-flash';
-const OPENAI_API_URL = process.env.OPENAI_BASE_URL || 'https://api.together.xyz/v1';
-const OPENAI_MODEL = process.env.OPENAI_MODEL || 'meta-llama/Llama-3.3-70B-Instruct-Turbo';
-
-// Groq API configuration for chatbot
+// Groq API configuration (primary)
 const GROQ_API_URL = process.env.GROQ_BASE_URL || 'https://api.groq.com/openai/v1';
 const GROQ_MODEL = process.env.GROQ_MODEL || 'llama-3.3-70b-versatile';
 
-function getGeminiApiKey() {
-  return process.env.GEMINI_API_KEY?.trim() || '';
+// OpenRouter API configuration (fallback for text, primary for vision)
+const OPENAI_API_URL = process.env.OPENAI_BASE_URL || 'https://openrouter.ai/api/v1';
+const OPENAI_MODEL = process.env.OPENAI_MODEL || 'meta-llama/Llama-3.3-70B-Instruct-Turbo';
+
+// Gemini API configuration (fallback for vision/OCR only)
+const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models';
+const DEFAULT_GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-2.0-flash';
+
+function getGroqApiKey() {
+  return process.env.GROQ_API_KEY?.trim() || '';
 }
 
 function getOpenAiApiKey() {
   return process.env.OPENAI_API_KEY?.trim() || '';
 }
 
-function getGroqApiKey() {
-  return process.env.GROQ_API_KEY?.trim() || '';
-}
-
-function extractGeminiText(data) {
-  return data?.candidates?.[0]?.content?.parts?.map((part) => part?.text || '').join('').trim() || '';
+function getGeminiApiKey() {
+  return process.env.GEMINI_API_KEY?.trim() || '';
 }
 
 function buildAiError(message, status = 500) {
@@ -42,34 +41,85 @@ function normalizeHistory(history = []) {
   if (!Array.isArray(history)) return [];
   return history
     .map((item) => ({
-      role: item?.role === 'user' ? 'user' : 'model',
-      text: item?.content || item?.text || '',
+      role: item?.role === 'user' ? 'user' : 'assistant',
+      content: item?.content || item?.text || '',
     }))
-    .filter((item) => item.text.trim().length > 0)
+    .filter((item) => item.content.trim().length > 0)
     .slice(-10);
 }
 
-async function callOpenAI({ prompt, history = [], temperature = 0.7, maxTokens = 2048 }) {
+// Primary Groq API call
+async function callGroq({ prompt, history = [], temperature = 0.7, maxTokens = 2048, systemPrompt = null }) {
+  const apiKey = getGroqApiKey();
+  if (!apiKey) {
+    throw buildAiError('GROQ_API_KEY is not configured on the backend.', 503);
+  }
+
+  const messages = [];
+
+  if (systemPrompt) {
+    messages.push({ role: 'system', content: systemPrompt });
+  }
+
+  messages.push(
+    ...normalizeHistory(history).map((msg) => ({
+      role: msg.role,
+      content: msg.content,
+    })),
+    { role: 'user', content: prompt }
+  );
+
+  const response = await fetch(`${GROQ_API_URL}/chat/completions`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({
+      model: GROQ_MODEL,
+      messages,
+      temperature,
+      max_tokens: maxTokens,
+    }),
+  });
+
+  if (!response.ok) {
+    const errorBody = await response.json().catch(() => ({}));
+    const message = errorBody?.error?.message || `Groq API request failed with status ${response.status}`;
+    throw buildAiError(message, response.status === 429 ? 429 : 502);
+  }
+
+  const data = await response.json();
+  return data?.choices?.[0]?.message?.content?.trim() || '';
+}
+
+// OpenRouter/OpenAI fallback for text
+async function callOpenAI({ prompt, history = [], temperature = 0.7, maxTokens = 2048, systemPrompt = null }) {
   const apiKey = getOpenAiApiKey();
   if (!apiKey) {
     throw buildAiError('OPENAI_API_KEY is not configured on the backend.', 503);
   }
 
-  const messages = [
-    ...history.map((msg) => ({
-      role: msg.role === 'model' ? 'assistant' : 'user',
-      content: msg.text || msg.content || '',
+  const messages = [];
+
+  if (systemPrompt) {
+    messages.push({ role: 'system', content: systemPrompt });
+  }
+
+  messages.push(
+    ...normalizeHistory(history).map((msg) => ({
+      role: msg.role,
+      content: msg.content,
     })),
-    { role: 'user', content: prompt },
-  ];
+    { role: 'user', content: prompt }
+  );
 
   const isOpenRouter = OPENAI_API_URL.includes('openrouter');
   const headers = {
     'Content-Type': 'application/json',
     'Authorization': `Bearer ${apiKey}`,
   };
-  
-  // OpenRouter requires these extra headers
+
   if (isOpenRouter) {
     headers['HTTP-Referer'] = process.env.FRONTEND_URL || 'https://gyandeep.edu';
     headers['X-Title'] = 'Gyandeep';
@@ -96,47 +146,42 @@ async function callOpenAI({ prompt, history = [], temperature = 0.7, maxTokens =
   return data?.choices?.[0]?.message?.content?.trim() || '';
 }
 
-async function callGemini({
-  prompt,
-  history = [],
-  model = DEFAULT_MODEL,
-  temperature = 0.7,
-  maxTokens = 2048,
-  inlineData = null,
-}) {
+// Gemini for vision/OCR only
+async function callGeminiVision({ prompt, imageBase64, temperature = 0.1 }) {
   const apiKey = getGeminiApiKey();
   if (!apiKey) {
-    throw buildAiError('GEMINI_API_KEY is not configured on the backend.', 503);
+    throw buildAiError('GEMINI_API_KEY is not configured (required for image processing).', 503);
   }
 
-  const contents = [
-    ...normalizeHistory(history).map((message) => ({
-      role: message.role,
-      parts: [{ text: message.text }],
-    })),
-    {
-      role: 'user',
-      parts: inlineData
-        ? [{ text: prompt }, inlineData]
-        : [{ text: prompt }],
-    },
-  ];
-
   const payload = {
-    contents,
+    contents: [{
+      role: 'user',
+      parts: [
+        { text: prompt },
+        {
+          inline_data: {
+            mime_type: 'image/jpeg',
+            data: imageBase64.replace(/^data:image\/\w+;base64,/, ''),
+          },
+        },
+      ],
+    }],
     generationConfig: {
       temperature,
-      maxOutputTokens: maxTokens,
+      maxOutputTokens: 2048,
       topP: 0.95,
       topK: 40,
     },
   };
 
-  const response = await fetch(`${GEMINI_API_URL}/${model}:generateContent?key=${apiKey}`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload),
-  });
+  const response = await fetch(
+    `${GEMINI_API_URL}/${DEFAULT_GEMINI_MODEL}:generateContent?key=${apiKey}`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    }
+  );
 
   if (!response.ok) {
     const errorBody = await response.json().catch(() => ({}));
@@ -145,39 +190,40 @@ async function callGemini({
   }
 
   const data = await response.json();
-  return extractGeminiText(data);
+  return data?.candidates?.[0]?.content?.parts?.map((p) => p?.text || '').join('').trim() || '';
 }
 
-async function callAI(params) {
-  const results = { gemini: null, openai: null };
-  
-  // Try Gemini first
-  if (getGeminiApiKey()) {
+// Unified AI caller - Groq primary, OpenRouter fallback
+async function callAI({ prompt, history = [], temperature = 0.7, maxTokens = 2048, systemPrompt = null }) {
+  const results = { groq: null, openai: null };
+
+  // Try Groq first (fastest)
+  if (getGroqApiKey()) {
     try {
-      results.gemini = await callGemini(params);
-      return results.gemini;
-    } catch (geminiError) {
-      console.warn('[AI] Gemini failed, falling back to OpenAI:', geminiError.message);
-      results.gemini = geminiError;
+      results.groq = await callGroq({ prompt, history, temperature, maxTokens, systemPrompt });
+      return results.groq;
+    } catch (groqError) {
+      console.warn('[AI] Groq failed, trying OpenRouter:', groqError.message);
+      results.groq = groqError;
     }
   }
 
-  // Fallback to OpenAI
+  // Fallback to OpenRouter/OpenAI
   if (getOpenAiApiKey()) {
     try {
-      results.openai = await callOpenAI(params);
+      results.openai = await callOpenAI({ prompt, history, temperature, maxTokens, systemPrompt });
       return results.openai;
     } catch (openaiError) {
-      console.error('[AI] OpenAI also failed:', openaiError.message);
+      console.error('[AI] OpenRouter also failed:', openaiError.message);
       results.openai = openaiError;
     }
   }
 
-  // Both failed
-  const errorMsg = results.openai?.message || results.gemini?.message || 'Unknown error';
-  throw buildAiError(`AI request failed: ${errorMsg}`, results.openai?.status || results.gemini?.status || 502);
+  const errorMsg = results.openai?.message || results.groq?.message || 'No AI provider configured';
+  throw buildAiError(`AI request failed: ${errorMsg}`, results.openai?.status || results.groq?.status || 502);
 }
 
+// Parse quiz JSON response
 function parseQuizResponse(rawResponse, count) {
   const cleaned = rawResponse.replace(/```json\s*/gi, '').replace(/```\s*/g, '').trim();
   const jsonMatch = cleaned.match(/\[[\s\S]*\]/);
@@ -213,6 +259,7 @@ function parseQuizResponse(rawResponse, count) {
   return quiz;
 }
 
+// AI Email generation
 router.post('/ai-email', async (req, res) => {
   try {
     const { prompt, recipients, context } = req.body;
@@ -233,7 +280,7 @@ Subject: [your subject line here]
 ---
 [your email body here]`;
 
-    const reply = await callGemini({ prompt: emailPrompt, temperature: 0.5 });
+    const reply = await callAI({ prompt: emailPrompt, temperature: 0.5, maxTokens: 1024 });
     const [subjectLine, ...bodyParts] = reply.split('---');
 
     res.json({
@@ -250,50 +297,7 @@ Subject: [your subject line here]
   }
 });
 
-async function callGroqChat({ message, history = [], temperature = 0.7, maxTokens = 1024, userName = 'Student', userRole = 'student' }) {
-  const apiKey = getGroqApiKey();
-  if (!apiKey) {
-    throw buildAiError('GROQ_API_KEY is not configured.', 503);
-  }
-
-  const messages = [
-    {
-      role: 'system',
-      content: `You are Gyandeep AI, a concise educational assistant for students and teachers. Current user: ${userName} (${userRole}). Answer clearly, accurately, and in a classroom-safe way.`
-    },
-    ...history.map((msg) => ({
-      role: msg.role === 'model' || msg.role === 'assistant' ? 'assistant' : 'user',
-      content: msg.content || msg.text || '',
-    })),
-    { role: 'user', content: message },
-  ];
-
-  const headers = {
-    'Content-Type': 'application/json',
-    'Authorization': `Bearer ${apiKey}`,
-  };
-
-  const response = await fetch(`${GROQ_API_URL}/chat/completions`, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify({
-      model: GROQ_MODEL,
-      messages,
-      temperature,
-      max_tokens: maxTokens,
-    }),
-  });
-
-  if (!response.ok) {
-    const errorBody = await response.json().catch(() => ({}));
-    const message = errorBody?.error?.message || `Groq API request failed with status ${response.status}`;
-    throw buildAiError(message, response.status === 429 ? 429 : 502);
-  }
-
-  const data = await response.json();
-  return data?.choices?.[0]?.message?.content?.trim() || '';
-}
-
+// Chat endpoint
 router.post('/chat', async (req, res) => {
   try {
     const { message, prompt, history, userName = 'Student', userRole = 'student', model } = req.body;
@@ -303,13 +307,14 @@ router.post('/chat', async (req, res) => {
       return res.status(400).json({ error: 'Message or prompt is required' });
     }
 
-    const reply = await callGroqChat({
-      message: inputMessage,
+    const systemPrompt = `You are Gyandeep AI, a concise educational assistant for students and teachers. Current user: ${userName} (${userRole}). Answer clearly, accurately, and in a classroom-safe way.`;
+
+    const reply = await callAI({
+      prompt: inputMessage,
       history,
       temperature: model === 'smart' ? 0.5 : 0.7,
       maxTokens: 1024,
-      userName,
-      userRole,
+      systemPrompt,
     });
 
     res.json({
@@ -323,6 +328,7 @@ router.post('/chat', async (req, res) => {
   }
 });
 
+// Quiz generation
 async function handleQuizGeneration(req, res) {
   try {
     const { notesText, subject, count = 10 } = req.body;
@@ -372,6 +378,7 @@ ${notesText.slice(0, 8000)}`;
 router.post('/quiz', handleQuizGeneration);
 router.post('/quiz/generate', handleQuizGeneration);
 
+// Grading
 router.post('/grade', async (req, res) => {
   try {
     const { questions, answers } = req.body;
@@ -463,6 +470,7 @@ Respond ONLY with a JSON object:
   }
 });
 
+// OCR - Image text extraction (uses Gemini for vision support)
 router.post('/extract-text', async (req, res) => {
   try {
     const { imageBase64 } = req.body;
@@ -471,16 +479,10 @@ router.post('/extract-text', async (req, res) => {
       return res.status(400).json({ error: 'Image base64 data is required' });
     }
 
-    const text = await callAI({
+    const text = await callGeminiVision({
       prompt: 'Extract all readable text from this image. Preserve structure when possible.',
+      imageBase64,
       temperature: 0.1,
-      maxTokens: 2048,
-      inlineData: {
-        inlineData: {
-          mimeType: 'image/jpeg',
-          data: imageBase64.replace(/^data:image\/\w+;base64,/, ''),
-        },
-      },
     });
 
     res.json({ text, success: true });
@@ -490,6 +492,7 @@ router.post('/extract-text', async (req, res) => {
   }
 });
 
+// Summarization
 router.post('/summarize', async (req, res) => {
   try {
     const { text, subject, mode = 'bullets' } = req.body;

@@ -1,12 +1,82 @@
 /**
  * server/routes/analytics.js
- * Analytics and AI-powered insights with real MongoDB aggregates
+ * Analytics and AI-powered insights with Groq primary and OpenRouter fallback
  */
 
 import express from 'express';
 const router = express.Router();
 import { connectToDatabase, COLLECTIONS } from '../db/mongoAtlas.js';
 import { authMiddleware } from '../middleware/auth.js';
+
+// Groq API configuration
+const GROQ_API_URL = process.env.GROQ_BASE_URL || 'https://api.groq.com/openai/v1';
+const GROQ_MODEL = process.env.GROQ_MODEL || 'llama-3.3-70b-versatile';
+
+// OpenRouter fallback
+const OPENAI_API_URL = process.env.OPENAI_BASE_URL || 'https://openrouter.ai/api/v1';
+const OPENAI_MODEL = process.env.OPENAI_MODEL || 'meta-llama/Llama-3.3-70B-Instruct-Turbo';
+
+async function callGroq(prompt, temperature = 0.4, maxTokens = 1024) {
+  const apiKey = process.env.GROQ_API_KEY?.trim();
+  if (!apiKey) throw new Error('GROQ_API_KEY not configured');
+
+  const response = await fetch(`${GROQ_API_URL}/chat/completions`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({
+      model: GROQ_MODEL,
+      messages: [{ role: 'user', content: prompt }],
+      temperature,
+      max_tokens: maxTokens,
+    }),
+  });
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({}));
+    throw new Error(error?.error?.message || `Groq API error: ${response.status}`);
+  }
+
+  const data = await response.json();
+  return data?.choices?.[0]?.message?.content || '';
+}
+
+async function callOpenAI(prompt, temperature = 0.4, maxTokens = 1024) {
+  const apiKey = process.env.OPENAI_API_KEY?.trim();
+  if (!apiKey) throw new Error('OPENAI_API_KEY not configured');
+
+  const isOpenRouter = OPENAI_API_URL.includes('openrouter');
+  const headers = {
+    'Content-Type': 'application/json',
+    'Authorization': `Bearer ${apiKey}`,
+  };
+
+  if (isOpenRouter) {
+    headers['HTTP-Referer'] = process.env.FRONTEND_URL || 'https://gyandeep.edu';
+    headers['X-Title'] = 'Gyandeep';
+  }
+
+  const response = await fetch(`${OPENAI_API_URL}/chat/completions`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({
+      model: OPENAI_MODEL,
+      messages: [{ role: 'user', content: prompt }],
+      temperature,
+      max_tokens: maxTokens,
+    }),
+  });
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({}));
+    throw new Error(error?.error?.message || `OpenAI API error: ${response.status}`);
+  }
+
+  const data = await response.json();
+  return data?.choices?.[0]?.message?.content || '';
+}
 
 router.post('/insights', authMiddleware, async (req, res) => {
   try {
@@ -22,67 +92,31 @@ Format your response ONLY as a JSON array of objects:
   { "type": "achievement|improvement|attendance|progress", "message": "Short actionable insight message" }
 ]`;
 
-    // Try Gemini first
-    if (process.env.GEMINI_API_KEY) {
+    // Try Groq first (primary)
+    if (process.env.GROQ_API_KEY) {
       try {
-        const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
-        const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent';
-
-        const response = await fetch(`${GEMINI_API_URL}?key=${GEMINI_API_KEY}`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            contents: [{ parts: [{ text: prompt }] }],
-            generationConfig: { temperature: 0.4, maxOutputTokens: 1024 }
-          })
-        });
-
-        if (response.ok) {
-          const data = await response.json();
-          const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
-          const jsonMatch = text.match(/\[[\s\S]*\]/);
-          if (jsonMatch) {
-            const insights = JSON.parse(jsonMatch[0]);
-            return res.json({ insights, provider: 'gemini' });
-          }
+        const text = await callGroq(prompt, 0.4, 1024);
+        const jsonMatch = text.match(/\[[\s\S]*\]/);
+        if (jsonMatch) {
+          const insights = JSON.parse(jsonMatch[0]);
+          return res.json({ insights, provider: 'groq' });
         }
       } catch (err) {
-        console.warn('[Analytics] Gemini insight generation failed, trying OpenAI:', err.message);
+        console.warn('[Analytics] Groq insight generation failed, trying OpenRouter:', err.message);
       }
     }
 
-    // Fallback to OpenAI
+    // Fallback to OpenRouter/OpenAI
     if (process.env.OPENAI_API_KEY) {
       try {
-        const OPENAI_API_URL = process.env.OPENAI_BASE_URL || 'https://api.together.xyz/v1';
-        const OPENAI_MODEL = process.env.OPENAI_MODEL || 'meta-llama/Llama-3.3-70B-Instruct-Turbo';
-        const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
-
-        const response = await fetch(`${OPENAI_API_URL}/chat/completions`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${OPENAI_API_KEY}`,
-          },
-          body: JSON.stringify({
-            model: OPENAI_MODEL,
-            messages: [{ role: 'user', content: prompt }],
-            temperature: 0.4,
-            max_tokens: 1024,
-          })
-        });
-
-        if (response.ok) {
-          const data = await response.json();
-          const text = data?.choices?.[0]?.message?.content || '';
-          const jsonMatch = text.match(/\[[\s\S]*\]/);
-          if (jsonMatch) {
-            const insights = JSON.parse(jsonMatch[0]);
-            return res.json({ insights, provider: 'openai' });
-          }
+        const text = await callOpenAI(prompt, 0.4, 1024);
+        const jsonMatch = text.match(/\[[\s\S]*\]/);
+        if (jsonMatch) {
+          const insights = JSON.parse(jsonMatch[0]);
+          return res.json({ insights, provider: 'openai' });
         }
       } catch (err) {
-        console.warn('[Analytics] OpenAI insight generation failed:', err.message);
+        console.warn('[Analytics] OpenRouter insight generation failed:', err.message);
       }
     }
 

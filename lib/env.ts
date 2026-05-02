@@ -17,6 +17,8 @@ const ENV_CONFIG: EnvConfig = {
   optional: [
     'MONGODB_URI',
     'MONGODB_DB',
+    'GROQ_API_KEY',
+    'OPENAI_API_KEY',
     'GEMINI_API_KEY',
     'RESEND_API_KEY',
     'R2_ACCOUNT_ID',
@@ -28,7 +30,7 @@ const ENV_CONFIG: EnvConfig = {
   ],
   warnings: [
     'MONGODB_URI',
-    'GEMINI_API_KEY',
+    'GROQ_API_KEY',
     'RESEND_API_KEY',
     'R2_ACCOUNT_ID',
   ],
