@@ -21,6 +21,7 @@ interface QuizWorkerState {
 interface GenerateQuizOptions {
   notesText: string;
   subject: string;
+  count?: number;
 }
 
 interface SummarizeOptions {
@@ -94,7 +95,7 @@ export function useQuizWorker() {
   }, []);
 
   const generateQuiz = useCallback(
-    ({ notesText, subject }: GenerateQuizOptions): Promise<{ quiz: QuizQuestion[]; fromCache: boolean }> => {
+    ({ notesText, subject, count }: GenerateQuizOptions): Promise<{ quiz: QuizQuestion[]; fromCache: boolean }> => {
       if (!workerRef.current) return Promise.reject(new Error('Worker not ready'));
 
       setState(s => ({ ...s, isGenerating: true, error: null, progress: 'Preparing...' }));
@@ -104,7 +105,7 @@ export function useQuizWorker() {
         rejectRef.current = reject;
         workerRef.current!.postMessage({
           type: 'GENERATE_QUIZ',
-          payload: { notesText, subject, token: getStoredToken(), apiBase: API_BASE },
+          payload: { notesText, subject, count, token: getStoredToken(), apiBase: API_BASE },
         });
       });
     },

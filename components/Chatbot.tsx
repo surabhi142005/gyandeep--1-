@@ -115,7 +115,14 @@ const Chatbot: React.FC<ChatbotProps> = ({ theme, userLocation }) => {
             const response = await getChatbotResponse({
                 prompt: trimmedInput,
                 location: userLocation,
-                model: thinkingMode ? 'smart' : chatbotModel
+                model: thinkingMode ? 'smart' : chatbotModel,
+                history: messages
+                    .filter((message) => !message.thinking)
+                    .slice(-10)
+                    .map((message) => ({
+                        role: message.sender === 'user' ? 'user' : 'model',
+                        text: message.text,
+                    })),
             });
             const botMessage: Message = { sender: 'bot', text: response.text, sources: response.sources };
             // Remove the "thinking" placeholder and add real response

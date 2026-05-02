@@ -21,16 +21,16 @@ self.onmessage = async (e) => {
 
   try {
     if (type === 'GENERATE_QUIZ') {
-      const { notesText, subject, token, apiBase = '' } = payload;
+      const { notesText, subject, count, token, apiBase = '' } = payload;
       post('PROGRESS', { message: 'Sending notes to AI...' });
 
-      const res = await fetch(`${apiBase}/api/quiz`, {
+      const res = await fetch(`${apiBase}/api/quiz/generate`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
-        body: JSON.stringify({ notesText, subject }),
+        body: JSON.stringify({ notesText, subject, count }),
       });
 
       if (!res.ok) {

@@ -69,6 +69,23 @@ async function apiRequest(path: string, init: RequestInit = {}) {
   return body;
 }
 
+async function multipartRequest(path: string, formData: FormData) {
+  await getCSRFToken();
+  const csrfHeaders = getCSRFHeaders();
+  const res = await fetchWithTimeout(`${API_BASE}${path}`, {
+    method: 'POST',
+    headers: csrfHeaders,
+    body: formData,
+    credentials: 'include',
+  });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const msg = body.error || body.message || `Request failed (${res.status})`;
+    throw new Error(msg);
+  }
+  return body;
+}
+
 // ─── Utility ────────────────────────────────────────────────────────────────
 
 const lsGet = <T>(key: string, defaultValue: T): T => {
@@ -146,18 +163,7 @@ export const uploadClassNotes = async (params: { classId: string; subjectId: str
     formData.append('file', params.file);
     formData.append('classId', params.classId);
     formData.append('subjectId', params.subjectId);
-
-    await getCSRFToken();
-    const csrfHeaders = getCSRFHeaders();
-    const res = await fetch(`${API_BASE}/api/notes/upload`, {
-      method: 'POST',
-      headers: csrfHeaders,
-      body: formData,
-      credentials: 'include',
-    });
-    const body = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error(body.error || `Upload failed (${res.status})`);
-    return body as { ok: boolean; url: string; extractedText?: string };
+    return await multipartRequest('/api/storage/upload', formData) as { ok: boolean; url: string; extractedText?: string };
   }
 
   // Text content upload
@@ -165,6 +171,34 @@ export const uploadClassNotes = async (params: { classId: string; subjectId: str
     method: 'POST',
     body: JSON.stringify({ classId: params.classId, subjectId: params.subjectId, content: params.content }),
   });
+};
+
+export const uploadSessionFile = async (params: { classId: string; subjectId: string; file: File; type?: string; userId?: string }) => {
+  const formData = new FormData();
+  formData.append('file', params.file);
+  formData.append('classId', params.classId);
+  formData.append('subjectId', params.subjectId);
+  if (params.type) formData.append('type', params.type);
+  if (params.userId) formData.append('userId', params.userId);
+  return multipartRequest('/api/storage/upload', formData);
+};
+
+export const uploadCentralizedFile = async (params: {
+  classId?: string;
+  subjectId: string;
+  file: File;
+  title?: string;
+  noteType?: string;
+  userId?: string;
+}) => {
+  const formData = new FormData();
+  formData.append('file', params.file);
+  if (params.classId) formData.append('classId', params.classId);
+  formData.append('subjectId', params.subjectId);
+  if (params.title) formData.append('title', params.title);
+  if (params.noteType) formData.append('noteType', params.noteType);
+  if (params.userId) formData.append('userId', params.userId);
+  return multipartRequest('/api/storage/centralized', formData);
 };
 
 export const listClassNotes = async (params: { classId: string; subjectId: string }) => {
@@ -755,6 +789,13 @@ export const fetchAvailableQuizzes = async (classId: string) => {
 
 export const fetchQuizResults = async (quizId: string) => {
   return apiRequest(`/api/quiz/${quizId}/results`, { method: 'GET' });
+};
+
+export const startSessionQuiz = async (sessionId: string, payload: { title?: string; questions: any[] }) => {
+  return apiRequest(`/api/sessions/${sessionId}/quiz/start`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
 };
 
 export const fetchLeaderboard = async (classId?: string, limit?: number) => {

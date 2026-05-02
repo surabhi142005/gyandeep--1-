@@ -73,6 +73,7 @@ router.post('/upload', authMiddleware, handleUpload, async (req, res) => {
       const note = {
         classId: classId || null,
         subjectId: subjectId || null,
+        subject: subjectId || 'General',
         title: file.originalname,
         url: result.url,
         key: result.key,
@@ -80,7 +81,7 @@ router.post('/upload', authMiddleware, handleUpload, async (req, res) => {
         fileSize: file.size,
         mimeType: file.mimetype,
         noteType: type || 'class_notes',
-        uploadedBy: userId || null,
+        uploadedBy: userId || req.user?.id || null,
         deletedAt: null,
         _id: new ObjectId(),
         createdAt: new Date(),
@@ -108,6 +109,7 @@ router.post('/upload', authMiddleware, handleUpload, async (req, res) => {
       const note = {
         classId: classId || null,
         subjectId: subjectId || null,
+        subject: subjectId || 'General',
         title: file.originalname,
         url: result.url,
         key: result.publicId,
@@ -115,7 +117,7 @@ router.post('/upload', authMiddleware, handleUpload, async (req, res) => {
         fileSize: file.size,
         mimeType: file.mimetype,
         noteType: type || 'class_notes',
-        uploadedBy: userId || null,
+        uploadedBy: userId || req.user?.id || null,
         deletedAt: null,
         storage: 'cloudinary',
         _id: new ObjectId(),
@@ -141,6 +143,7 @@ router.post('/upload', authMiddleware, handleUpload, async (req, res) => {
     const note = {
       classId: classId || null,
       subjectId: subjectId || null,
+      subject: subjectId || 'General',
       title: file.originalname,
       content: base64,
       url: dataUrl,
@@ -148,7 +151,7 @@ router.post('/upload', authMiddleware, handleUpload, async (req, res) => {
       fileSize: file.size,
       mimeType: file.mimetype,
       noteType: type || 'class_notes',
-      uploadedBy: userId || null,
+      uploadedBy: userId || req.user?.id || null,
       deletedAt: null,
       storage: 'base64',
       _id: new ObjectId(),
@@ -188,6 +191,7 @@ router.post('/centralized', authMiddleware, handleUpload, async (req, res) => {
     const note = {
       classId: classId || null,
       subjectId,
+      subject: subjectId || 'General',
       unitNumber: parseInt(unitNumber) || 1,
       unitName: unitName || 'Unit',
       title: title || file.originalname,
@@ -197,7 +201,7 @@ router.post('/centralized', authMiddleware, handleUpload, async (req, res) => {
       fileSize: file.size,
       mimeType: file.mimetype,
       noteType: noteType || 'centralized_notes',
-      uploadedBy: userId || null,
+      uploadedBy: userId || req.user?.id || null,
       _id: new ObjectId(),
       createdAt: new Date(),
     };

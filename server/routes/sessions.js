@@ -7,7 +7,7 @@ import express from 'express';
 const router = express.Router();
 import { ObjectId } from 'mongodb';
 import { connectToDatabase, COLLECTIONS } from '../db/mongoAtlas.js';
-import { broadcastToRoom, broadcastToAll } from './events.js';
+import { broadcastToRoom, broadcastToAll, broadcastToUser } from './events.js';
 import { authMiddleware } from '../middleware/auth.js';
 import { checkAndAssignBadges } from '../services/gamification.js';
 import { RateLimiter } from '../middleware/rateLimiter.js';

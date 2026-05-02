@@ -181,14 +181,24 @@ export function sanitizeHTML(html) {
   });
 }
 
-const MAX_BODY_SIZE = process.env.MAX_BODY_SIZE || '10mb';
-const MAX_FILE_SIZE = process.env.MAX_FILE_SIZE || '5mb';
+const MAX_BODY_SIZE = process.env.MAX_BODY_SIZE || '50mb';
+const MAX_FILE_SIZE = process.env.MAX_FILE_SIZE || '50mb';
 
 export function requestSizeLimit(req, res, next) {
   const contentLength = parseInt(req.headers['content-length'] || '0', 10);
-  const maxBytes = parseInt(MAX_BODY_SIZE, 10) * 1024 * 1024;
+  
+  // Parse limit (handle 'mb' or 'kb' suffix if present)
+  const parseLimit = (limitStr) => {
+    const value = parseInt(limitStr, 10);
+    if (limitStr.toLowerCase().endsWith('kb')) return value * 1024;
+    if (limitStr.toLowerCase().endsWith('gb')) return value * 1024 * 1024 * 1024;
+    return value * 1024 * 1024; // Default to MB
+  };
+
+  const maxBytes = parseLimit(MAX_BODY_SIZE);
   
   if (contentLength > maxBytes) {
+    console.warn(`[Security] Payload too large: ${contentLength} bytes (limit: ${MAX_BODY_SIZE})`);
     return res.status(413).json({ 
       error: 'Payload too large',
       message: `Request body exceeds maximum size of ${MAX_BODY_SIZE}`

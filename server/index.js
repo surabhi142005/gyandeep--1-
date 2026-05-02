@@ -49,7 +49,7 @@ import seedRouter from './routes/seed.js';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
-const BODY_SIZE_LIMIT = process.env.BODY_SIZE_LIMIT || '10mb';
+const BODY_SIZE_LIMIT = process.env.BODY_SIZE_LIMIT || '50mb';
 
 // Security headers for all routes
 app.use(securityHeaders);

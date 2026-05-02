@@ -9,6 +9,29 @@ import { ObjectId } from 'mongodb';
 import { connectToDatabase, COLLECTIONS } from '../db/mongoAtlas.js';
 import { authMiddleware } from '../middleware/auth.js';
 
+function buildSubjectFilter(subjectId) {
+  if (!subjectId) return null;
+  return {
+    $or: [
+      { subjectId },
+      { subject: subjectId },
+    ],
+  };
+}
+
+async function resolveSubjectLabel(db, note) {
+  if (note.subject) return note.subject;
+  if (!note.subjectId) return 'General';
+  if (!ObjectId.isValid(note.subjectId)) return note.subjectId;
+
+  const subject = await db.collection(COLLECTIONS.SUBJECTS).findOne(
+    { _id: new ObjectId(note.subjectId) },
+    { projection: { name: 1 } }
+  );
+
+  return subject?.name || note.subjectId;
+}
+
 router.get('/', async (req, res) => {
   try {
     const db = await connectToDatabase();
@@ -21,7 +44,10 @@ router.get('/', async (req, res) => {
     
     const filter = {};
     if (classId) filter.classId = classId;
-    if (subjectId) filter.subjectId = subjectId;
+    if (subjectId) {
+      const subjectFilter = buildSubjectFilter(subjectId);
+      if (subjectFilter) Object.assign(filter, subjectFilter);
+    }
 
     const [notes, total] = await Promise.all([
       db.collection(COLLECTIONS.SESSION_NOTES)
@@ -62,10 +88,12 @@ router.post('/upload', authMiddleware, async (req, res) => {
     const result = await db.collection(COLLECTIONS.SESSION_NOTES).insertOne({
       classId,
       subjectId,
+      subject: subjectId || 'General',
       content: content || extractedText || '',
       url: url || null,
       fileName: fileName || null,
       fileType: fileType || 'application/pdf',
+      uploadedBy: req.user?.id || null,
       deletedAt: null,
       _id: new ObjectId(),
       createdAt: new Date(),
@@ -83,7 +111,11 @@ router.get('/centralized', authMiddleware, async (req, res) => {
     const db = await connectToDatabase();
     const { subjectId, unitNumber, classId } = req.query;
     
-    const filter = { subjectId };
+    const filter = {};
+    if (subjectId) {
+      const subjectFilter = buildSubjectFilter(subjectId);
+      if (subjectFilter) Object.assign(filter, subjectFilter);
+    }
     if (unitNumber) filter.unitNumber = Number(unitNumber);
     if (classId) filter.classId = classId;
 
@@ -106,11 +138,13 @@ router.post('/centralized', authMiddleware, async (req, res) => {
     const result = await db.collection(COLLECTIONS.CENTRALIZED_NOTES).insertOne({
       classId: classId || null,
       subjectId,
+      subject: subjectId || 'General',
       unitNumber: Number(unitNumber),
       unitName,
       title,
       content,
       noteType: noteType || 'class_notes',
+      uploadedBy: req.user?.id || null,
       _id: new ObjectId(),
       createdAt: new Date(),
     });
@@ -150,23 +184,18 @@ router.get('/student/:classId', authMiddleware, async (req, res) => {
       classId,
       deletedAt: null,
     };
-    if (subjectId) filter.subjectId = subjectId;
+    if (subjectId) {
+      const subjectFilter = buildSubjectFilter(subjectId);
+      if (subjectFilter) Object.assign(filter, subjectFilter);
+    }
 
     const notes = await db.collection(COLLECTIONS.SESSION_NOTES)
       .find(filter)
       .sort({ createdAt: -1 })
       .toArray();
 
-    // Enrich with subject info
     const notesWithSubject = await Promise.all(notes.map(async (note) => {
-      let subjectName = note.subjectId;
-      if (note.subjectId) {
-        const subject = await db.collection(COLLECTIONS.SUBJECTS).findOne(
-          { _id: new ObjectId(note.subjectId) },
-          { projection: { name: 1 } }
-        );
-        subjectName = subject?.name || note.subjectId;
-      }
+      const subjectName = await resolveSubjectLabel(db, note);
       return {
         id: note._id?.toString() || note.id,
         fileName: note.fileName || null,

@@ -80,6 +80,7 @@ class ApiClient {
       const response = await fetchWithTimeout(fullUrl, {
         ...options,
         headers,
+        credentials: 'include',
       });
 
       // Handle 401 by retrying once after token refresh

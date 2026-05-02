@@ -258,7 +258,7 @@ router.post('/register-face', async (req, res) => {
     }
 
     const decoded = jwt.verify(token, JWT_SECRET);
-    const { userId, faceImage, metadata } = req.body;
+    const { userId, faceImage, metadata, faceDescriptor } = req.body;
 
     if (!userId || !faceImage) {
       return res.status(400).json({ error: 'userId and faceImage are required' });
@@ -269,7 +269,7 @@ router.post('/register-face', async (req, res) => {
     }
 
     const { registerFaceForAuth } = await import('../routes/face.js');
-    const result = await registerFaceForAuth(userId, faceImage, metadata || {});
+    const result = await registerFaceForAuth(userId, faceImage, metadata || {}, faceDescriptor);
 
     const db = await connectToDatabase();
     const user = await db.collection(COLLECTIONS.USERS).findOne(
@@ -303,7 +303,7 @@ router.post('/logout', async (req, res) => {
 
 router.post('/login-face', async (req, res) => {
   try {
-    const { userId, faceImage } = req.body;
+    const { userId, faceImage, faceDescriptor, metadata } = req.body;
     
     if (!userId || !faceImage) {
       return res.status(400).json({ error: 'userId and faceImage are required' });
@@ -329,7 +329,7 @@ router.post('/login-face', async (req, res) => {
     }
 
     const { verifyFaceForAuth } = await import('../routes/face.js');
-    const verifyResult = await verifyFaceForAuth(userId, faceImage);
+    const verifyResult = await verifyFaceForAuth(userId, faceImage, faceDescriptor, metadata || {});
     
     if (!verifyResult.authenticated) {
       return res.status(401).json({ 

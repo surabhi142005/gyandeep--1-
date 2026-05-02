@@ -13,7 +13,7 @@ export interface AIConfig {
 }
 
 const DEFAULT_CONFIG: AIConfig = {
-  model: 'gemini-2.0-flash',
+  model: 'gemini-2.5-flash',
   temperature: 0.7,
   maxTokens: 2048,
 };
@@ -384,7 +384,7 @@ export async function extractTextFromImage(imageBase64: string): Promise<string>
 
   try {
     const response = await fetch(
-      `${GEMINI_API_URL}/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`,
+      `${GEMINI_API_URL}/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

@@ -86,10 +86,13 @@ export const FileUpload: React.FC<FileUploadProps> = ({
         formData.append('file', uploadedFile.file);
 
         const token = getStoredToken();
-        const response = await fetch(uploadEndpoint, {
+        const apiBase = import.meta.env.VITE_API_URL || '';
+        const resolvedEndpoint = uploadEndpoint.startsWith('http') ? uploadEndpoint : `${apiBase}${uploadEndpoint}`;
+        const response = await fetch(resolvedEndpoint, {
           method: 'POST',
           headers: token ? { Authorization: `Bearer ${token}` } : {},
           body: formData,
+          credentials: 'include',
           signal: controller.signal,
         });
 

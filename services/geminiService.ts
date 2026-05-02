@@ -41,14 +41,15 @@ export interface ChatbotRequest {
     prompt: string;
     location: Coordinates | null;
     model: 'fast' | 'smart';
+    history?: Array<{ role: 'user' | 'model'; text: string }>;
 }
 
-export const getChatbotResponse = async ({ prompt, location, model }: ChatbotRequest): Promise<ChatbotResponse> => {
+export const getChatbotResponse = async ({ prompt, location, model, history = [] }: ChatbotRequest): Promise<ChatbotResponse> => {
   const headers = getAuthHeaders();
   const res = await fetch(`${getApiBase()}/api/chat`, {
     method: 'POST',
     headers,
-    body: JSON.stringify({ prompt, location, model })
+    body: JSON.stringify({ prompt, location, model, history })
   });
 
   if (!res.ok) {
