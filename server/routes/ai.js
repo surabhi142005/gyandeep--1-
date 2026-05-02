@@ -12,9 +12,9 @@ const DEFAULT_MODEL = process.env.GEMINI_MODEL || 'gemini-2.0-flash';
 const OPENAI_API_URL = process.env.OPENAI_BASE_URL || 'https://api.together.xyz/v1';
 const OPENAI_MODEL = process.env.OPENAI_MODEL || 'meta-llama/Llama-3.3-70B-Instruct-Turbo';
 
-// GoQ (Groq) API configuration for chatbot
-const GOQ_API_URL = process.env.GOQ_BASE_URL || 'https://api.groq.com/openai';
-const GOQ_MODEL = process.env.GOQ_MODEL || 'llama-3.3-70b-versatile';
+// Groq API configuration for chatbot
+const GROQ_API_URL = process.env.GROQ_BASE_URL || 'https://api.groq.com/openai';
+const GROQ_MODEL = process.env.GROQ_MODEL || 'llama-3.3-70b-versatile';
 
 function getGeminiApiKey() {
   return process.env.GEMINI_API_KEY?.trim() || '';
@@ -24,8 +24,8 @@ function getOpenAiApiKey() {
   return process.env.OPENAI_API_KEY?.trim() || '';
 }
 
-function getGoqApiKey() {
-  return process.env.GOQ_API_KEY?.trim() || '';
+function getGroqApiKey() {
+  return process.env.GROQ_API_KEY?.trim() || '';
 }
 
 function extractGeminiText(data) {
@@ -250,10 +250,10 @@ Subject: [your subject line here]
   }
 });
 
-async function callGoqChat({ message, history = [], temperature = 0.7, maxTokens = 1024, userName = 'Student', userRole = 'student' }) {
-  const apiKey = getGoqApiKey();
+async function callGroqChat({ message, history = [], temperature = 0.7, maxTokens = 1024, userName = 'Student', userRole = 'student' }) {
+  const apiKey = getGroqApiKey();
   if (!apiKey) {
-    throw buildAiError('GOQ_API_KEY is not configured.', 503);
+    throw buildAiError('GROQ_API_KEY is not configured.', 503);
   }
 
   const messages = [
@@ -273,11 +273,11 @@ async function callGoqChat({ message, history = [], temperature = 0.7, maxTokens
     'Authorization': `Bearer ${apiKey}`,
   };
 
-  const response = await fetch(`${GOQ_API_URL}/chat/completions`, {
+  const response = await fetch(`${GROQ_API_URL}/chat/completions`, {
     method: 'POST',
     headers,
     body: JSON.stringify({
-      model: GOQ_MODEL,
+      model: GROQ_MODEL,
       messages,
       temperature,
       max_tokens: maxTokens,
@@ -286,7 +286,7 @@ async function callGoqChat({ message, history = [], temperature = 0.7, maxTokens
 
   if (!response.ok) {
     const errorBody = await response.json().catch(() => ({}));
-    const message = errorBody?.error?.message || `GoQ API request failed with status ${response.status}`;
+    const message = errorBody?.error?.message || `Groq API request failed with status ${response.status}`;
     throw buildAiError(message, response.status === 429 ? 429 : 502);
   }
 
@@ -303,7 +303,7 @@ router.post('/chat', async (req, res) => {
       return res.status(400).json({ error: 'Message or prompt is required' });
     }
 
-    const reply = await callGoqChat({
+    const reply = await callGroqChat({
       message: inputMessage,
       history,
       temperature: model === 'smart' ? 0.5 : 0.7,

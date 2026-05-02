@@ -67,7 +67,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [selectedSubject, setSelectedSubject] = useState<string>(
-    classSession.subject || (teacher.assignedSubjects.length > 0 ? allSubjects.find(s => s.id === teacher.assignedSubjects[0])?.name || '' : '')
+    classSession.subject || ((teacher.assignedSubjects?.length ?? 0) > 0 ? allSubjects.find(s => s.id === teacher.assignedSubjects[0])?.name || '' : '')
   );
   const [manualLat, setManualLat] = useState('');
   const [manualLng, setManualLng] = useState('');
@@ -453,7 +453,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
                           className="w-full h-12 px-4 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-sm focus:ring-2 focus:ring-primary/20 outline-none transition-all"
                         >
                           <option value="">{t('Choose a subject...')}</option>
-                          {allSubjects.filter(s => teacher.assignedSubjects.includes(s.id)).map(s => (
+                          {allSubjects.filter(s => teacher.assignedSubjects?.includes(s.id)).map(s => (
                             <option key={s.id} value={s.name}>{s.name}</option>
                           ))}
                         </select>
