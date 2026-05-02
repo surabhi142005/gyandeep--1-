@@ -9,7 +9,7 @@ A full-stack educational platform with authentication, class management, quizzes
 - **Database**: MongoDB Atlas with Prisma ORM
 - **Real-time**: WebSocket + SSE
 - **Auth**: JWT with httpOnly cookies + Face recognition
-- **AI**: Google Gemini
+- **AI**: Groq API (with OpenRouter fallback)
 
 ## Getting Started
 
@@ -40,7 +40,8 @@ npm run start
 - `ALLOWED_ORIGINS` - Comma-separated allowed origins
 
 ### Optional
-- `GEMINI_API_KEY` - Google Gemini for AI features
+- `GROQ_API_KEY` - Groq API for AI chatbot
+- `OPENROUTER_API_KEY` - OpenRouter fallback for AI features
 - `RESEND_API_KEY` - Email service
 - `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` - OAuth
 - `R2_*` - Cloudflare R2 storage
@@ -95,7 +96,7 @@ The `prisma/seed.ts` creates test users with known passwords. **Before productio
 - Announcements
 - Timetable
 - Notes (session + centralized)
-- AI analytics (Gemini)
+- AI analytics (Groq)
 - File storage
 - Email notifications
 - Real-time updates (WebSocket/SSE)
