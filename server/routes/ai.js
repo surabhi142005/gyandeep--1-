@@ -8,7 +8,7 @@ import express from 'express';
 const router = express.Router();
 
 const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models';
-const DEFAULT_MODEL = process.env.GEMINI_MODEL || 'gemini-1.5-flash';
+const DEFAULT_MODEL = process.env.GEMINI_MODEL || 'gemini-2.0-flash';
 
 function getGeminiApiKey() {
   return process.env.GEMINI_API_KEY?.trim() || '';
