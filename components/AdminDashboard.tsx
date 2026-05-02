@@ -6,6 +6,8 @@ import WebcamCapture from './WebcamCapture';
 import AdminFaceViewer from './AdminFaceViewer';
 import { bulkImportUsers, checkEmailServiceHealth, sendEmailNotification, fetchQuestionBank, fetchTagPresets, assignUserToClass } from '../services/dataService';
 import { registerFace, verifyFace, hashPassword } from '../services/authService';
+import { fetchFaceSystemHealth, FaceSystemHealthReport } from '../services/faceHealthService';
+import { formatFaceAuthError } from '../services/faceRecognitionService';
 import { getCurrentPosition } from '../services/locationService';
 import TicketPanel from './TicketPanel';
 import { DashboardLayout, Card, Button, Badge, Input } from './ui';
@@ -27,7 +29,11 @@ import {
   Plus,
   Download,
   BookOpen,
-  Database
+  Database,
+  Activity,
+  Server,
+  Globe,
+  X
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer } from 'recharts';
@@ -103,6 +109,10 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [verifyMessage, setVerifyMessage] = useState<string | null>(null);
   const [verifySuccess, setVerifySuccess] = useState<boolean | null>(null);
 
+  const [faceHealth, setFaceHealth] = useState<FaceSystemHealthReport | null>(null);
+  const [faceHealthLoading, setFaceHealthLoading] = useState(false);
+  const [faceHealthError, setFaceHealthError] = useState<string | null>(null);
+
   // Subject Management State
   const [newSubjectName, setNewSubjectName] = useState('');
   const [subjectError, setSubjectError] = useState<string | null>(null);
@@ -151,6 +161,19 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
       setEmailStatusMessage(err?.message || 'Failed to check email health');
     } finally {
       setEmailHealthLoading(false);
+    }
+  };
+
+  const loadFaceHealth = async () => {
+    try {
+      setFaceHealthLoading(true);
+      setFaceHealthError(null);
+      const report = await fetchFaceSystemHealth();
+      setFaceHealth(report);
+    } catch (err: any) {
+      setFaceHealthError(err?.message || 'Failed to load face system health');
+    } finally {
+      setFaceHealthLoading(false);
     }
   };
 
@@ -417,7 +440,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
     try {
       await registerFace(admin.id, imageDataUrl);
     } catch (e) {
-      console.error(e);
+      console.error(formatFaceAuthError(e, 'register'));
     }
     setShowFaceRegistration(false);
   };
@@ -437,7 +460,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
       }
     } catch (e: any) {
       setVerifySuccess(false);
-      setVerifyMessage(e.message || 'Verification error');
+      setVerifyMessage(formatFaceAuthError(e, 'verify'));
     } finally {
       setVerifyingForUser(null);
       setTimeout(() => setVerifyMessage(null), 4000);
@@ -890,41 +913,121 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
       {activeTab === 'faces' && (
         <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-           <Card padding="xl">
-              <div className="flex justify-between items-center mb-8">
-                <div>
-                  <h2 className="text-2xl font-bold">{t('Biometric Management')}</h2>
-                  <p className="text-gray-500">{t('Manage student and staff facial recognition data')}</p>
-                </div>
-                <Button variant="primary" onClick={() => setShowFaceViewer(true)} icon={<Camera size={20} />}>
+          <Card padding="xl">
+            <div className="flex justify-between items-center mb-8">
+              <div>
+                <h2 className="text-2xl font-bold">{t('Biometric Management')}</h2>
+                <p className="text-gray-500">{t('Monitor face recognition system health and model status')}</p>
+              </div>
+              <div className="flex gap-3">
+                <Button variant="secondary" onClick={() => setShowFaceViewer(true)} icon={<Camera size={20} />}>
                   {t('Open Face Viewer')}
                 </Button>
+                <Button variant="primary" onClick={loadFaceHealth} loading={faceHealthLoading} icon={<Activity size={20} />}>
+                  {t('Run Health Check')}
+                </Button>
               </div>
-              
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                 <div className="p-6 rounded-2xl bg-primary/5 border border-primary/10">
-                    <div className="w-12 h-12 rounded-xl bg-white dark:bg-gray-900 flex items-center justify-center text-primary mb-4 shadow-sm">
-                       <ShieldCheck size={24} />
-                    </div>
-                    <h3 className="font-bold mb-2">{t('Secure Storage')}</h3>
-                    <p className="text-sm text-gray-500">{t('All facial data is encrypted and stored locally on your secure server.')}</p>
-                 </div>
-                 <div className="p-6 rounded-2xl bg-secondary/5 border border-secondary/10">
-                    <div className="w-12 h-12 rounded-xl bg-white dark:bg-gray-900 flex items-center justify-center text-secondary mb-4 shadow-sm">
-                       <RefreshCw size={24} />
-                    </div>
-                    <h3 className="font-bold mb-2">{t('Bulk Verification')}</h3>
-                    <p className="text-sm text-gray-500">{t('Run automated health checks on your biometric database regularly.')}</p>
-                 </div>
-                 <div className="p-6 rounded-2xl bg-amber-500/5 border border-amber-500/10">
-                    <div className="w-12 h-12 rounded-xl bg-white dark:bg-gray-900 flex items-center justify-center text-amber-600 mb-4 shadow-sm">
-                       <AlertCircle size={24} />
-                    </div>
-                    <h3 className="font-bold mb-2">{t('Privacy First')}</h3>
-                    <p className="text-sm text-gray-500">{t('Ensure all users have consented to biometric data collection.')}</p>
-                 </div>
+            </div>
+
+            {faceHealthError && (
+              <div className="mb-6 p-4 bg-red-50 border border-red-100 rounded-xl text-red-700 text-sm flex items-center gap-2">
+                <AlertCircle size={16} />
+                {faceHealthError}
               </div>
-           </Card>
+            )}
+
+            {faceHealth && (
+              <div className="mb-6">
+                <div className={`p-4 rounded-xl border mb-6 ${faceHealth.overallReady ? 'bg-green-50 border-green-100' : 'bg-amber-50 border-amber-100'}`}>
+                  <div className="flex items-center gap-3">
+                    <div className={`w-3 h-3 rounded-full ${faceHealth.overallReady ? 'bg-green-500 animate-pulse' : 'bg-amber-500'}`} />
+                    <span className="text-sm font-bold">{faceHealth.overallReady ? t('Face System Operational') : t('Face System Has Issues')}</span>
+                    <span className="text-xs text-gray-500 ml-auto">{new Date(faceHealth.backend.timestamp).toLocaleTimeString()}</span>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                  <div className="p-5 rounded-xl bg-gray-50 dark:bg-gray-800/50 border border-gray-100 dark:border-gray-700">
+                    <div className="flex items-center gap-2 mb-4">
+                      <Server size={18} className="text-primary" />
+                      <h3 className="font-bold text-sm">{t('Backend Verifier')}</h3>
+                    </div>
+                    <div className="space-y-2 text-sm">
+                      <div className="flex justify-between">
+                        <span className="text-gray-500">{t('Mode')}</span>
+                        <span className="font-medium">{faceHealth.backend.verifier.mode}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-500">{t('Match Threshold')}</span>
+                        <span className="font-medium">{faceHealth.backend.verifier.matchThreshold}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-500">{t('Min Detection Score')}</span>
+                        <span className="font-medium">{faceHealth.backend.verifier.minDetectionScore}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-500">{t('Descriptor Length')}</span>
+                        <span className="font-medium">{faceHealth.backend.verifier.descriptorLength}D</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-500">{t('Embedding Version')}</span>
+                        <span className="font-medium">{faceHealth.backend.verifier.embeddingVersion}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="p-5 rounded-xl bg-gray-50 dark:bg-gray-800/50 border border-gray-100 dark:border-gray-700">
+                    <div className="flex items-center gap-2 mb-4">
+                      <Globe size={18} className="text-secondary" />
+                      <h3 className="font-bold text-sm">{t('Frontend Models')}</h3>
+                      <Badge variant={faceHealth.frontendReady ? 'success' : 'danger'} size="sm" className="ml-auto">
+                        {faceHealth.frontendReady ? t('All Loaded') : t('Missing Files')}
+                      </Badge>
+                    </div>
+                    <div className="space-y-1.5">
+                      {faceHealth.modelAssets.map((asset) => (
+                        <div key={asset.path} className="flex items-center gap-2 text-sm">
+                          {asset.ok ? (
+                            <CheckCircle2 size={14} className="text-green-500 flex-shrink-0" />
+                          ) : (
+                            <X size={14} className="text-red-500 flex-shrink-0" />
+                          )}
+                          <span className="text-gray-600 dark:text-gray-400 truncate">{asset.path}</span>
+                          {asset.status != null && !asset.ok && (
+                            <span className="text-xs text-red-500 ml-auto">{asset.status}</span>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              <div className="p-6 rounded-2xl bg-primary/5 border border-primary/10">
+                <div className="w-12 h-12 rounded-xl bg-white dark:bg-gray-900 flex items-center justify-center text-primary mb-4 shadow-sm">
+                  <ShieldCheck size={24} />
+                </div>
+                <h3 className="font-bold mb-2">{t('Secure Storage')}</h3>
+                <p className="text-sm text-gray-500">{t('All facial data is encrypted and stored locally on your secure server.')}</p>
+              </div>
+              <div className="p-6 rounded-2xl bg-secondary/5 border border-secondary/10">
+                <div className="w-12 h-12 rounded-xl bg-white dark:bg-gray-900 flex items-center justify-center text-secondary mb-4 shadow-sm">
+                  <RefreshCw size={24} />
+                </div>
+                <h3 className="font-bold mb-2">{t('Bulk Verification')}</h3>
+                <p className="text-sm text-gray-500">{t('Run automated health checks on your biometric database regularly.')}</p>
+              </div>
+              <div className="p-6 rounded-2xl bg-amber-500/5 border border-amber-500/10">
+                <div className="w-12 h-12 rounded-xl bg-white dark:bg-gray-900 flex items-center justify-center text-amber-600 mb-4 shadow-sm">
+                  <AlertCircle size={24} />
+                </div>
+                <h3 className="font-bold mb-2">{t('Privacy First')}</h3>
+                <p className="text-sm text-gray-500">{t('Ensure all users have consented to biometric data collection.')}</p>
+              </div>
+            </div>
+          </Card>
         </div>
       )}
 

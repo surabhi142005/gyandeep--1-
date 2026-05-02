@@ -4,6 +4,7 @@ import { ROLE_DISPLAY_NAMES, UserRole as UserRoleEnum } from '../types';
 import WebcamCapture from './WebcamCapture';
 import Spinner from './Spinner';
 import { register as registerAccount, registerFace } from '../services/authService';
+import { formatFaceAuthError } from '../services/faceRecognitionService';
 import { fetchClasses } from '../services/dataService';
 import { t } from '../services/i18n';
 
@@ -131,7 +132,7 @@ const Register: React.FC<RegisterProps> = ({ onRegister, theme, onNavigateToLogi
       await registerFace(registeredUser.id, imageDataUrl);
       onRegister({ ...registeredUser, faceImage: imageDataUrl });
     } catch (e: any) {
-      setError(e.message || 'Face registration failed. You can skip this step and continue.');
+      setError(formatFaceAuthError(e, 'register'));
     } finally {
       setIsRegisteringFace(false);
     }

@@ -7,7 +7,17 @@ let modelsLoaded = false;
 let modelsLoading = false;
 let loadPromise: Promise<void> | null = null;
 
-const MODELS_PATH = '/models';
+export const FACE_MODELS_PATH = '/models';
+export const FACE_REQUIRED_FILES = [
+  'ssd_mobilenetv1_model-weights_manifest.json',
+  'ssd_mobilenetv1_model-shard1',
+  'ssd_mobilenetv1_model-shard2',
+  'face_landmark_68_model-weights_manifest.json',
+  'face_landmark_68_model-shard1',
+  'face_recognition_model-weights_manifest.json',
+  'face_recognition_model-shard1',
+  'face_recognition_model-shard2',
+] as const;
 
 export async function preloadFaceApiModels(): Promise<void> {
   if (modelsLoaded) return;
@@ -24,9 +34,9 @@ async function loadModelsInternal(): Promise<void> {
 
     // Load all required models in parallel
     await Promise.all([
-      faceApi.nets.ssdMobilenetv1.loadFromUri(MODELS_PATH),
-      faceApi.nets.faceLandmark68Net.loadFromUri(MODELS_PATH),
-      faceApi.nets.faceRecognitionNet.loadFromUri(MODELS_PATH),
+      faceApi.nets.ssdMobilenetv1.loadFromUri(FACE_MODELS_PATH),
+      faceApi.nets.faceLandmark68Net.loadFromUri(FACE_MODELS_PATH),
+      faceApi.nets.faceRecognitionNet.loadFromUri(FACE_MODELS_PATH),
     ]);
 
     modelsLoaded = true;

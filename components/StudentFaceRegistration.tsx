@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react'
 import Spinner from './Spinner'
 import { registerFace } from '../services/authService'
+import { formatFaceAuthError } from '../services/faceRecognitionService'
 
 interface StudentFaceRegistrationProps {
   userId: string
@@ -90,7 +91,7 @@ const StudentFaceRegistration: React.FC<StudentFaceRegistrationProps> = ({ userI
         onSuccess?.()
       }, 1200)
     } catch (error) {
-      const errorMsg = error instanceof Error ? error.message : 'Failed to register face'
+      const errorMsg = formatFaceAuthError(error, 'register')
       setErrorMessage(errorMsg)
       setRegistrationStatus('error')
     } finally {

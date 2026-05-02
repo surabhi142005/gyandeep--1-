@@ -5,6 +5,7 @@ import { ROLE_DISPLAY_NAMES } from '../types';
 import WebcamCapture from './WebcamCapture';
 import { verifyFace, passwordMatches, hashPassword, login as expressLogin, loginWithFace } from '../services/authService';
 import { preloadFaceApiModels } from '../services/faceApiLoader';
+import { formatFaceAuthError } from '../services/faceRecognitionService';
 import Spinner from './Spinner';
 import { t } from '../services/i18n';
 
@@ -184,7 +185,7 @@ const Login: React.FC<LoginProps> = ({ onLogin, users, theme, onPasswordReset, o
 
       onLogin(userToLogin);
     } catch (e: any) {
-      setError(e.message || 'Authentication failed. Please try again or use email & password login.');
+      setError(formatFaceAuthError(e, 'login'));
     } finally {
       setIsAuthenticating(false);
     }

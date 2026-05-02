@@ -21,14 +21,19 @@ import Spinner from './Spinner';
 import PerformanceChart from './PerformanceChart';
 import AttendanceChart from './AttendanceChart';
 import WebcamCapture from './WebcamCapture';
+import { registerFace } from '../services/authService';
+import { formatFaceAuthError } from '../services/faceRecognitionService';
 import {
   fetchActiveSession,
   fetchAvailableQuizzes,
   fetchCentralizedNotesCombined,
   fetchQuizResults,
   fetchSessionAttendance,
+  startSessionQuiz,
   fetchTagPresets,
   fetchUsers,
+  uploadCentralizedFile,
+  uploadSessionFile,
   uploadClassNotes
 } from '../services/dataService';
 import { TeacherDashboardProps } from './TeacherDashboardProps';
@@ -645,7 +650,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
                             if (!quizTopic.trim()) return;
                             setIsGeneratingQuiz(true);
                             try {
-                              const result = await generateQuizWorker({ notesText: quizTopic, subject: selectedSubject });
+                              const result = await generateQuizWorker({ notesText: quizTopic, subject: selectedSubject, count: quizQuestionCount });
                               const quizArray = result?.quiz || [];
                               setGeneratedQuiz(quizArray);
                               setSuccessMessage(`${t('Generated')} ${quizArray.length} ${t('questions')}!`);
@@ -728,6 +733,40 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
                <div className="flex justify-between items-center mb-6">
                  <h3 className="text-xl font-bold">{t('Generated Questions')}</h3>
                  <div className="flex gap-2">
+                   <Button variant="primary" size="sm" onClick={async () => {
+                     if (!classSession.id) {
+                       setError(t('Start a live session before publishing a quiz.'));
+                       return;
+                     }
+                     if (generatedQuiz.length === 0) return;
+                     setIsPublishingQuiz(true);
+                     try {
+                       const response = await startSessionQuiz(classSession.id, {
+                         title: `${selectedSubject || t('General')} ${t('Quiz')}`,
+                         questions: generatedQuiz,
+                       });
+                       const quiz = response?.quiz;
+                       if (quiz?.id) {
+                         setPublishedQuizzes((prev) => [
+                           {
+                             id: quiz.id,
+                             title: quiz.title,
+                             subject: selectedSubject,
+                             questionCount: Array.isArray(quiz.questions) ? quiz.questions.length : generatedQuiz.length,
+                             sessionId: classSession.id,
+                           },
+                           ...prev.filter((item) => item.id !== quiz.id),
+                         ]);
+                         setSelectedQuizId(quiz.id);
+                       }
+                       setSuccessMessage(t('Quiz published successfully!'));
+                       setTimeout(() => setSuccessMessage(null), 3000);
+                     } catch (err: any) {
+                       setError(err?.message || t('Failed to publish quiz'));
+                     } finally {
+                       setIsPublishingQuiz(false);
+                     }
+                   }} loading={isPublishingQuiz} disabled={!generatedQuiz.length}>{t('Publish Live Quiz')}</Button>
                    <Button variant="secondary" size="sm" onClick={async () => {
                      try {
                        await import('../services/dataService').then(m => m.upsertQuizToBank(generatedQuiz, selectedSubject));
@@ -840,26 +879,15 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
                         if (!file) return;
                         setIsUploading(true);
                         try {
-                          const formData = new FormData();
-                          formData.append('file', file);
-                          formData.append('classId', classSession.classId || '');
-                          formData.append('subjectId', selectedSubject);
-                          formData.append('type', 'session_notes');
-                          formData.append('userId', teacher.id);
-                          
-                          const accessToken = (await import('../services/tokenManager')).tokenManager.getAccessToken();
-                          const res = await fetch('/api/storage/upload', {
-                            method: 'POST',
-                            headers: { Authorization: `Bearer ${accessToken}` },
-                            body: formData,
+                          await uploadSessionFile({
+                            file,
+                            classId: classSession.classId || '',
+                            subjectId: selectedSubject,
+                            type: 'session_notes',
+                            userId: teacher.id,
                           });
-                          
-                          if (res.ok) {
-                            setSuccessMessage(t('File uploaded successfully!'));
-                            setTimeout(() => setSuccessMessage(null), 3000);
-                          } else {
-                            setError(t('Upload failed'));
-                          }
+                          setSuccessMessage(t('File uploaded successfully!'));
+                          setTimeout(() => setSuccessMessage(null), 3000);
                         } catch (err) {
                           setError(t('Upload failed'));
                         } finally {
@@ -940,25 +968,16 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
                         if (!file) return;
                         setIsUploading(true);
                         try {
-                          const formData = new FormData();
-                          formData.append('file', file);
-                          formData.append('classId', classSession.classId || '');
-                          formData.append('subjectId', selectedSubject);
-                          formData.append('title', file.name);
-                          formData.append('noteType', 'centralized_notes');
-                          formData.append('userId', teacher.id);
-                          
-                          const accessToken = (await import('../services/tokenManager')).tokenManager.getAccessToken();
-                          const res = await fetch('/api/storage/centralized', {
-                            method: 'POST',
-                            headers: { Authorization: `Bearer ${accessToken}` },
-                            body: formData,
+                          await uploadCentralizedFile({
+                            file,
+                            classId: classSession.classId || '',
+                            subjectId: selectedSubject,
+                            title: file.name,
+                            noteType: 'centralized_notes',
+                            userId: teacher.id,
                           });
-                          
-                          if (res.ok) {
-                            setSuccessMessage(t('Uploaded to centralized bank!'));
-                            setTimeout(() => setSuccessMessage(null), 3000);
-                          }
+                          setSuccessMessage(t('Uploaded to centralized bank!'));
+                          setTimeout(() => setSuccessMessage(null), 3000);
                         } catch (err) {
                           setError(t('Upload failed'));
                         } finally {
@@ -1007,6 +1026,11 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
         <WebcamCapture
           onCapture={async (img) => {
             onUpdateFaceImage(teacher.id, img);
+            try {
+              await registerFace(teacher.id, img);
+            } catch (err) {
+              console.error(formatFaceAuthError(err, 'register'));
+            }
             setShowFaceRegistration(false);
           }}
           onClose={() => setShowFaceRegistration(false)}

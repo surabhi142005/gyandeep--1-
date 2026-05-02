@@ -8,6 +8,8 @@
 
 import { calculateDistance } from './locationService';
 import { initCSRFToken, getCSRFHeaders, getCSRFToken } from './csrfService';
+import { buildFaceDescriptorPayload, formatFaceAuthError } from './faceRecognitionService';
+import { tokenManager } from './tokenManager';
 import type { Coordinates } from '../types';
 
 const API_BASE = import.meta.env.VITE_API_URL || '';
@@ -50,6 +52,16 @@ function updateAuthState(updates: Partial<AuthState>) {
   notifyListeners();
 }
 
+function syncReturnedTokens(data: any) {
+  if (data?.accessToken && data?.refreshToken) {
+    tokenManager.setTokens({
+      accessToken: data.accessToken,
+      refreshToken: data.refreshToken,
+      expiresAt: Date.now() + 15 * 60 * 1000,
+    });
+  }
+}
+
 export function getAuthState(): AuthState {
   return { ...authState };
 }
@@ -72,9 +84,7 @@ export async function getAccessToken(): Promise<string | null> {
 }
 
 export function getStoredToken(): string | null {
-  // Returns null - actual tokens are in httpOnly cookies
-  // For realtime, use getRealtimeToken() which fetches socket-token
-  return null;
+  return tokenManager.getAccessToken();
 }
 
 export async function getRealtimeToken(): Promise<string | null> {
@@ -91,7 +101,7 @@ export async function getRealtimeToken(): Promise<string | null> {
 }
 
 export function getStoredRefreshToken(): string | null {
-  return null;
+  return tokenManager.getTokens()?.refreshToken || null;
 }
 
 // ── Token refresh (automatic with cookies) ────────────────────────────────────
@@ -115,6 +125,7 @@ export async function refreshAccessToken(): Promise<boolean> {
       }
 
       const data = await res.json();
+      syncReturnedTokens(data);
       if (data.user) {
         updateAuthState({ user: data.user, isAuthenticated: true });
         return true;
@@ -172,6 +183,7 @@ export async function register(email: string, password: string, name: string, ro
   }
 
   const data = await res.json();
+  syncReturnedTokens(data);
   updateAuthState({
     user: data.user,
     isAuthenticated: true,
@@ -205,6 +217,7 @@ export async function login(email: string, password: string) {
   }
 
   const data = await res.json();
+  syncReturnedTokens(data);
   updateAuthState({
     user: data.user,
     isAuthenticated: true,
@@ -240,6 +253,7 @@ export async function logout() {
     isAuthenticated: false,
     isLoading: false,
   });
+  tokenManager.clearTokens();
 }
 
 export async function getCurrentUser() {
@@ -306,54 +320,95 @@ export async function requestPasswordReset(email: string) {
 // ── Face Recognition ──────────────────────────────────────────────────────────
 
 export async function registerFace(userId: string, imageDataUrl: string): Promise<{ ok: boolean }> {
-  const payload = JSON.stringify({ userId, faceImage: imageDataUrl });
-  const attempt = async (path: string) => {
-    const res = await fetch(`${API_BASE}${path}`, {
-      method: 'POST',
-      credentials: 'include',
-      headers: { 'Content-Type': 'application/json' },
-      body: payload,
-    });
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      throw new Error(err.error || 'Face registration failed');
-    }
-    return res.json().catch(() => ({ ok: true }));
-  };
-
   try {
-    await attempt('/api/auth/register-face');
-  } catch (error: any) {
-    if (error?.message !== 'Failed to fetch') {
-      throw error;
-    }
-    await attempt('/api/face/register');
-  }
+    const descriptorPayload = await buildFaceDescriptorPayload(imageDataUrl);
+    const payload = JSON.stringify({
+      userId,
+      faceImage: imageDataUrl,
+      faceDescriptor: descriptorPayload.faceDescriptor,
+      metadata: {
+        detectionScore: descriptorPayload.detectionScore,
+        descriptorModel: descriptorPayload.descriptorModel,
+        capturedAt: new Date().toISOString(),
+      },
+    });
+    const attempt = async (path: string) => {
+      const res = await fetch(`${API_BASE}${path}`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: payload,
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || 'Face registration failed');
+      }
+      return res.json().catch(() => ({ ok: true }));
+    };
 
-  return { ok: true };
+    try {
+      await attempt('/api/auth/register-face');
+    } catch (error: any) {
+      if (error?.message !== 'Failed to fetch') {
+        throw error;
+      }
+      await attempt('/api/face/register');
+    }
+
+    return { ok: true };
+  } catch (error) {
+    throw new Error(formatFaceAuthError(error, 'register'));
+  }
 }
 
 export async function loginWithFace(userId: string, imageDataUrl: string) {
-  const res = await fetch(`${API_BASE}/api/auth/login-face`, {
-    method: 'POST',
-    credentials: 'include',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ userId, faceImage: imageDataUrl }),
-  });
+  try {
+    const descriptorPayload = await buildFaceDescriptorPayload(imageDataUrl);
+    const payload = JSON.stringify({
+      userId,
+      faceImage: imageDataUrl,
+      faceDescriptor: descriptorPayload.faceDescriptor,
+      metadata: {
+        detectionScore: descriptorPayload.detectionScore,
+        descriptorModel: descriptorPayload.descriptorModel,
+        capturedAt: new Date().toISOString(),
+      },
+    });
+    const attempt = async (path: string) => {
+      const res = await fetch(`${API_BASE}${path}`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: payload,
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || 'Face login failed');
+      }
+      return res.json();
+    };
 
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err.error || 'Face login failed');
+    let data;
+    try {
+      data = await attempt('/api/auth/login-face');
+    } catch (error: any) {
+      if (error?.message !== 'Failed to fetch') {
+        throw error;
+      }
+      data = await attempt('/api/face/login');
+    }
+
+    syncReturnedTokens(data);
+    updateAuthState({
+      user: data.user,
+      isAuthenticated: true,
+      isLoading: false,
+    });
+    initCSRFToken();
+    return data.user;
+  } catch (error) {
+    throw new Error(formatFaceAuthError(error, 'login'));
   }
-
-  const data = await res.json();
-  updateAuthState({
-    user: data.user,
-    isAuthenticated: true,
-    isLoading: false,
-  });
-  initCSRFToken();
-  return data.user;
 }
 
 export async function verifyFace(
@@ -361,27 +416,38 @@ export async function verifyFace(
   userId?: string | null,
   options?: { recordAttendance?: boolean; sessionId?: string; classId?: string; location?: { lat: number; lng: number } },
 ): Promise<{ authenticated: boolean; confidence?: number; method?: string }> {
-  const body: Record<string, any> = { faceImage: capturedImageDataUrl };
-  if (userId) body.userId = userId;
-  if (options?.recordAttendance) {
-    body.recordAttendance = true;
-    body.sessionId = options.sessionId;
-    body.classId = options.classId;
-    if (options.location) body.location = options.location;
+  try {
+    const descriptorPayload = await buildFaceDescriptorPayload(capturedImageDataUrl);
+    const body: Record<string, any> = { faceImage: capturedImageDataUrl };
+    if (userId) body.userId = userId;
+    body.faceDescriptor = descriptorPayload.faceDescriptor;
+    body.metadata = {
+      detectionScore: descriptorPayload.detectionScore,
+      descriptorModel: descriptorPayload.descriptorModel,
+      capturedAt: new Date().toISOString(),
+    };
+    if (options?.recordAttendance) {
+      body.recordAttendance = true;
+      body.sessionId = options.sessionId;
+      body.classId = options.classId;
+      if (options.location) body.location = options.location;
+    }
+
+    const res = await fetch(`${API_BASE}/api/face/verify`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      throw new Error(data.error || 'Face verification failed');
+    }
+    const authenticated = data.authenticated ?? data.ok ?? false;
+    return { authenticated, confidence: data.confidence, method: data.method || 'face-api' };
+  } catch (error) {
+    throw new Error(formatFaceAuthError(error, 'verify'));
   }
-  
-  const res = await fetch(`${API_BASE}/api/face/verify`, {
-    method: 'POST',
-    credentials: 'include',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  });
-  if (!res.ok) {
-    throw new Error('Face service unavailable. Please try again or use password login.');
-  }
-  const data = await res.json();
-  const authenticated = data.authenticated ?? data.ok ?? false;
-  return { authenticated, confidence: data.confidence, method: 'face-api' };
 }
 
 async function _compareImages(img1DataUrl: string, img2DataUrl: string): Promise<number> {
