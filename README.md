@@ -4,7 +4,12 @@ A full-stack educational platform that brings classrooms online: real-time class
 
 > **Status:** active development · **Stack:** React 18 · TypeScript · Express · MongoDB · Prisma · Vite
 
----
+- **Frontend**: React 18 + TypeScript + Vite + Tailwind CSS
+- **Backend**: Express.js (local) / Vercel API (production)
+- **Database**: MongoDB Atlas with Prisma ORM
+- **Real-time**: WebSocket + SSE
+- **Auth**: JWT with httpOnly cookies + Face recognition
+- **AI**: Groq API (with OpenRouter fallback)
 
 ## Table of contents
 
@@ -180,19 +185,13 @@ The full reference is in [`.env.example`](./.env.example). Required vs optional:
 
 29 route modules under `/api`. The most-used:
 
-| Module | Endpoint(s) | Notes |
-|---|---|---|
-| Auth | `POST /api/auth/{register,login,refresh,reset-password}` | JWT + httpOnly cookies; Google OAuth flow |
-| Users | `GET/PUT /api/users/me`, `/api/users/:id` | Profile, preferences |
-| Sessions | `POST /api/sessions/start`, `POST /api/sessions/:code` | 6-digit codes, geofence + face verify |
-| Quiz | `POST /api/quiz/generate`, `POST /api/quiz/:id/submit` | Gemini → OpenAI fallback, auto-grade |
-| Notes | `GET/POST /api/notes` | Multipart upload, async indexing |
-| Grades | `GET/POST /api/grades` | Trends, weighted categories |
-| Analytics | `GET /api/analytics/...` | Live class & teacher insights |
-| Tickets | `GET/POST /api/tickets` | Threaded support |
-| Admin | `GET /api/admin/stats` | Platform stats, audit logs |
-| Face | `POST /api/face/{register,verify}` | Embedding-based recognition |
-| Realtime | `WS /ws`, `GET /api/events` (SSE) | Live quizzes, attendance, leaderboards |
+### Optional
+- `GROQ_API_KEY` - Groq API for AI chatbot
+- `OPENROUTER_API_KEY` - OpenRouter fallback for AI features
+- `RESEND_API_KEY` - Email service
+- `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` - OAuth
+- `R2_*` - Cloudflare R2 storage
+- `FACE_RECOGNITION_SERVICE_URL` - Face recognition service
 
 ## Testing
 
@@ -216,59 +215,34 @@ docker run -p 3001:3001 --env-file .env gyandeep
 docker compose -f docker-compose.dev.yml up
 ```
 
-### PM2 cluster
-```bash
-npm run build
-npm run start:cluster   # uses ecosystem.config.json
-```
+## ⚠️ Production Notes
 
-### Render / VPS
-- `render.yaml` is provided.
-- `config/nginx.conf` for reverse proxy.
-- `scripts/setup-monitoring.sh` for Prometheus/uptime.
+### Seed Data Warning
+The `prisma/seed.ts` creates test users with known passwords. **Before production:**
+- Change default passwords in seed.ts
+- Or delete test users after deployment
+- Or create a production seed that doesn't include test users
 
-## Security
+### Security
+- JWT_SECRET must be set in production
+- Use strong, unique secrets
+- Enable HTTPS in production
+- Configure CORS properly
 
-- **Hashing:** bcrypt cost factor 12.
-- **Tokens:** short-lived JWT access (15 min) + refresh (7 d) in httpOnly cookies.
-- **Rate limiting:** sliding window per IP (`RATE_LIMIT_*`).
-- **Input handling:** DOMPurify + schema validation; centralised sanitiser middleware.
-- **CSRF:** opt-in via `CSRF_SECRET` for state-changing routes.
-- **CORS:** strict `ALLOWED_ORIGINS` whitelist.
-- **Audit log:** every admin action persisted to `AuditLog`.
-- **Email enumeration:** generic error messages on auth failure.
-- **Production seed warning:** `prisma/seed.ts` creates test users with known passwords. Replace, delete, or gate it before going live.
+## Features
 
-## Suggested improvements
-
-Findings from a code-graph analysis of this repo (1,320 nodes / 2,251 edges across 144 communities) and a review of the current README & layout. Ordered roughly by impact:
-
-1. **Trim repo bloat.** Several dev artefacts and one-off scripts are committed at the repo root and would be better in `scripts/` or `.gitignore`d:
-   - `dev.err`, `err.tmp`, `out.tmp`, `mockapi.err`, `ir_log.txt`, `ir_log8.txt`, `CONVERSION_COMPLETE.txt`, `gyandeep.env`
-   - Loose root scripts: `check-user.js`, `create-test-users.js`, `fix-users.js`, `list-users.js`, `update-existing.js`, `test-api.js`, `test-db-connection.js`, `test-fullstack.js`, `mock-server.cjs`, `setup.bat`, `setup.sh`
-   - `gyandeep.env` is especially risky — anything resembling an env file should never be tracked.
-2. **Generate the OpenAPI spec.** With 29 route modules, hand-written API tables drift fast. Adopt `zod-to-openapi` or `express-openapi` and auto-publish a `/docs` Swagger UI — kills the largest doc-rot risk in the codebase.
-3. **Centralise the API client.** `services/dataService.ts::apiRequest` is the largest hub in the graph (degree 84). Consider migrating it to React Query mutations/queries (already a dependency) — gets you cache invalidation, retries, and devtools for free.
-4. **Type-share between client and server.** The Prisma schema (26 models) and `types.ts` (~30 frontend types) describe overlapping shapes. Move shared types into a `shared/` folder and import on both sides; or generate frontend types from Prisma to eliminate drift.
-5. **Add CI.** No `.github/workflows/` was detected. Add a workflow that runs `lint`, `typecheck`, `test`, and `test:security` on PRs. Wire Cypress E2E on a nightly schedule.
-6. **Lock the seed in production.** `db:seed` and `db:seed:force` mass-mutate collections from a script run via `node -e`. Gate seed scripts on `NODE_ENV !== 'production'` at the script level, not just docs.
-7. **Consolidate WebSocket layers.** The graph shows `RealtimeClient`, `SocketService`, and a separate `realtimeClient` service as three hubs (degrees 30, 25, …). Unifying them removes a class of subtle bugs around reconnect & message routing.
-8. **Document the modules folder.** Move the excellent `MODULE_DESIGN.md` into `docs/architecture.md` and link from this README; today it lives at the root and is easy to miss.
-9. **Service worker cache for `/api/users/me`.** Currently no runtime cache rule for the profile route — every navigation re-fetches. A short `NetworkFirst` (~30s) would cut perceived latency on PWA cold-starts.
-10. **Add a `LICENSE` file.** No license file exists at the repo root, which technically makes the code "all rights reserved" by default. Pick MIT/Apache-2.0/etc. and commit.
-11. **Stop tracking `dev-dist/`.** It's a build artefact regenerated by `vite-plugin-pwa` and should be `.gitignore`d.
-12. **Pin Node version.** Add `.nvmrc` and `engines` in `package.json` so contributors don't hit subtle Node 18 vs 20 differences (e.g. `--experimental-strip-types` in the Prisma seed config).
-13. **Image hygiene.** `Book to Lantern Logo for Gyandeep.png` lives at the repo root; move to `public/` and rename without spaces.
-14. **Consider Prisma migrations over `db push`.** `db:push` is fine in dev, but for production a `prisma migrate deploy` flow gives you a paper trail and rollback story.
-15. **Test coverage gates.** `vitest.config.ts` supports coverage; enforce a floor (e.g. 70% on `server/routes/`) in CI.
-
-## Contributing
-
-1. Fork → feature branch → PR against `main`.
-2. Run `npm run lint && npm run typecheck && npm test` before pushing.
-3. Keep PRs scoped — one concern per PR.
-4. New routes need a test in `server/tests/` and an entry in the API table above.
-
----
-
-_Built for classrooms. Powered by AI._
+- User authentication (email/password, Google OAuth, Face)
+- Class sessions with codes
+- Real-time quiz system
+- Attendance tracking with GPS
+- Grade book
+- Gamification (XP, coins, levels)
+- Support tickets
+- Notifications
+- Announcements
+- Timetable
+- Notes (session + centralized)
+- AI analytics (Groq)
+- File storage
+- Email notifications
+- Real-time updates (WebSocket/SSE)
