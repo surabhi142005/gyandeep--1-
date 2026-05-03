@@ -5,7 +5,7 @@ import Login from './components/Login';
 import Register from './components/Register';
 import ToastNotification from './components/ToastNotification';
 import type { ToastType } from './components/ToastNotification';
-import { fetchUsers, fetchClasses, saveUsers } from './services/dataService';
+import { fetchUsers, fetchClasses, saveUsers, fetchAnnouncements, createAnnouncement } from './services/dataService';
 import { setLocale, t } from './services/i18n';
 import AdminSetup from './components/AdminSetup';
 import UserProfile from './components/UserProfile';
@@ -296,13 +296,62 @@ const App: React.FC = () => {
     };
 
     // ── Announcements ─────────────────────────────────────────────────────────
-    const handlePostAnnouncement = (text: string) => {
-        if (!currentUser) return;
-        const newAnnouncement: Announcement = {
-            id: Date.now().toString(), text,
-            author: currentUser.name, timestamp: new Date().toISOString(),
+    useEffect(() => {
+        if (!currentUser) {
+            setAnnouncements([]);
+            return;
+        }
+        const loadAnnouncements = async () => {
+            try {
+                const data = await fetchAnnouncements(currentUser.classId || undefined);
+                if (Array.isArray(data)) {
+                    const mapped = data.map((a: any) => ({
+                        id: a.id || a._id?.toString?.() || Date.now().toString(),
+                        text: a.content || a.text || '',
+                        title: a.title || '',
+                        author: a.authorName || a.authorId || 'Unknown',
+                        timestamp: a.createdAt || a.timestamp || new Date().toISOString(),
+                        priority: a.priority || 'medium',
+                    }));
+                    setAnnouncements(mapped);
+                }
+            } catch (err) {
+                console.warn('Failed to load announcements:', err);
+            }
         };
-        setAnnouncements(prev => [newAnnouncement, ...prev]);
+        loadAnnouncements();
+    }, [currentUser?.id, currentUser?.classId]);
+
+    const handlePostAnnouncement = async (text: string) => {
+        if (!currentUser) return;
+        try {
+            const result = await createAnnouncement({
+                authorId: currentUser.id,
+                classId: currentUser.classId || 'default',
+                title: text.slice(0, 60),
+                content: text,
+                priority: 'medium',
+            });
+            if (result?.announcement) {
+                const a = result.announcement;
+                const newAnnouncement: Announcement = {
+                    id: a.id || Date.now().toString(),
+                    text: a.content || text,
+                    title: a.title || '',
+                    author: currentUser.name,
+                    timestamp: new Date().toISOString(),
+                    priority: a.priority || 'medium',
+                };
+                setAnnouncements(prev => [newAnnouncement, ...prev]);
+            }
+        } catch (err) {
+            console.error('Failed to post announcement:', err);
+            const newAnnouncement: Announcement = {
+                id: Date.now().toString(), text,
+                author: currentUser.name, timestamp: new Date().toISOString(),
+            };
+            setAnnouncements(prev => [newAnnouncement, ...prev]);
+        }
     };
 
     // Sync in-memory user list after Login component completes its own password reset flow

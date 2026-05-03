@@ -17,9 +17,8 @@ const ENV_CONFIG: EnvConfig = {
   optional: [
     'MONGODB_URI',
     'MONGODB_DB',
-    'GROQ_API_KEY',
-    'OPENAI_API_KEY',
-    'GEMINI_API_KEY',
+    'AI_API_KEY_GROQ',
+    'AI_API_KEY_GEMINI',
     'RESEND_API_KEY',
     'R2_ACCOUNT_ID',
     'R2_ACCESS_KEY_ID',
@@ -30,7 +29,8 @@ const ENV_CONFIG: EnvConfig = {
   ],
   warnings: [
     'MONGODB_URI',
-    'GROQ_API_KEY',
+    'AI_API_KEY_GROQ',
+    'AI_API_KEY_GEMINI',
     'RESEND_API_KEY',
     'R2_ACCOUNT_ID',
   ],
@@ -115,8 +115,12 @@ export function logEnvironmentStatus(): void {
 }
 
 export function checkFeatureFlags(): Record<string, boolean> {
+  const aiConfigured = !!(getEnv('AI_API_KEY_GROQ') || getEnv('AI_API_KEY_GEMINI'));
   return {
-    aiEnabled: !!getEnv('GEMINI_API_KEY'),
+    aiEnabled: aiConfigured,
+    aiChatEnabled: aiConfigured,
+    aiContentEnabled: aiConfigured,
+    aiAnalyticsEnabled: aiConfigured,
     emailEnabled: !!getEnv('RESEND_API_KEY'),
     storageEnabled: !!(getEnv('R2_ACCOUNT_ID') && getEnv('R2_ACCESS_KEY_ID')),
     googleAuthEnabled: !!(getEnv('GOOGLE_CLIENT_ID') && getEnv('GOOGLE_CLIENT_SECRET')),

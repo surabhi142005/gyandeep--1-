@@ -1,337 +1,70 @@
 /**
  * server/routes/ai.js
- * AI-powered routes using Groq API as primary provider with OpenRouter fallback
+ * AI-powered routes using unified AI service (Groq + Gemini)
  */
 
 import express from 'express';
+import Tesseract from 'tesseract.js';
+import { ObjectId } from 'mongodb';
+import { connectToDatabase, COLLECTIONS } from '../db/mongoAtlas.js';
+import { callAI, callAIChat, callAIVision, parseAIJson, getAIStatus } from '../services/aiService.js';
+import { optionalAuth, authMiddleware } from '../middleware/auth.js';
 
 const router = express.Router();
 
-// Groq API configuration (primary)
-const GROQ_API_URL = process.env.GROQ_BASE_URL || 'https://api.groq.com/openai/v1';
-const GROQ_MODEL = process.env.GROQ_MODEL || 'llama-3.3-70b-versatile';
+// Unified AI configuration
+const DEFAULT_MAX_TOKENS = 2048;
+const DEFAULT_TEMPERATURE = 0.7;
 
-// OpenRouter API configuration (fallback for text, primary for vision)
-const OPENAI_API_URL = process.env.OPENAI_BASE_URL || 'https://openrouter.ai/api/v1';
-const OPENAI_MODEL = process.env.OPENAI_MODEL || 'meta-llama/Llama-3.3-70B-Instruct-Turbo';
+// ── TEST ENDPOINT ──────────────────────────────────────────────
+// Verify AI service is working
 
-// Gemini API configuration (fallback for vision/OCR only)
-const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models';
-const DEFAULT_GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-2.0-flash';
-
-function getGroqApiKey() {
-  return process.env.GROQ_API_KEY?.trim() || '';
-}
-
-function getOpenAiApiKey() {
-  return process.env.OPENAI_API_KEY?.trim() || '';
-}
-
-function getGeminiApiKey() {
-  return process.env.GEMINI_API_KEY?.trim() || '';
-}
-
-function buildAiError(message, status = 500) {
-  const error = new Error(message);
-  error.status = status;
-  return error;
-}
-
-function normalizeHistory(history = []) {
-  if (!Array.isArray(history)) return [];
-  return history
-    .map((item) => ({
-      role: item?.role === 'user' ? 'user' : 'assistant',
-      content: item?.content || item?.text || '',
-    }))
-    .filter((item) => item.content.trim().length > 0)
-    .slice(-10);
-}
-
-// Primary Groq API call
-async function callGroq({ prompt, history = [], temperature = 0.7, maxTokens = 2048, systemPrompt = null }) {
-  const apiKey = getGroqApiKey();
-  if (!apiKey) {
-    throw buildAiError('GROQ_API_KEY is not configured on the backend.', 503);
-  }
-
-  const messages = [];
-
-  if (systemPrompt) {
-    messages.push({ role: 'system', content: systemPrompt });
-  }
-
-  messages.push(
-    ...normalizeHistory(history).map((msg) => ({
-      role: msg.role,
-      content: msg.content,
-    })),
-    { role: 'user', content: prompt }
-  );
-
-  const response = await fetch(`${GROQ_API_URL}/chat/completions`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify({
-      model: GROQ_MODEL,
-      messages,
-      temperature,
-      max_tokens: maxTokens,
-    }),
-  });
-
-  if (!response.ok) {
-    const errorBody = await response.json().catch(() => ({}));
-    const message = errorBody?.error?.message || `Groq API request failed with status ${response.status}`;
-    throw buildAiError(message, response.status === 429 ? 429 : 502);
-  }
-
-  const data = await response.json();
-  return data?.choices?.[0]?.message?.content?.trim() || '';
-}
-
-// OpenRouter/OpenAI fallback for text
-async function callOpenAI({ prompt, history = [], temperature = 0.7, maxTokens = 2048, systemPrompt = null }) {
-  const apiKey = getOpenAiApiKey();
-  if (!apiKey) {
-    throw buildAiError('OPENAI_API_KEY is not configured on the backend.', 503);
-  }
-
-  const messages = [];
-
-  if (systemPrompt) {
-    messages.push({ role: 'system', content: systemPrompt });
-  }
-
-  messages.push(
-    ...normalizeHistory(history).map((msg) => ({
-      role: msg.role,
-      content: msg.content,
-    })),
-    { role: 'user', content: prompt }
-  );
-
-  const isOpenRouter = OPENAI_API_URL.includes('openrouter');
-  const headers = {
-    'Content-Type': 'application/json',
-    'Authorization': `Bearer ${apiKey}`,
-  };
-
-  if (isOpenRouter) {
-    headers['HTTP-Referer'] = process.env.FRONTEND_URL || 'https://gyandeep.edu';
-    headers['X-Title'] = 'Gyandeep';
-  }
-
-  const response = await fetch(`${OPENAI_API_URL}/chat/completions`, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify({
-      model: OPENAI_MODEL,
-      messages,
-      temperature,
-      max_tokens: maxTokens,
-    }),
-  });
-
-  if (!response.ok) {
-    const errorBody = await response.json().catch(() => ({}));
-    const message = errorBody?.error?.message || `OpenAI API request failed with status ${response.status}`;
-    throw buildAiError(message, response.status === 429 ? 429 : 502);
-  }
-
-  const data = await response.json();
-  return data?.choices?.[0]?.message?.content?.trim() || '';
-}
-
-// Gemini for vision/OCR only
-async function callGeminiVision({ prompt, imageBase64, temperature = 0.1 }) {
-  const apiKey = getGeminiApiKey();
-  if (!apiKey) {
-    throw buildAiError('GEMINI_API_KEY is not configured (required for image processing).', 503);
-  }
-
-  const payload = {
-    contents: [{
-      role: 'user',
-      parts: [
-        { text: prompt },
-        {
-          inline_data: {
-            mime_type: 'image/jpeg',
-            data: imageBase64.replace(/^data:image\/\w+;base64,/, ''),
-          },
-        },
-      ],
-    }],
-    generationConfig: {
-      temperature,
-      maxOutputTokens: 2048,
-      topP: 0.95,
-      topK: 40,
-    },
-  };
-
-  const response = await fetch(
-    `${GEMINI_API_URL}/${DEFAULT_GEMINI_MODEL}:generateContent?key=${apiKey}`,
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    }
-  );
-
-  if (!response.ok) {
-    const errorBody = await response.json().catch(() => ({}));
-    const message = errorBody?.error?.message || `Gemini API request failed with status ${response.status}`;
-    throw buildAiError(message, response.status === 429 ? 429 : 502);
-  }
-
-  const data = await response.json();
-  return data?.candidates?.[0]?.content?.parts?.map((p) => p?.text || '').join('').trim() || '';
-}
-
-// Unified AI caller - Groq primary, OpenRouter fallback
-async function callAI({ prompt, history = [], temperature = 0.7, maxTokens = 2048, systemPrompt = null }) {
-  const results = { groq: null, openai: null };
-
-  // Try Groq first (fastest)
-  if (getGroqApiKey()) {
-    try {
-      results.groq = await callGroq({ prompt, history, temperature, maxTokens, systemPrompt });
-      return results.groq;
-    } catch (groqError) {
-      console.warn('[AI] Groq failed, trying OpenRouter:', groqError.message);
-      results.groq = groqError;
-    }
-  }
-
-  // Fallback to OpenRouter/OpenAI
-  if (getOpenAiApiKey()) {
-    try {
-      results.openai = await callOpenAI({ prompt, history, temperature, maxTokens, systemPrompt });
-      return results.openai;
-    } catch (openaiError) {
-      console.error('[AI] OpenRouter also failed:', openaiError.message);
-      results.openai = openaiError;
-    }
-  }
-
-  const errorMsg = results.openai?.message || results.groq?.message || 'No AI provider configured';
-  throw buildAiError(`AI request failed: ${errorMsg}`, results.openai?.status || results.groq?.status || 502);
-}
-
-// Parse quiz JSON response
-function parseQuizResponse(rawResponse, count) {
-  const cleaned = rawResponse.replace(/```json\s*/gi, '').replace(/```\s*/g, '').trim();
-  const jsonMatch = cleaned.match(/\[[\s\S]*\]/);
-  if (!jsonMatch) {
-    throw buildAiError('AI returned an unexpected quiz format.', 502);
-  }
-
-  let quiz = JSON.parse(jsonMatch[0]);
-  if (!Array.isArray(quiz) || quiz.length === 0) {
-    throw buildAiError('AI did not return any quiz questions.', 502);
-  }
-
-  quiz = quiz.slice(0, count).map((question, index) => {
-    const options = Array.isArray(question.options) ? question.options.filter(Boolean).slice(0, 4) : [];
-    if (!question.question || options.length < 2) {
-      throw buildAiError(`AI returned invalid data for question ${index + 1}.`, 502);
-    }
-
-    let correctAnswer = question.correctAnswer;
-    if (!options.includes(correctAnswer)) {
-      correctAnswer = options[0];
-    }
-
-    return {
-      id: question.id || `q${index + 1}`,
-      question: question.question,
-      options,
-      correctAnswer,
-      explanation: question.explanation || '',
-    };
-  });
-
-  return quiz;
-}
-
-// AI Email generation
-router.post('/ai-email', async (req, res) => {
+router.get('/status', async (req, res) => {
   try {
-    const { prompt, recipients, context } = req.body;
-
-    if (!prompt || !recipients) {
-      return res.status(400).json({ error: 'Prompt and recipients are required' });
-    }
-
-    const emailPrompt = `You are an AI assistant helping with email communication for Gyandeep educational platform.
-
-Context: ${context || 'General communication'}
-Recipients: ${Array.isArray(recipients) ? recipients.join(', ') : recipients}
-
-Generate a professional email based on: ${prompt}
-
-Format your response exactly as:
-Subject: [your subject line here]
----
-[your email body here]`;
-
-    const reply = await callAI({ prompt: emailPrompt, temperature: 0.5, maxTokens: 1024 });
-    const [subjectLine, ...bodyParts] = reply.split('---');
-
-    res.json({
-      ok: true,
-      email: {
-        subject: subjectLine.replace(/^Subject:\s*/i, '').trim() || `Communication from ${context || 'Gyandeep'}`,
-        body: bodyParts.join('---').trim() || reply,
-        recipients,
-      },
-    });
+    const status = getAIStatus();
+    res.json({ ok: true, ...status });
   } catch (error) {
-    console.error('AI email error:', error);
-    res.status(error.status || 500).json({ error: error.message || 'Failed to generate email' });
+    res.status(500).json({ ok: false, error: error.message });
   }
 });
 
-// Chat endpoint
-router.post('/chat', async (req, res) => {
-  try {
-    const { message, prompt, history, userName = 'Student', userRole = 'student', model } = req.body;
-    const inputMessage = (message || prompt || '').trim();
+// ── CHAT ENDPOINT ──────────────────────────────────────────────
 
+router.post('/chat', optionalAuth, async (req, res) => {
+  try {
+    const {
+      message,
+      prompt,
+      history,
+      userName = 'Student',
+      userRole = 'student',
+      model
+    } = req.body;
+
+    const inputMessage = (message || prompt || '').trim();
     if (!inputMessage) {
-      return res.status(400).json({ error: 'Message or prompt is required' });
+      return res.status(400).json({ error: 'Message is required' });
     }
 
-    const systemPrompt = `You are Gyandeep AI, a concise educational assistant for students and teachers. Current user: ${userName} (${userRole}). Answer clearly, accurately, and in a classroom-safe way.`;
+    const systemPrompt = `You are Gyandeep AI, a concise educational assistant for students and teachers.
+Current user: ${userName} (${userRole}).
+Answer clearly, accurately, and in a classroom-safe way.
+Keep responses brief - 2 to 4 sentences unless explaining complex topics.`;
 
-    const reply = await callAI({
-      prompt: inputMessage,
-      history,
-      temperature: model === 'smart' ? 0.5 : 0.7,
-      maxTokens: 1024,
-      systemPrompt,
-    });
+    const reply = await callAIChat(inputMessage, history || [], systemPrompt);
 
-    res.json({
-      reply,
-      text: reply,
-      sources: [],
-    });
+    res.json({ reply, text: reply, sources: [] });
   } catch (error) {
     console.error('Chat error:', error);
-    res.status(error.status || 500).json({ error: error.message || 'Failed to process chat' });
+    res.status(500).json({ error: error.message || 'Failed to process chat' });
   }
 });
 
-// Quiz generation
+// ── QUIZ GENERATION ─────────────────────────────────────────────
+
 async function handleQuizGeneration(req, res) {
   try {
-    const { notesText, subject, count = 10 } = req.body;
+    const { notesText, subject, count = 10, sessionId, classId, title } = req.body;
     const normalizedCount = Math.min(20, Math.max(1, Number(count) || 10));
 
     if (!notesText || !notesText.trim()) {
@@ -361,25 +94,113 @@ JSON format:
 Study content:
 ${notesText.slice(0, 8000)}`;
 
-    const rawResponse = await callAI({
-      prompt: quizPrompt,
+    const rawResponse = await callAI(quizPrompt, {
       temperature: 0.3,
       maxTokens: 4096,
+      jsonMode: true
     });
 
     const quiz = parseQuizResponse(rawResponse, normalizedCount);
-    res.json({ quiz, subject, count: quiz.length });
+
+    // Save quiz to MongoDB
+    let quizId = null;
+    try {
+      const db = await connectToDatabase();
+      const quizDoc = {
+        sessionId: sessionId || null,
+        classId: classId || null,
+        title: title || `${subject || 'Quiz'} - ${new Date().toLocaleDateString()}`,
+        questions: quiz,
+        published: false,
+        createdBy: req.user?.id || null,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      };
+      const result = await db.collection(COLLECTIONS.QUIZZES).insertOne(quizDoc);
+      quizId = result.insertedId.toString();
+    } catch (dbErr) {
+      console.warn('[Quiz] Failed to save to database:', dbErr.message);
+    }
+
+    res.json({ quiz, subject, count: quiz.length, quizId, saved: !!quizId });
   } catch (error) {
     console.error('Quiz generation error:', error);
     res.status(error.status || 500).json({ error: error.message || 'Failed to generate quiz' });
   }
 }
 
-router.post('/quiz', handleQuizGeneration);
-router.post('/quiz/generate', handleQuizGeneration);
+function parseQuizResponse(rawResponse, count) {
+  const quiz = parseAIJson(rawResponse);
+  if (!Array.isArray(quiz) || quiz.length === 0) {
+    throw new Error('AI did not return any quiz questions.');
+  }
 
-// Grading
-router.post('/grade', async (req, res) => {
+  return quiz.slice(0, count).map((question, index) => {
+    const options = Array.isArray(question.options) ? question.options.filter(Boolean).slice(0, 4) : [];
+    if (!question.question || options.length < 2) {
+      throw new Error(`AI returned invalid data for question ${index + 1}.`);
+    }
+
+    let correctAnswer = question.correctAnswer;
+    if (!options.includes(correctAnswer)) {
+      correctAnswer = options[0];
+    }
+
+    return {
+      id: question.id || `q${index + 1}`,
+      question: question.question,
+      options,
+      correctAnswer,
+      explanation: question.explanation || ''
+    };
+  });
+}
+
+router.post('/quiz', authMiddleware, handleQuizGeneration);
+router.post('/quiz/generate', authMiddleware, handleQuizGeneration);
+
+// ── EMAIL GENERATION ──────────────────────────────────────────
+
+router.post('/ai-email', authMiddleware, async (req, res) => {
+  try {
+    const { prompt, recipients, context } = req.body;
+
+    if (!prompt || !recipients) {
+      return res.status(400).json({ error: 'Prompt and recipients are required' });
+    }
+
+    const emailPrompt = `You are an AI assistant helping with email communication for Gyandeep educational platform.
+
+Context: ${context || 'General communication'}
+Recipients: ${Array.isArray(recipients) ? recipients.join(', ') : recipients}
+
+Generate a professional email based on: ${prompt}
+
+Format your response exactly as:
+Subject: [your subject line here]
+---
+[your email body here]`;
+
+    const reply = await callAI(emailPrompt, { temperature: 0.5, maxTokens: 1024 });
+    const [subjectLine, ...bodyParts] = reply.split('---');
+
+    res.json({
+      ok: true,
+      email: {
+        subject: subjectLine.replace(/^Subject:\s*/i, '').trim() || `Communication from ${context || 'Gyandeep'}`,
+        body: bodyParts.join('---').trim() || reply,
+        recipients
+      }
+    });
+  } catch (error) {
+    console.error('AI email error:', error);
+    res.status(500).json({ error: error.message || 'Failed to generate email' });
+  }
+});
+
+// ── GRADING ────────────────────────────────────────────────────
+
+router.post('/grade', authMiddleware, async (req, res) => {
   try {
     const { questions, answers } = req.body;
 
@@ -391,12 +212,13 @@ router.post('/grade', async (req, res) => {
     let totalScore = 0;
     let maxScore = 0;
 
-    for (let index = 0; index < questions.length; index += 1) {
+    for (let index = 0; index < questions.length; index++) {
       const question = questions[index];
       const studentAnswer = answers[index] || '';
       const questionMaxScore = question.maxScore || 10;
       maxScore += questionMaxScore;
 
+      // MCQ grading is instant
       if (question.type === 'mcq') {
         const isCorrect =
           studentAnswer.toUpperCase().trim() === question.correctAnswer?.toUpperCase().trim() ||
@@ -411,13 +233,14 @@ router.post('/grade', async (req, res) => {
             criterion: 'Answer',
             score,
             maxScore: questionMaxScore,
-            comment: isCorrect ? 'Correct selection.' : `Selected "${studentAnswer}"`,
+            comment: isCorrect ? 'Correct selection.' : `Selected "${studentAnswer}"`
           }],
-          overallComment: isCorrect ? 'Full marks.' : 'No marks.',
+          overallComment: isCorrect ? 'Full marks.' : 'No marks.'
         });
         continue;
       }
 
+      // Use AI for subjective grading
       const gradingPrompt = `You are an AI teacher grading a student's answer.
 
 Question: ${question.question}
@@ -428,18 +251,8 @@ Max Score: ${questionMaxScore}
 Respond ONLY with a JSON object:
 { "score": number, "feedback": "string", "comment": "string" }`;
 
-      const response = await callAI({
-        prompt: gradingPrompt,
-        temperature: 0.2,
-        maxTokens: 512,
-      });
-
-      const jsonMatch = response.match(/\{[\s\S]*\}/);
-      if (!jsonMatch) {
-        throw buildAiError('Could not parse grading response.', 502);
-      }
-
-      const parsed = JSON.parse(jsonMatch[0]);
+      const response = await callAI(gradingPrompt, { temperature: 0.2, maxTokens: 512, jsonMode: true });
+      const parsed = parseAIJson(response);
       const score = Math.min(questionMaxScore, Math.max(0, parsed.score || 0));
       totalScore += score;
       results.push({
@@ -450,9 +263,9 @@ Respond ONLY with a JSON object:
           criterion: 'Quality',
           score,
           maxScore: questionMaxScore,
-          comment: parsed.comment || '',
+          comment: parsed.comment || ''
         }],
-        overallComment: parsed.feedback || '',
+        overallComment: parsed.feedback || ''
       });
     }
 
@@ -466,12 +279,13 @@ Respond ONLY with a JSON object:
     res.json({ totalScore, maxScore, results, overallFeedback });
   } catch (error) {
     console.error('Grading error:', error);
-    res.status(error.status || 500).json({ error: error.message || 'Failed to grade submission' });
+    res.status(500).json({ error: error.message || 'Failed to grade submission' });
   }
 });
 
-// OCR - Image text extraction (uses Gemini for vision support)
-router.post('/extract-text', async (req, res) => {
+// ── OCR - Text extraction from images ──────────────────────────
+
+router.post('/extract-text', authMiddleware, async (req, res) => {
   try {
     const { imageBase64 } = req.body;
 
@@ -479,21 +293,43 @@ router.post('/extract-text', async (req, res) => {
       return res.status(400).json({ error: 'Image base64 data is required' });
     }
 
-    const text = await callGeminiVision({
-      prompt: 'Extract all readable text from this image. Preserve structure when possible.',
-      imageBase64,
-      temperature: 0.1,
-    });
+    // Primary: Tesseract.js (free, no API key needed)
+    let text = '';
+    try {
+      const cleanBase64 = imageBase64.replace(/^data:image\/\w+;base64,/, '');
+      const { data: { text: extracted } } = await Tesseract.recognize(cleanBase64, 'eng');
+      text = extracted.trim();
+    } catch (tesseractError) {
+      console.warn('[OCR] Tesseract.js failed:', tesseractError.message);
+    }
 
-    res.json({ text, success: true });
+    // Fallback: Gemini vision if Tesseract returned nothing
+    if (!text) {
+      try {
+        text = await callAIVision(
+          'Extract all readable text from this image. Preserve structure when possible.',
+          imageBase64
+        );
+      } catch (visionError) {
+        console.error('[OCR] Vision extraction failed:', visionError.message);
+        throw new Error(`OCR extraction failed: ${visionError.message}`);
+      }
+    }
+
+    if (!text) {
+      return res.status(502).json({ error: 'OCR extraction failed: no text found' });
+    }
+
+    res.json({ text, success: true, provider: text ? 'tesseract' : 'gemini' });
   } catch (error) {
     console.error('OCR error:', error);
-    res.status(error.status || 500).json({ error: error.message || 'Failed to extract text from image' });
+    res.status(500).json({ error: error.message || 'Failed to extract text from image' });
   }
 });
 
-// Summarization
-router.post('/summarize', async (req, res) => {
+// ── SUMMARIZATION ───────────────────────────────────────────────
+
+router.post('/summarize', authMiddleware, async (req, res) => {
   try {
     const { text, subject, mode = 'bullets' } = req.body;
 
@@ -504,25 +340,24 @@ router.post('/summarize', async (req, res) => {
     const modeInstructions = {
       bullets: 'Format as bullet points with key takeaways.',
       paragraph: 'Write a coherent summary paragraph.',
-      flashcards: 'Create flashcards with question-answer pairs.',
+      flashcards: 'Create flashcards with question-answer pairs.'
     };
 
-    const result = await callAI({
-      prompt: `Summarize the following notes about ${subject || 'the topic'}:
+    const result = await callAI(
+      `Summarize the following notes about ${subject || 'the topic'}:
 
 ${text.slice(0, 8000)}
 
 ${modeInstructions[mode] || modeInstructions.bullets}
 
 Keep the summary concise and educational.`,
-      temperature: 0.5,
-      maxTokens: 2048,
-    });
+      { temperature: 0.5, maxTokens: 2048 }
+    );
 
     res.json({ result, success: true });
   } catch (error) {
     console.error('Summarize error:', error);
-    res.status(error.status || 500).json({ error: error.message || 'Failed to summarize notes' });
+    res.status(500).json({ error: error.message || 'Failed to summarize notes' });
   }
 });
 

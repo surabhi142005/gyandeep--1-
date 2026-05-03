@@ -820,10 +820,44 @@ export const importUsersCSV = async (csvData: string, defaultPassword?: string) 
   });
 };
 
+export const publishQuiz = async (quizId: string) => {
+  return apiRequest(`/api/quiz/${quizId}/publish`, {
+    method: 'POST',
+  });
+};
+
+export const submitStandaloneQuiz = async (quizId: string, answers: Array<{ questionIndex: number; selectedAnswer: string }>) => {
+  return apiRequest(`/api/quiz/${quizId}/submit`, {
+    method: 'POST',
+    body: JSON.stringify({ answers }),
+  });
+};
+
 export const fetchStudentPerformance = async (studentId: string, startDate?: string, endDate?: string) => {
   const params = new URLSearchParams();
   if (startDate) params.set('startDate', startDate);
   if (endDate) params.set('endDate', endDate);
   const queryString = params.toString();
-  return apiRequest(`/api/analytics/student/${studentId}/performance${queryString ? `?${queryString}` : ''}`, { method: 'GET' });
+  return apiRequest(`/api/analytics/student-performance/${studentId}${queryString ? `?${queryString}` : ''}`, { method: 'GET' });
+};
+
+// ─── Announcements ─────────────────────────────────────────────────────────────
+
+export const fetchAnnouncements = async (classId?: string) => {
+  const params = classId ? `?classId=${classId}` : '';
+  return apiRequest(`/api/announcements${params}`, { method: 'GET' });
+};
+
+export const createAnnouncement = async (payload: {
+  authorId: string;
+  classId: string;
+  title: string;
+  content: string;
+  subjectId?: string;
+  priority?: string;
+}) => {
+  return apiRequest('/api/announcements', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
 };

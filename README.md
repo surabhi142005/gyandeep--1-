@@ -191,7 +191,7 @@ The full reference is in [`.env.example`](./.env.example). Required vs optional:
 - `RESEND_API_KEY` - Email service
 - `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` - OAuth
 - `R2_*` - Cloudflare R2 storage
-- `FACE_RECOGNITION_SERVICE_URL` - Face recognition service
+- `FACE_MATCH_THRESHOLD` - Face verification similarity threshold (default: 0.62)
 
 ## Testing
 

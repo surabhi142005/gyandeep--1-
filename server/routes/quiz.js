@@ -142,4 +142,83 @@ router.get('/:id/results', authMiddleware, async (req, res) => {
   }
 });
 
+router.post('/:id/publish', authMiddleware, async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!ObjectId.isValid(id)) return res.status(400).json({ error: 'Invalid quiz id' });
+
+    const db = await connectToDatabase();
+    const result = await db.collection(COLLECTIONS.QUIZZES).updateOne(
+      { _id: new ObjectId(id) },
+      { $set: { published: true, publishedAt: new Date(), updatedAt: new Date() } }
+    );
+
+    if (result.matchedCount === 0) return res.status(404).json({ error: 'Quiz not found' });
+    res.json({ message: 'Quiz published successfully', published: true });
+  } catch (error) {
+    console.error('Publish quiz error:', error);
+    res.status(500).json({ error: 'Failed to publish quiz' });
+  }
+});
+
+router.post('/:id/submit', authMiddleware, async (req, res) => {
+  try {
+    const { id: quizId } = req.params;
+    const { answers } = req.body;
+
+    if (!ObjectId.isValid(quizId)) return res.status(400).json({ error: 'Invalid quiz id' });
+    if (!Array.isArray(answers)) return res.status(400).json({ error: 'Answers array is required' });
+
+    const db = await connectToDatabase();
+    const quiz = await db.collection(COLLECTIONS.QUIZZES).findOne({ _id: new ObjectId(quizId) });
+    if (!quiz) return res.status(404).json({ error: 'Quiz not found' });
+    if (!quiz.published) return res.status(403).json({ error: 'Quiz is not published yet' });
+
+    const alreadyAttempt = await db.collection(COLLECTIONS.QUIZ_ATTEMPTS).findOne({
+      quizId: new ObjectId(quizId),
+      studentId: req.user.id,
+    });
+    if (alreadyAttempt) return res.status(400).json({ error: 'You have already submitted this quiz' });
+
+    let correctCount = 0;
+    answers.forEach((a) => {
+      const question = quiz.questions[a.questionIndex];
+      if (question && question.correctAnswer === a.selectedAnswer) correctCount++;
+    });
+
+    const totalQuestions = quiz.questions.length;
+    const score = totalQuestions > 0 ? Math.round((correctCount / totalQuestions) * 100) : 0;
+
+    const attemptDoc = {
+      quizId: new ObjectId(quizId),
+      studentId: req.user.id,
+      answers,
+      score,
+      totalQuestions,
+      correctCount,
+      submittedAt: new Date(),
+      createdAt: new Date(),
+    };
+    await db.collection(COLLECTIONS.QUIZ_ATTEMPTS).insertOne(attemptDoc);
+
+    const xpEarned = correctCount * 20;
+    const student = await db.collection(COLLECTIONS.USERS).findOne({ _id: new ObjectId(req.user.id) });
+    if (student) {
+      const newXP = (student.xp || 0) + xpEarned;
+      const newLevel = Math.floor(newXP / 100) + 1;
+      const badges = [...(student.badges || [])];
+      if (score === 100 && !badges.includes('perfect_score')) badges.push('perfect_score');
+      await db.collection(COLLECTIONS.USERS).updateOne(
+        { _id: new ObjectId(req.user.id) },
+        { $set: { xp: newXP, level: newLevel, badges, updatedAt: new Date() } }
+      );
+    }
+
+    res.json({ score, totalQuestions, correctCount, xpEarned });
+  } catch (error) {
+    console.error('Quiz submit error:', error);
+    res.status(500).json({ error: 'Failed to submit quiz' });
+  }
+});
+
 export default router;

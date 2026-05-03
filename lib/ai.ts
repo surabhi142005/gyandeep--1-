@@ -1,389 +1,126 @@
 /**
  * lib/ai.ts
- * Groq AI integration with OpenRouter fallback for chat and content generation
+ * Frontend AI service - delegates to backend API
+ *
+ * All AI calls go through the backend to keep API keys secure.
+ * The backend handles provider selection (Groq/Gemini) automatically.
  */
 
-const GROQ_API_KEY = import.meta.env.VITE_GROQ_API_KEY || import.meta.env.GROQ_API_KEY;
-const GROQ_API_URL = import.meta.env.VITE_GROQ_BASE_URL || 'https://api.groq.com/openai/v1';
-const GROQ_MODEL = import.meta.env.VITE_GROQ_MODEL || 'llama-3.3-70b-versatile';
+import { extractJSONArray, extractJSONObject } from './jsonParser';
 
-const OPENAI_API_KEY = import.meta.env.VITE_OPENAI_API_KEY || '';
-const OPENAI_API_URL = import.meta.env.VITE_OPENAI_BASE_URL || 'https://openrouter.ai/api/v1';
-const OPENAI_MODEL = import.meta.env.VITE_OPENAI_MODEL || 'meta-llama/Llama-3.3-70B-Instruct-Turbo';
+const API_URL = import.meta.env.VITE_API_URL || '/api';
 
-// Gemini kept for OCR/vision only
-const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY || '';
-const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models';
+// Generic API wrapper
+async function aiFetch<T = any>(endpoint: string, body: any): Promise<T> {
+  const response = await fetch(`${API_URL}${endpoint}`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    credentials: 'include',
+    body: JSON.stringify(body),
+  });
 
-export interface AIConfig {
-  model?: string;
-  temperature?: number;
-  maxTokens?: number;
+  const data = await response.json();
+
+  if (!response.ok) {
+    throw new Error(data.error || `AI request failed with status ${response.status}`);
+  }
+
+  return data;
 }
 
-const DEFAULT_CONFIG: AIConfig = {
-  model: 'llama-3.3-70b-versatile',
-  temperature: 0.7,
-  maxTokens: 2048,
-};
+// ── Chat ────────────────────────────────────────────────────────
 
 export interface ChatMessage {
   role: 'user' | 'model' | 'assistant';
   content: string;
 }
 
-export interface AIResponse {
-  text: string;
-  candidates?: any[];
-  usage?: {
-    promptTokens: number;
-    completionTokens: number;
-    totalTokens: number;
-  };
-}
-
-// Primary: Groq API call
-async function callGroq(
-  prompt: string,
-  messages: ChatMessage[] = [],
-  config: AIConfig = {}
-): Promise<AIResponse> {
-  const { temperature, maxTokens } = { ...DEFAULT_CONFIG, ...config };
-
-  const chatMessages = [
-    ...messages.map(m => ({
-      role: m.role === 'user' ? 'user' : 'assistant',
-      content: m.content,
-    })),
-    { role: 'user', content: prompt },
-  ];
-
-  try {
-    const response = await fetch(`${GROQ_API_URL}/chat/completions`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${GROQ_API_KEY}`,
-      },
-      body: JSON.stringify({
-        model: GROQ_MODEL,
-        messages: chatMessages,
-        temperature,
-        max_tokens: maxTokens,
-      }),
-    });
-
-    if (!response.ok) {
-      const error = await response.json().catch(() => ({}));
-      throw new Error(error.error?.message || `Groq API error: ${response.status}`);
-    }
-
-    const data = await response.json();
-    const text = data?.choices?.[0]?.message?.content || '';
-
-    return {
-      text,
-      usage: data.usage ? {
-        promptTokens: data.usage.prompt_tokens,
-        completionTokens: data.usage.completion_tokens,
-        totalTokens: data.usage.total_tokens,
-      } : undefined,
-    };
-  } catch (error) {
-    console.error('Groq API error:', error);
-    throw error;
-  }
-}
-
-// Fallback: OpenRouter/OpenAI
-async function callOpenAI(
-  prompt: string,
-  messages: ChatMessage[] = [],
-  config: AIConfig = {}
-): Promise<AIResponse> {
-  const { temperature, maxTokens } = { ...DEFAULT_CONFIG, ...config };
-
-  const chatMessages = [
-    ...messages.map(m => ({
-      role: m.role === 'user' ? 'user' : 'assistant',
-      content: m.content,
-    })),
-    { role: 'user', content: prompt },
-  ];
-
-  try {
-    const isOpenRouter = OPENAI_API_URL.includes('openrouter');
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${OPENAI_API_KEY}`,
-    };
-    
-    if (isOpenRouter) {
-      headers['HTTP-Referer'] = import.meta.env.VITE_API_URL || 'https://gyandeep.edu';
-      headers['X-Title'] = 'Gyandeep';
-    }
-
-    const response = await fetch(`${OPENAI_API_URL}/chat/completions`, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({
-        model: OPENAI_MODEL,
-        messages: chatMessages,
-        temperature,
-        max_tokens: maxTokens,
-      }),
-    });
-
-    if (!response.ok) {
-      const error = await response.json().catch(() => ({}));
-      throw new Error(error.error?.message || `OpenAI API error: ${response.status}`);
-    }
-
-    const data = await response.json();
-    const text = data?.choices?.[0]?.message?.content || '';
-
-    return {
-      text,
-      usage: data.usage ? {
-        promptTokens: data.usage.prompt_tokens,
-        completionTokens: data.usage.completion_tokens,
-        totalTokens: data.usage.total_tokens,
-      } : undefined,
-    };
-  } catch (error) {
-    console.error('OpenAI API error:', error);
-    throw error;
-  }
-}
-
-// Gemini for vision/OCR only
-async function callGeminiVision(prompt: string, imageBase64: string): Promise<string> {
-  const model = 'gemini-2.0-flash';
-  
-  const response = await fetch(
-    `${GEMINI_API_URL}/${model}:generateContent?key=${GEMINI_API_KEY}`,
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents: [{
-          role: 'user',
-          parts: [
-            { text: prompt },
-            { inline_data: { mime_type: 'image/jpeg', data: imageBase64.replace(/^data:image\/\w+;base64,/, '') } },
-          ],
-        }],
-        generationConfig: {
-          temperature: 0.1,
-          maxOutputTokens: 2048,
-        },
-      }),
-    }
-  );
-
-  if (!response.ok) {
-    const error = await response.json().catch(() => ({}));
-    throw new Error(error.error?.message || `Gemini API error: ${response.status}`);
-  }
-
-  const data = await response.json();
-  return data.candidates?.[0]?.content?.parts?.[0]?.text || '';
-}
-
-// Unified AI caller - Groq primary, OpenRouter fallback
-async function callAI(
-  prompt: string,
-  messages: ChatMessage[] = [],
-  config: AIConfig = {}
-): Promise<AIResponse> {
-  const errors: { provider: string; error: Error }[] = [];
-
-  // Try Groq first (primary)
-  if (GROQ_API_KEY) {
-    try {
-      return await callGroq(prompt, messages, config);
-    } catch (groqError) {
-      console.warn('[AI] Groq failed, falling back to OpenRouter:', groqError.message);
-      errors.push({ provider: 'groq', error: groqError });
-    }
-  }
-
-  // Fallback to OpenRouter/OpenAI
-  if (OPENAI_API_KEY) {
-    try {
-      return await callOpenAI(prompt, messages, config);
-    } catch (openaiError) {
-      console.error('[AI] OpenRouter also failed:', openaiError.message);
-      errors.push({ provider: 'openai', error: openaiError });
-    }
-  }
-
-  const lastError = errors[errors.length - 1];
-  throw new Error(`AI request failed: ${lastError?.error?.message || 'No AI provider available'}`);
-}
-
 export async function generateChatResponse(
   message: string,
   history: ChatMessage[] = [],
-  config?: AIConfig
+  userName?: string,
+  userRole?: string
 ): Promise<string> {
-  if (!GROQ_API_KEY && !OPENAI_API_KEY) {
-    return 'AI chat is not configured. Please set VITE_GROQ_API_KEY or VITE_OPENAI_API_KEY in your environment variables.';
-  }
-
-  const response = await callAI(message, history, config);
-  return response.text;
+  const data = await aiFetch<{ reply: string }>('/chat', {
+    message,
+    history,
+    userName,
+    userRole,
+  });
+  return data.reply;
 }
 
-export async function generateContent(
-  prompt: string,
-  config?: AIConfig
-): Promise<string> {
-  if (!GROQ_API_KEY && !OPENAI_API_KEY) {
-    throw new Error('No AI provider configured. Please set VITE_GROQ_API_KEY or VITE_OPENAI_API_KEY');
-  }
+// ── Quiz Generation ────────────────────────────────────────────
 
-  const response = await callAI(prompt, [], config);
-  return response.text;
+export interface QuizQuestion {
+  id: string;
+  question: string;
+  options: string[];
+  correctAnswer: string;
+  explanation?: string;
+}
+
+export async function generateQuizQuestions(
+  notesText: string,
+  subject?: string,
+  count: number = 10
+): Promise<QuizQuestion[]> {
+  const data = await aiFetch<{ quiz: QuizQuestion[] }>('/quiz/generate', {
+    notesText,
+    subject,
+    count,
+  });
+  return data.quiz;
+}
+
+// ── Email Generation ───────────────────────────────────────────
+
+export interface GeneratedEmail {
+  subject: string;
+  body: string;
+  recipients: string[];
 }
 
 export async function generateEmail(
   context: string,
   recipients: string[],
   additionalContext?: string
-): Promise<{ subject: string; body: string }> {
-  if (!GROQ_API_KEY && !OPENAI_API_KEY) {
-    throw new Error('No AI provider configured. Please set VITE_GROQ_API_KEY or VITE_OPENAI_API_KEY');
-  }
-
-  const prompt = `You are an AI assistant helping with email communication.
-
-Context: ${context}
-Recipients: ${recipients.join(', ')}
-${additionalContext ? `Additional Context: ${additionalContext}` : ''}
-
-Generate a professional email with:
-1. A clear, concise subject line
-2. A well-structured body that is appropriate and professional
-
-Format your response as:
-Subject: [your subject line here]
----
-[your email body here]`;
-
-  const response = await callAI(prompt, [], { temperature: 0.5 });
-  const [subjectLine, ...bodyParts] = response.text.split('---');
-  
-  return {
-    subject: subjectLine.replace(/^Subject:\s*/i, '').trim(),
-    body: bodyParts.join('---').trim(),
-  };
+): Promise<GeneratedEmail> {
+  const data = await aiFetch<{ email: GeneratedEmail }>('/ai-email', {
+    prompt: context,
+    recipients,
+    context: additionalContext,
+  });
+  return data.email;
 }
 
-export async function generateQuizQuestions(
-  topic: string,
-  count: number = 5,
-  difficulty: 'easy' | 'medium' | 'hard' = 'medium'
-): Promise<any[]> {
-  if (!GROQ_API_KEY && !OPENAI_API_KEY) {
-    throw new Error('No AI provider configured. Please set VITE_GROQ_API_KEY or VITE_OPENAI_API_KEY');
-  }
+// ── Summarization ──────────────────────────────────────────────
 
-  const prompt = `Generate ${count} quiz questions about "${topic}" with ${difficulty} difficulty.
-
-For each question, provide:
-- The question text
-- 4 multiple choice options (A, B, C, D)
-- The correct answer
-- A brief explanation
-
-Format as JSON array:
-[
-  {
-    "question": "...",
-    "options": ["A: ...", "B: ...", "C: ...", "D: ..."],
-    "correctAnswer": "A",
-    "explanation": "..."
-  }
-]`;
-
-  const response = await callAI(prompt, [], { temperature: 0.3 });
-  
-  try {
-    const jsonMatch = response.text.match(/\[[\s\S]*\]/);
-    if (jsonMatch) {
-      return JSON.parse(jsonMatch[0]);
-    }
-    return [];
-  } catch {
-    console.error('Failed to parse quiz questions:', response.text);
-    return [];
-  }
+export async function summarizeText(
+  text: string,
+  subject?: string,
+  mode: 'bullets' | 'paragraph' | 'flashcards' = 'bullets'
+): Promise<string> {
+  const data = await aiFetch<{ result: string }>('/summarize', {
+    text,
+    subject,
+    mode,
+  });
+  return data.result;
 }
 
-export async function analyzeStudentPerformance(
-  grades: { score: number; maxScore: number; subject: string }[],
-  attendance: { present: number; total: number },
-  behavior?: any
-): Promise<{
-  insights: { type: string; message: string; priority: 'high' | 'medium' | 'low' }[];
-  recommendations: string[];
-  summary: string;
-}> {
-  if (!GROQ_API_KEY && !OPENAI_API_KEY) {
-    return {
-      insights: [{ type: 'info', message: 'Configure AI API keys for AI-powered insights', priority: 'low' }],
-      recommendations: [],
-      summary: 'AI insights are not available. Please configure VITE_GROQ_API_KEY or VITE_OPENAI_API_KEY.',
-    };
-  }
+// ── Text Extraction (OCR) ──────────────────────────────────────
 
-  const prompt = `Analyze the following student data and provide insights:
-
-Grades:
-${grades.map(g => `- ${g.subject}: ${g.score}/${g.maxScore} (${Math.round(g.score/g.maxScore*100)}%)`).join('\n')}
-
-Attendance: ${attendance.present}/${attendance.total} days (${Math.round(attendance.present/attendance.total*100)}%)
-
-${behavior ? `Behavior: ${JSON.stringify(behavior)}` : ''}
-
-Provide a JSON response with:
-{
-  "insights": [{ "type": "achievement|improvement|warning|info", "message": "...", "priority": "high|medium|low" }],
-  "recommendations": ["..."],
-  "summary": "..."
-}`;
-
-  const response = await callAI(prompt, [], { temperature: 0.3 });
-  
-  try {
-    const jsonMatch = response.text.match(/\{[\s\S]*\}/);
-    if (jsonMatch) {
-      return JSON.parse(jsonMatch[0]);
-    }
-    return {
-      insights: [],
-      recommendations: [],
-      summary: response.text,
-    };
-  } catch {
-    return {
-      insights: [],
-      recommendations: [],
-      summary: response.text,
-    };
-  }
+export async function extractTextFromImage(imageBase64: string): Promise<string> {
+  const data = await aiFetch<{ text: string }>('/extract-text', {
+    imageBase64,
+  });
+  return data.text;
 }
 
-export function isAIConfigured(): boolean {
-  return !!(GROQ_API_KEY || OPENAI_API_KEY);
-}
-
-export function getAIProvider(): string {
-  if (GROQ_API_KEY) return 'groq';
-  if (OPENAI_API_KEY) return 'openai';
-  return 'none';
-}
+// ── Grading ───────────────────────────────────────────────────
 
 export interface GradingResult {
   score: number;
@@ -400,16 +137,7 @@ export async function autoGradeAnswer(
   maxScore: number = 10,
   questionType: 'mcq' | 'short' | 'long' = 'short'
 ): Promise<GradingResult> {
-  if (!GROQ_API_KEY && !OPENAI_API_KEY) {
-    return {
-      score: 0,
-      maxScore,
-      feedback: 'AI grading is not configured. Manual review required.',
-      criteriaScores: [],
-      overallComment: 'Please review manually.',
-    };
-  }
-
+  // For MCQ, grade locally
   if (questionType === 'mcq') {
     const isCorrect = studentAnswer.toUpperCase().trim() === correctAnswer.toUpperCase().trim();
     return {
@@ -422,121 +150,103 @@ export async function autoGradeAnswer(
         maxScore,
         comment: isCorrect ? 'Student selected the correct option.' : `Student selected "${studentAnswer}" instead of "${correctAnswer}".`,
       }],
-      overallComment: isCorrect ? 'Full marks awarded for correct selection.' : 'No marks awarded for incorrect selection.',
+      overallComment: isCorrect ? 'Full marks awarded.' : 'No marks awarded.',
     };
   }
 
-  const prompt = `You are an AI teacher grading a student's answer.
+  // Use backend AI for subjective grading
+  const data = await aiFetch<{ results: GradingResult[] }>('/grade', {
+    questions: [{ question, correctAnswer, maxScore, type: questionType }],
+    answers: [studentAnswer],
+  });
 
-Question: ${question}
-Correct Answer: ${correctAnswer}
-Student's Answer: ${studentAnswer}
-Maximum Score: ${maxScore}
-
-Grade the student's answer objectively based on:
-1. Accuracy of the answer
-2. Completeness
-3. Understanding of concepts
-4. Quality of explanation (if applicable)
-
-Provide your response as a JSON object:
-{
-  "score": [numeric score between 0 and ${maxScore}],
-  "feedback": "[Brief feedback on what the student got right/wrong]",
-  "criteriaScores": [
-    { "criterion": "[Name]", "score": [number], "maxScore": [number], "comment": "[Feedback]" }
-  ],
-  "overallComment": "[Summary comment for the student]"
-}`;
-
-  const response = await callAI(prompt, [], { temperature: 0.3 });
-
-  try {
-    const jsonMatch = response.text.match(/\{[\s\S]*\}/);
-    if (jsonMatch) {
-      const parsed = JSON.parse(jsonMatch[0]);
-      return {
-        score: Math.min(maxScore, Math.max(0, parsed.score || 0)),
-        maxScore,
-        feedback: parsed.feedback || 'Graded by AI.',
-        criteriaScores: parsed.criteriaScores || [],
-        overallComment: parsed.overallComment || '',
-      };
-    }
-  } catch {
-    console.error('Failed to parse grading result:', response.text);
-  }
-
-  return {
-    score: Math.round(maxScore * 0.7),
-    maxScore,
-    feedback: 'AI grading encountered an issue. Partial credit assigned.',
-    criteriaScores: [{
-      criterion: 'General Assessment',
-      score: Math.round(maxScore * 0.7),
-      maxScore,
-      comment: 'Please review manually if this score seems inaccurate.',
-    }],
-    overallComment: 'This answer requires manual review.',
-  };
+  return data.results[0];
 }
 
 export async function gradeQuizSubmission(
   questions: { question: string; correctAnswer: string; maxScore: number; type: 'mcq' | 'short' | 'long' }[],
   answers: string[]
 ): Promise<{ totalScore: number; maxScore: number; results: GradingResult[]; overallFeedback: string }> {
+  // Local MCQ grading
   const results: GradingResult[] = [];
-  
+  let totalScore = 0;
+  let maxScore = 0;
+
   for (let i = 0; i < questions.length; i++) {
     const q = questions[i];
     const studentAnswer = answers[i] || '';
-    const result = await autoGradeAnswer(q.question, q.correctAnswer, studentAnswer, q.maxScore, q.type);
-    results.push(result);
+
+    if (q.type === 'mcq') {
+      const isCorrect = studentAnswer.toUpperCase().trim() === q.correctAnswer.toUpperCase().trim();
+      const score = isCorrect ? q.maxScore : 0;
+      totalScore += score;
+      maxScore += q.maxScore;
+      results.push({
+        score,
+        maxScore: q.maxScore,
+        feedback: isCorrect ? 'Correct!' : `Incorrect. Answer: ${q.correctAnswer}`,
+        criteriaScores: [{ criterion: 'Answer', score, maxScore: q.maxScore, comment: isCorrect ? 'Correct.' : `Wrong.` }],
+        overallComment: isCorrect ? 'Full marks.' : 'No marks.',
+      });
+    } else {
+      results.push({
+        score: 0,
+        maxScore: q.maxScore,
+        feedback: 'Pending AI grading',
+        criteriaScores: [],
+        overallComment: '',
+      });
+    }
   }
 
-  const totalScore = results.reduce((sum, r) => sum + r.score,0);
-  const maxScore = results.reduce((sum, r) => sum + r.maxScore,0);
+  // Batch grade non-MCQ questions via API
+  const nonMcqQuestions = questions.filter(q => q.type !== 'mcq');
+  const nonMcqAnswers = answers.filter((_, i) => questions[i].type !== 'mcq');
+
+  if (nonMcqQuestions.length > 0) {
+    try {
+      const data = await aiFetch<{ results: GradingResult[]; totalScore: number; maxScore: number }>('/grade', {
+        questions: nonMcqQuestions,
+        answers: nonMcqAnswers,
+      });
+
+      let resultIndex = 0;
+      for (let i = 0; i < questions.length; i++) {
+        if (questions[i].type !== 'mcq') {
+          results[i] = data.results[resultIndex++];
+          totalScore += results[i].score;
+          maxScore += results[i].maxScore;
+        }
+      }
+    } catch (err) {
+      console.warn('AI grading failed, showing pending:', err);
+    }
+  }
+
   const percentage = maxScore > 0 ? Math.round((totalScore / maxScore) * 100) : 0;
-
-  let overallFeedback = '';
-  if (percentage >= 90) {
-    overallFeedback = 'Excellent work! You have mastered this material.';
-  } else if (percentage >= 75) {
-    overallFeedback = 'Good job! You have a solid understanding of the material.';
-  } else if (percentage >= 60) {
-    overallFeedback = 'You passed, but there is room for improvement. Review the topics you missed.';
-  } else if (percentage >= 40) {
-    overallFeedback = 'You need to review this material more carefully. Consider revisiting the lessons.';
-  } else {
-    overallFeedback = 'Significant improvement needed. Please review the material thoroughly and seek help if needed.';
-  }
+  let overallFeedback = 'Significant review needed.';
+  if (percentage >= 90) overallFeedback = 'Excellent work!';
+  else if (percentage >= 75) overallFeedback = 'Good job!';
+  else if (percentage >= 60) overallFeedback = 'Passed. Review missed topics.';
+  else if (percentage >= 40) overallFeedback = 'Needs improvement.';
 
   return { totalScore, maxScore, results, overallFeedback };
 }
 
-export async function extractTextFromImage(imageBase64: string): Promise<string> {
-  if (!GEMINI_API_KEY) {
-    throw new Error('Gemini API key is required for OCR. Please set VITE_GEMINI_API_KEY');
-  }
+// ── Utility ───────────────────────────────────────────────────
 
-  try {
-    const prompt = 'Extract all text from this image. Preserve the structure and formatting as much as possible. If there is no readable text, describe what you see in the image.';
-    return await callGeminiVision(prompt, imageBase64);
-  } catch (error) {
-    console.error('[AI] Gemini OCR failed:', error.message);
-    throw new Error(`OCR extraction failed: ${error.message}`);
-  }
+export function isAIConfigured(): boolean {
+  // AI status is determined server-side
+  return true;
 }
 
 export default {
   generateChatResponse,
-  generateContent,
-  generateEmail,
   generateQuizQuestions,
-  analyzeStudentPerformance,
+  generateEmail,
+  summarizeText,
+  extractTextFromImage,
   autoGradeAnswer,
   gradeQuizSubmission,
-  extractTextFromImage,
   isAIConfigured,
-  getAIProvider,
 };

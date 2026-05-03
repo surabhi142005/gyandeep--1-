@@ -3,7 +3,7 @@
  *
  * Auth with httpOnly cookies. Tokens are stored server-side in secure cookies.
  * Client manages session state without storing tokens directly.
- * Face recognition proxies to /api/auth/face (Python service on :5001).
+ * Face recognition uses browser-generated 128-d descriptors via face-api.js.
  */
 
 import { calculateDistance } from './locationService';
@@ -395,7 +395,11 @@ export async function loginWithFace(userId: string, imageDataUrl: string) {
       if (error?.message !== 'Failed to fetch') {
         throw error;
       }
-      data = await attempt('/api/face/login');
+      const verifyData = await attempt('/api/face/verify');
+      if (!verifyData.authenticated) {
+        throw new Error('Face verification failed');
+      }
+      return null;
     }
 
     syncReturnedTokens(data);

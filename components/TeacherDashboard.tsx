@@ -40,6 +40,7 @@ import { TeacherDashboardProps } from './TeacherDashboardProps';
 import GradeBook from './GradeBook';
 import TicketPanel from './TicketPanel';
 import AnalyticsDashboard from './AnalyticsDashboard';
+import AnnouncementBoard from './AnnouncementBoard';
 import { useTeacherSession } from '../hooks/useTeacherSession';
 import { useQuizWorker } from '../hooks/useQuizWorker';
 import { DashboardLayout, Card, Button, Badge, Input } from './ui';
@@ -838,11 +839,22 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
                  <p className="text-gray-500">{t('Students have not submitted attempts for this quiz yet.')}</p>
                </div>
              )}
-           </Card>
-        </div>
-      )}
+            </Card>
+         </div>
+       )}
 
-      {activeTab === 'notes' && (
+       {activeTab === 'announcements' && (
+         <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+            <AnnouncementBoard
+              announcements={announcements}
+              onPost={onPostAnnouncement}
+              canPost={true}
+              theme={theme}
+            />
+         </div>
+       )}
+
+       {activeTab === 'notes' && (
         <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
            <Card padding="xl">
               <div className="flex justify-between items-center mb-6">

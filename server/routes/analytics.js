@@ -1,89 +1,29 @@
 /**
  * server/routes/analytics.js
- * Analytics and AI-powered insights with Groq primary and OpenRouter fallback
+ * Analytics and AI-powered insights using unified AI service
  */
 
 import express from 'express';
 const router = express.Router();
 import { connectToDatabase, COLLECTIONS } from '../db/mongoAtlas.js';
 import { authMiddleware } from '../middleware/auth.js';
+import { callAI, parseAIJson, getAIStatus } from '../services/aiService.js';
 
-// Groq API configuration
-const GROQ_API_URL = process.env.GROQ_BASE_URL || 'https://api.groq.com/openai/v1';
-const GROQ_MODEL = process.env.GROQ_MODEL || 'llama-3.3-70b-versatile';
-
-// OpenRouter fallback
-const OPENAI_API_URL = process.env.OPENAI_BASE_URL || 'https://openrouter.ai/api/v1';
-const OPENAI_MODEL = process.env.OPENAI_MODEL || 'meta-llama/Llama-3.3-70B-Instruct-Turbo';
-
-async function callGroq(prompt, temperature = 0.4, maxTokens = 1024) {
-  const apiKey = process.env.GROQ_API_KEY?.trim();
-  if (!apiKey) throw new Error('GROQ_API_KEY not configured');
-
-  const response = await fetch(`${GROQ_API_URL}/chat/completions`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify({
-      model: GROQ_MODEL,
-      messages: [{ role: 'user', content: prompt }],
-      temperature,
-      max_tokens: maxTokens,
-    }),
-  });
-
-  if (!response.ok) {
-    const error = await response.json().catch(() => ({}));
-    throw new Error(error?.error?.message || `Groq API error: ${response.status}`);
+router.get('/ai-status', async (req, res) => {
+  try {
+    const status = getAIStatus();
+    res.json(status);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
   }
-
-  const data = await response.json();
-  return data?.choices?.[0]?.message?.content || '';
-}
-
-async function callOpenAI(prompt, temperature = 0.4, maxTokens = 1024) {
-  const apiKey = process.env.OPENAI_API_KEY?.trim();
-  if (!apiKey) throw new Error('OPENAI_API_KEY not configured');
-
-  const isOpenRouter = OPENAI_API_URL.includes('openrouter');
-  const headers = {
-    'Content-Type': 'application/json',
-    'Authorization': `Bearer ${apiKey}`,
-  };
-
-  if (isOpenRouter) {
-    headers['HTTP-Referer'] = process.env.FRONTEND_URL || 'https://gyandeep.edu';
-    headers['X-Title'] = 'Gyandeep';
-  }
-
-  const response = await fetch(`${OPENAI_API_URL}/chat/completions`, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify({
-      model: OPENAI_MODEL,
-      messages: [{ role: 'user', content: prompt }],
-      temperature,
-      max_tokens: maxTokens,
-    }),
-  });
-
-  if (!response.ok) {
-    const error = await response.json().catch(() => ({}));
-    throw new Error(error?.error?.message || `OpenAI API error: ${response.status}`);
-  }
-
-  const data = await response.json();
-  return data?.choices?.[0]?.message?.content || '';
-}
+});
 
 router.post('/insights', authMiddleware, async (req, res) => {
   try {
     const { studentData, type } = req.body;
 
     const prompt = `Analyze this student performance data and provide 3-5 concise, actionable insights.
-    
+
 Student Data:
 ${JSON.stringify(studentData, null, 2)}
 
@@ -92,42 +32,28 @@ Format your response ONLY as a JSON array of objects:
   { "type": "achievement|improvement|attendance|progress", "message": "Short actionable insight message" }
 ]`;
 
-    // Try Groq first (primary)
-    if (process.env.GROQ_API_KEY) {
-      try {
-        const text = await callGroq(prompt, 0.4, 1024);
-        const jsonMatch = text.match(/\[[\s\S]*\]/);
-        if (jsonMatch) {
-          const insights = JSON.parse(jsonMatch[0]);
-          return res.json({ insights, provider: 'groq' });
-        }
-      } catch (err) {
-        console.warn('[Analytics] Groq insight generation failed, trying OpenRouter:', err.message);
+    try {
+      const text = await callAI(prompt, {
+        temperature: 0.4,
+        maxTokens: 1024,
+        jsonMode: true
+      });
+      const insights = parseAIJson(text);
+      if (Array.isArray(insights) && insights.length > 0) {
+        return res.json({ insights, provider: 'ai' });
       }
+    } catch (aiErr) {
+      console.warn('[Analytics] AI insight generation failed:', aiErr.message);
     }
 
-    // Fallback to OpenRouter/OpenAI
-    if (process.env.OPENAI_API_KEY) {
-      try {
-        const text = await callOpenAI(prompt, 0.4, 1024);
-        const jsonMatch = text.match(/\[[\s\S]*\]/);
-        if (jsonMatch) {
-          const insights = JSON.parse(jsonMatch[0]);
-          return res.json({ insights, provider: 'openai' });
-        }
-      } catch (err) {
-        console.warn('[Analytics] OpenRouter insight generation failed:', err.message);
-      }
-    }
-
-    // Fallback manual insights if both AI providers fail
+    // Fallback manual insights if AI fails
     const insights = [];
     if (studentData?.grades?.length > 0) {
       const avgScore = studentData.grades.reduce((sum, g) => sum + (g.score / g.maxScore * 100), 0) / studentData.grades.length;
       if (avgScore >= 90) insights.push({ type: 'achievement', message: 'Outstanding performance! Keep up the excellent work.' });
       else if (avgScore < 60) insights.push({ type: 'improvement', message: 'Consider reviewing the material and seeking additional help.' });
     }
-    
+
     if (studentData?.attendance) {
       const attendanceRate = (studentData.attendance.present / studentData.attendance.total) * 100;
       if (attendanceRate < 80) insights.push({ type: 'attendance', message: 'Attendance rate is below 80%. Regular attendance improves learning outcomes.' });
@@ -235,7 +161,7 @@ router.get('/attendance-trends', authMiddleware, async (req, res) => {
       absent: t.absent,
       late: t.late,
       total: t.total,
-      rate: t.total > 0 ? ((t.present + t.late) / t.total * 100).toFixed(1) : 0,
+      rate: t.total > 0 ? ((t.present + t.late) / t.total * 100).toFixed(1) : 0
     })));
   } catch (error) {
     console.error('Attendance trends error:', error);
@@ -248,43 +174,34 @@ router.get('/grade-distribution', authMiddleware, async (req, res) => {
     const db = await connectToDatabase();
     const { classId, subjectId } = req.query;
 
-    const match = {};
+    const match: any = {};
     if (classId) match.classId = classId;
     if (subjectId) match.subjectId = subjectId;
 
     const distribution = await db.collection(COLLECTIONS.GRADES).aggregate([
       { $match: match },
       {
-        $addFields: {
-          percentage: { $divide: ['$score', '$maxScore'] }
+        $project: {
+          percentage: {
+            $multiply: [{ $divide: ['$score', '$maxScore'] }, 100]
+          }
         }
       },
       {
         $bucket: {
           groupBy: '$percentage',
-          boundaries: [0, 0.6, 0.7, 0.8, 0.9, 1.01],
+          boundaries: [0, 60, 70, 80, 90, 101],
           default: 'Other',
           output: {
-            count: { $sum: 1 },
-            avgScore: { $avg: '$percentage' }
+            count: { $sum: 1 }
           }
         }
-      },
+      }
     ]).toArray();
 
-    const labelMap = {
-      '0': 'F (<60%)',
-      '0.6': 'D (60-70%)',
-      '0.7': 'C (70-80%)',
-      '0.8': 'B (80-90%)',
-      '0.9': 'A (90-100%)',
-      'Other': 'Other',
-    };
-
     res.json(distribution.map(b => ({
-      range: labelMap[b._id] || b._id,
-      count: b.count,
-      averageScore: b.avgScore ? (b.avgScore * 100).toFixed(1) : 0,
+      range: b._id,
+      count: b.count
     })));
   } catch (error) {
     console.error('Grade distribution error:', error);
@@ -292,254 +209,46 @@ router.get('/grade-distribution', authMiddleware, async (req, res) => {
   }
 });
 
-router.get('/performance-by-subject', authMiddleware, async (req, res) => {
-  try {
-    const db = await connectToDatabase();
-    const { classId } = req.query;
-
-    const match = classId ? { classId } : {};
-
-    const performance = await db.collection(COLLECTIONS.GRADES).aggregate([
-      { $match: match },
-      {
-        $lookup: {
-          from: COLLECTIONS.SUBJECTS,
-          localField: 'subjectId',
-          foreignField: '_id',
-          as: 'subject'
-        }
-      },
-      { $unwind: '$subject' },
-      {
-        $group: {
-          _id: '$subjectId',
-          subjectName: { $first: '$subject.name' },
-          totalGrades: { $sum: 1 },
-          averageScore: { $avg: { $divide: ['$score', '$maxScore'] } },
-          highestScore: { $max: { $divide: ['$score', '$maxScore'] } },
-          lowestScore: { $min: { $divide: ['$score', '$maxScore'] } },
-        }
-      },
-      { $sort: { averageScore: -1 } },
-    ]).toArray();
-
-    res.json(performance.map(p => ({
-      subjectId: p._id?.toString(),
-      subjectName: p.subjectName,
-      totalGrades: p.totalGrades,
-      averageScore: p.averageScore ? (p.averageScore * 100).toFixed(1) : 0,
-      highestScore: p.highestScore ? (p.highestScore * 100).toFixed(1) : 0,
-      lowestScore: p.lowestScore ? (p.lowestScore * 100).toFixed(1) : 0,
-    })));
-  } catch (error) {
-    console.error('Performance by subject error:', error);
-    res.status(500).json({ error: 'Failed to get performance by subject' });
-  }
-});
-
-router.get('/student/:studentId/performance', authMiddleware, async (req, res) => {
+router.get('/student-performance/:studentId', authMiddleware, async (req, res) => {
   try {
     const db = await connectToDatabase();
     const { studentId } = req.params;
-    const { startDate, endDate } = req.query;
 
-    const match = { studentId };
-    if (startDate || endDate) {
-      match.timestamp = {};
-      if (startDate) match.timestamp.$gte = new Date(startDate);
-      if (endDate) match.timestamp.$lte = new Date(endDate);
-    }
-
-    const [attendance, grades] = await Promise.all([
-      db.collection(COLLECTIONS.ATTENDANCE).aggregate([
-        { $match: match },
-        {
-          $group: {
-            _id: null,
-            total: { $sum: 1 },
-            present: { $sum: { $cond: [{ $eq: ['$status', 'Present'] }, 1, 0] } },
-            absent: { $sum: { $cond: [{ $eq: ['$status', 'Absent'] }, 1, 0] } },
-            late: { $sum: { $cond: [{ $eq: ['$status', 'Late'] }, 1, 0] } },
-            excused: { $sum: { $cond: [{ $eq: ['$status', 'Excused'] }, 1, 0] } },
-          }
-        }
-      ]).toArray(),
-      db.collection(COLLECTIONS.GRADES).aggregate([
-        { $match: { studentId, ...(startDate || endDate ? { timestamp: match.timestamp } : {}) } },
-        {
-          $group: {
-            _id: null,
-            totalGrades: { $sum: 1 },
-            averageScore: { $avg: { $divide: ['$score', '$maxScore'] } },
-            highestScore: { $max: { $divide: ['$score', '$maxScore'] } },
-            lowestScore: { $min: { $divide: ['$score', '$maxScore'] } },
-          }
-        }
-      ]).toArray(),
+    const [grades, attendance, quizResults] = await Promise.all([
+      db.collection(COLLECTIONS.GRADES).find({ studentId }).sort({ timestamp: -1 }).limit(20).toArray(),
+      db.collection(COLLECTIONS.ATTENDANCE).find({ studentId }).sort({ timestamp: -1 }).limit(30).toArray(),
+      db.collection(COLLECTIONS.QUIZ_ATTEMPTS).find({ studentId }).sort({ submittedAt: -1 }).limit(10).toArray()
     ]);
 
-    const att = attendance[0] || { total: 0, present: 0, late: 0, excused: 0 };
-    const grd = grades[0] || { totalGrades: 0, averageScore: 0 };
+    const gradeStats = grades.length > 0 ? {
+      average: (grades.reduce((sum, g) => sum + (g.score / g.maxScore * 100), 0) / grades.length).toFixed(1),
+      highest: Math.max(...grades.map(g => g.score / g.maxScore * 100)).toFixed(1),
+      lowest: Math.min(...grades.map(g => g.score / g.maxScore * 100)).toFixed(1),
+      total: grades.length
+    } : null;
+
+    const attendanceStats = attendance.length > 0 ? {
+      present: attendance.filter(a => a.status === 'Present').length,
+      absent: attendance.filter(a => a.status === 'Absent').length,
+      late: attendance.filter(a => a.status === 'Late').length,
+      rate: (attendance.filter(a => a.status !== 'Absent').length / attendance.length * 100).toFixed(1)
+    } : null;
+
+    const quizStats = quizResults.length > 0 ? {
+      average: (quizResults.reduce((sum, q) => sum + q.score, 0) / quizResults.length).toFixed(1),
+      best: Math.max(...quizResults.map(q => q.score)),
+      attempts: quizResults.length
+    } : null;
 
     res.json({
-      studentId,
-      attendance: {
-        total: att.total,
-        present: att.present,
-        absent: att.absent,
-        late: att.late,
-        excused: att.excused,
-        rate: att.total > 0 ? ((att.present + att.late) / att.total * 100).toFixed(1) : 0,
-      },
-      grades: {
-        total: grd.totalGrades,
-        average: grd.averageScore ? (grd.averageScore * 100).toFixed(1) : 0,
-        highest: grd.highestScore ? (grd.highestScore * 100).toFixed(1) : 0,
-        lowest: grd.lowestScore ? (grd.lowestScore * 100).toFixed(1) : 0,
-      },
+      grades: gradeStats,
+      attendance: attendanceStats,
+      quizzes: quizStats,
+      recentGrades: grades.slice(0, 5)
     });
   } catch (error) {
     console.error('Student performance error:', error);
     res.status(500).json({ error: 'Failed to get student performance' });
-  }
-});
-
-router.get('/leaderboard', authMiddleware, async (req, res) => {
-  try {
-    const db = await connectToDatabase();
-    const { classId, limit = '20' } = req.query;
-    const limitNum = Math.min(100, Math.max(1, parseInt(limit, 10) || 20));
-
-    const filter = { role: 'student', active: true };
-    if (classId) filter.classId = classId;
-
-    const leaderboard = await db.collection(COLLECTIONS.USERS)
-      .find(filter)
-      .project({ 
-        name: 1, 
-        email: 1, 
-        xp: 1, 
-        level: 1, 
-        coins: 1, 
-        badges: 1,
-        classId: 1,
-        streak: 1 
-      })
-      .sort({ xp: -1, level: -1 })
-      .limit(limitNum)
-      .toArray();
-
-    const ranked = leaderboard.map((user, index) => ({
-      rank: index + 1,
-      id: user._id?.toString() || user.id,
-      name: user.name,
-      email: user.email,
-      xp: user.xp || 0,
-      level: user.level || 1,
-      coins: user.coins || 0,
-      badges: user.badges || [],
-      classId: user.classId,
-      streak: user.streak || 0,
-    }));
-
-    res.json({
-      leaderboard: ranked,
-      total: ranked.length,
-    });
-  } catch (error) {
-    console.error('Leaderboard error:', error);
-    res.status(500).json({ error: 'Failed to get leaderboard' });
-  }
-});
-
-router.get('/teacher/:classId', authMiddleware, async (req, res) => {
-  try {
-    const db = await connectToDatabase();
-    const { classId } = req.params;
-    const { startDate, endDate } = req.query;
-
-    const dateMatch = {};
-    if (startDate || endDate) {
-      dateMatch.timestamp = {};
-      if (startDate) dateMatch.timestamp.$gte = new Date(startDate);
-      if (endDate) dateMatch.timestamp.$lte = new Date(endDate);
-    }
-
-    const classStudents = await db.collection(COLLECTIONS.USERS)
-      .find({ classId, role: 'student', active: true })
-      .project({ _id: 1, name: 1, email: 1 })
-      .toArray();
-
-    const studentIds = classStudents.map(s => s._id.toString());
-
-    const [attendanceStats, gradeStats, quizStats] = await Promise.all([
-      db.collection(COLLECTIONS.ATTENDANCE).aggregate([
-        { $match: { studentId: { $in: studentIds }, ...dateMatch } },
-        {
-          $group: {
-            _id: null,
-            total: { $sum: 1 },
-            present: { $sum: { $cond: [{ $eq: ['$status', 'Present'] }, 1, 0] } },
-            absent: { $sum: { $cond: [{ $eq: ['$status', 'Absent'] }, 1, 0] } },
-            late: { $sum: { $cond: [{ $eq: ['$status', 'Late'] }, 1, 0] } },
-          }
-        }
-      ]).toArray(),
-      db.collection(COLLECTIONS.GRADES).aggregate([
-        { $match: { studentId: { $in: studentIds }, ...dateMatch } },
-        {
-          $group: {
-            _id: null,
-            totalGrades: { $sum: 1 },
-            averageScore: { $avg: { $divide: ['$score', '$maxScore'] } },
-          }
-        }
-      ]).toArray(),
-      db.collection(COLLECTIONS.QUIZ_ATTEMPTS).aggregate([
-        { $match: { studentId: { $in: studentIds }, ...dateMatch } },
-        {
-          $group: {
-            _id: null,
-            totalAttempts: { $sum: 1 },
-            averageScore: { $avg: '$score' },
-            passedCount: { $sum: { $cond: [{ $gte: ['$score', 60] }, 1, 0] } },
-          }
-        }
-      ]).toArray(),
-    ]);
-
-    const att = attendanceStats[0] || { total: 0, present: 0, late: 0 };
-    const grd = gradeStats[0] || { totalGrades: 0, averageScore: 0 };
-    const quiz = quizStats[0] || { totalAttempts: 0, averageScore: 0, passedCount: 0 };
-
-    res.json({
-      classId,
-      totalStudents: classStudents.length,
-      attendance: {
-        total: att.total,
-        present: att.present,
-        absent: att.absent,
-        late: att.late,
-        rate: att.total > 0 ? ((att.present + att.late) / att.total * 100).toFixed(1) : 0,
-      },
-      grades: {
-        totalGrades: grd.totalGrades,
-        averageScore: grd.averageScore ? (grd.averageScore * 100).toFixed(1) : 0,
-      },
-      quizzes: {
-        totalAttempts: quiz.totalAttempts,
-        averageScore: quiz.averageScore ? quiz.averageScore.toFixed(1) : 0,
-        passRate: quiz.totalAttempts > 0 ? ((quiz.passedCount / quiz.totalAttempts) * 100).toFixed(1) : 0,
-      },
-      studentList: classStudents.map(s => ({
-        id: s._id?.toString(),
-        name: s.name,
-        email: s.email,
-      })),
-    });
-  } catch (error) {
-    console.error('Teacher analytics error:', error);
-    res.status(500).json({ error: 'Failed to get teacher analytics' });
   }
 });
 
