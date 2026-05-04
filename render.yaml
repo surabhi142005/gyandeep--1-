@@ -7,7 +7,7 @@ services:
     region: oregon
     buildCommand: npm install && npm run build
     startCommand: node server/index.js
-    healthCheckPath: /api/health
+    healthCheckPath: /healthz
     envVars:
       - key: NODE_ENV
         value: production

@@ -161,7 +161,17 @@ app.use(sanitizeInput);
 // Standard rate limiting for all API routes
 app.use('/api', standardRateLimiter.middleware());
 
-// Health check (no rate limiting)
+// Lightweight liveness probe for hosting platforms.
+// This should stay independent from MongoDB/Redis so deploys don't flap on slow dependencies.
+app.get('/healthz', (req, res) => {
+  res.status(200).json({
+    status: 'ok',
+    uptime: process.uptime(),
+    timestamp: new Date().toISOString(),
+  });
+});
+
+// Readiness health check (no rate limiting)
 app.get('/api/health', async (req, res) => {
   try {
     const db = await connectToDatabase();
@@ -371,6 +381,7 @@ if (!process.env.VERCEL) {
     
     console.log(`🚀 Server listening on 0.0.0.0:${PORT}`);
     console.log(`🌍 Public URL: ${host}`);
+    console.log(`💓 Liveness check: ${host}/healthz`);
     console.log(`📊 Health check: ${host}/api/health`);
     console.log(`🔌 WebSocket: ${wsHost}/ws`);
     console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
