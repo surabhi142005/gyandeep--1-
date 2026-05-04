@@ -17,6 +17,11 @@
 import Groq from 'groq-sdk';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 
+// ── Model configuration ─────────────────────────────────────────
+// Define these first so they can be used in logging below
+const GROQ_MODEL = process.env.GROQ_MODEL || 'llama-3.3-70b-versatile';
+const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-2.0-flash';
+
 // ── Detect configured providers ───────────────────────────────
 const HAS_GROQ_CHAT = !!(process.env.GROQ_API_KEY_CHAT?.trim());
 const HAS_GROQ_CONTENT = !!(process.env.GROQ_API_KEY_CONTENT?.trim());
@@ -57,10 +62,6 @@ const groqAnalyticsClient = HAS_GROQ_ANALYTICS
 const geminiClient = HAS_GEMINI
   ? new GoogleGenerativeAI(process.env.GEMINI_API_KEY.trim())
   : null;
-
-// ── Model configuration ─────────────────────────────────────────
-const GROQ_MODEL = process.env.GROQ_MODEL || 'llama-3.3-70b-versatile';
-const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-2.0-flash';
 
 // ── Helper: get groq client for purpose ─────────────────────────
 function getGroqClient(purpose) {
