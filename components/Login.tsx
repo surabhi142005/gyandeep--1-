@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { useState, useMemo } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import type { User } from '../types';
 import { ROLE_DISPLAY_NAMES } from '../types';
 import WebcamCapture from './WebcamCapture';
@@ -29,6 +29,7 @@ const THEME_COLORS: Record<string, Record<string, string>> = {
 
 const Login: React.FC<LoginProps> = ({ onLogin, users, theme, onPasswordReset, onNavigateToRegister }) => {
   const [loginMethod, setLoginMethod] = useState<LoginMethod>('emailPassword');
+  const [hasInitializedLoginMethod, setHasInitializedLoginMethod] = useState(false);
 
   // Face ID Login State
   const [selectedUserId, setSelectedUserId] = useState<string>('');
@@ -62,6 +63,22 @@ const Login: React.FC<LoginProps> = ({ onLogin, users, theme, onPasswordReset, o
     users.filter(u => u.name && u.id && u.active !== false),
     [users]
   );
+
+  const faceLoginUsers = useMemo(
+    () => allUsersForLogin.filter(user => !!user.faceImage),
+    [allUsersForLogin]
+  );
+
+  useEffect(() => {
+    if (hasInitializedLoginMethod || allUsersForLogin.length === 0) return;
+
+    if (faceLoginUsers.length > 0) {
+      setLoginMethod('faceId');
+      setSelectedUserId(faceLoginUsers[0].id);
+    }
+
+    setHasInitializedLoginMethod(true);
+  }, [allUsersForLogin, faceLoginUsers, hasInitializedLoginMethod]);
 
   const handleForgotPasswordStart = () => {
     setForgotPasswordStep('enterEmail');
@@ -233,6 +250,7 @@ const Login: React.FC<LoginProps> = ({ onLogin, users, theme, onPasswordReset, o
             {/* Login Method Toggle */}
             <div className="flex bg-gray-100 rounded-lg p-1 mb-5" role="tablist" aria-label="Login method">
               <button
+                type="button"
                 role="tab"
                 aria-selected={loginMethod === 'emailPassword'}
                 onClick={() => { setLoginMethod('emailPassword'); setError(null); }}
@@ -242,6 +260,7 @@ const Login: React.FC<LoginProps> = ({ onLogin, users, theme, onPasswordReset, o
                 <span aria-hidden="true">📧 </span>{t('Email & Password')}
               </button>
               <button
+                type="button"
                 role="tab"
                 aria-selected={loginMethod === 'faceId'}
                 onClick={() => { setLoginMethod('faceId'); setError(null); }}
@@ -300,6 +319,7 @@ const Login: React.FC<LoginProps> = ({ onLogin, users, theme, onPasswordReset, o
                   </div>
                 </div>
                 <button
+                  type="button"
                   onClick={handleEmailPasswordLogin}
                   disabled={isLoggingIn || !email || !password}
                   className={`w-full text-white font-bold py-3 rounded-xl transition-all duration-200 flex items-center justify-center gap-2 ${colors.primary} ${colors.hover} disabled:opacity-50 disabled:cursor-not-allowed`}
@@ -307,7 +327,7 @@ const Login: React.FC<LoginProps> = ({ onLogin, users, theme, onPasswordReset, o
                   {isLoggingIn ? <><Spinner size="w-5 h-5" /><span>{t('Signing in...')}</span></> : t('Sign In')}
                 </button>
                 <div className="text-center">
-                  <button onClick={handleForgotPasswordStart} className={`text-sm ${colors.text} hover:underline`}>
+                  <button type="button" onClick={handleForgotPasswordStart} className={`text-sm ${colors.text} hover:underline`}>
                     {t('Forgot Password?')}
                   </button>
                 </div>
@@ -336,7 +356,7 @@ const Login: React.FC<LoginProps> = ({ onLogin, users, theme, onPasswordReset, o
                       id="face-user-select"
                       value={selectedUserId}
                       onChange={e => { setSelectedUserId(e.target.value); setError(null); }}
-                      className={`w-full p-3 text-base border border-gray-300 rounded-xl shadow-sm focus:outline-none focus:ring-2 ${colors.ring} bg-white`}
+                      className={`w-full p-3 text-base text-gray-900 border border-gray-300 rounded-xl shadow-sm focus:outline-none focus:ring-2 ${colors.ring} bg-white`}
                     >
                       <option value="">-- {t('Select account')} --</option>
                       {allUsersForLogin.map(u => (
@@ -352,6 +372,7 @@ const Login: React.FC<LoginProps> = ({ onLogin, users, theme, onPasswordReset, o
                   )}
                 </div>
                 <button
+                  type="button"
                   onClick={handleFaceLoginRequest}
                   disabled={isRequestingPermission || !selectedUserId}
                   className={`w-full text-white font-bold py-3 rounded-xl transition-all duration-200 flex items-center justify-center gap-2 ${colors.primary} ${colors.hover} disabled:opacity-50 disabled:cursor-not-allowed`}
