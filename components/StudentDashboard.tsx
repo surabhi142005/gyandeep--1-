@@ -23,7 +23,8 @@ import {
   Camera,
   Download
 } from 'lucide-react';
-import type { Student, ClassSession, HistoricalSessionRecord } from '../types';
+import type { Student, ClassSession, HistoricalSessionRecord, AnyUser } from '../types';
+import Timetable from './Timetable';
 import WebcamCapture from './WebcamCapture';
 import StudentFaceRegistration from './StudentFaceRegistration';
 import { getCurrentPosition, calculateDistance } from '../services/locationService';
@@ -120,6 +121,7 @@ const SIDEBAR_ITEMS = [
   { id: 'performance', label: t('My Progress'), icon: LineChart },
   { id: 'twin', label: t('Learning Twin'), icon: Zap },
   { id: 'announcements', label: t('Notice Board'), icon: Bell },
+  { id: 'timetable', label: t('Timetable'), icon: Clock },
   { id: 'profile', label: t('Profile'), icon: User },
 ];
 
@@ -127,7 +129,7 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({
   student, classSession, onMarkAttendance, onUpdatePerformance, 
   onLogout, onShowNotification, theme, onUpdateFaceImage, 
   historicalSessions, allStudents = [], announcements = [], 
-  onUpdateSession,
+  onUpdateSession, allUsers, allSubjects, allClasses,
   }) => {
   // Real-time notes
   const { newNotes } = useLiveNotes(student.classId || undefined, classSession.id || undefined);
@@ -818,6 +820,20 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({
            </div>
          )}
 
+          {activeTab === 'timetable' && (
+            <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+               <Timetable 
+                 currentUserRole="student"
+                 currentUserId={student.id}
+                 subjects={allSubjects}
+                 teachers={allUsers.filter(u => u.role === 'teacher')}
+                 classes={allClasses}
+                 classId={student.classId || undefined}
+                 theme={theme}
+               />
+            </div>
+          )}
+
          {activeTab === 'profile' && (
            <div className="max-w-4xl mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
               <Card padding="xl">
@@ -923,6 +939,9 @@ interface StudentDashboardProps {
   allStudents?: Student[];
   announcements?: Announcement[];
   onUpdateSession?: (sessionUpdate: Partial<ClassSession>) => void;
+  allUsers: AnyUser[];
+  allSubjects: any[];
+  allClasses: any[];
 }
 
 export default StudentDashboard;

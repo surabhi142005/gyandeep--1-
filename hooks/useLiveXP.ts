@@ -117,7 +117,7 @@ export function useLiveXP({ userId, initialXP = 0, initialLevel = 1 }: UseLiveXP
     if (!userId) return;
 
     try {
-      const response = await fetch(`/api/users/${userId}/xp`);
+      const response = await fetch(`/api/users/${userId}`);
       if (response.ok) {
         const data = await response.json();
         setXP({

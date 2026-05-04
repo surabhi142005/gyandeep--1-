@@ -5,6 +5,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { realtimeClient } from '../services/realtimeClient';
+import { tokenManager } from '../services/tokenManager';
 
 interface SessionState {
   id: string | null;
@@ -62,7 +63,12 @@ export function useLiveSession({ teacherId, sessionId }: UseLiveSessionOptions =
     if (!session.id) return;
 
     try {
-      const response = await fetch(`/api/sessions/${session.id}`);
+      const token = tokenManager.getAccessToken();
+      const response = await fetch(`/api/sessions/${session.id}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
       if (response.ok) {
         const serverSession = await response.json();
         if (serverSession.expiry) {
@@ -165,9 +171,13 @@ export function useLiveSession({ teacherId, sessionId }: UseLiveSessionOptions =
   const createSession = useCallback(async (subject: string, durationMinutes: number = 10) => {
     if (!teacherId) throw new Error('Teacher ID required');
 
+    const token = tokenManager.getAccessToken();
     const response = await fetch('/api/sessions', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
       body: JSON.stringify({
         teacherId,
         subjectId: subject,
@@ -197,7 +207,13 @@ export function useLiveSession({ teacherId, sessionId }: UseLiveSessionOptions =
     if (!session.id) return;
 
     try {
-      await fetch(`/api/sessions/${session.id}/end`, { method: 'PATCH' });
+      const token = tokenManager.getAccessToken();
+      await fetch(`/api/sessions/${session.id}/end`, { 
+        method: 'PATCH',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
     } catch (error) {
       console.warn('Failed to end session on server:', error);
     }
@@ -216,9 +232,13 @@ export function useLiveSession({ teacherId, sessionId }: UseLiveSessionOptions =
   const regenerateCode = useCallback(async () => {
     if (!session.id || !session.subject) throw new Error('No active session');
 
+    const token = tokenManager.getAccessToken();
     const response = await fetch('/api/sessions', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
       body: JSON.stringify({
         teacherId,
         subjectId: session.subject,

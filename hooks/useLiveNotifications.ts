@@ -5,6 +5,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { realtimeClient } from '../services/realtimeClient';
+import { tokenManager } from '../services/tokenManager';
 
 export interface Notification {
   id: string;
@@ -95,7 +96,7 @@ export function useLiveNotifications({
     try {
       const response = await fetch('/api/notifications', {
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('accessToken')}`,
+          'Authorization': `Bearer ${tokenManager.getAccessToken()}`,
         },
       });
 
@@ -129,7 +130,7 @@ export function useLiveNotifications({
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('accessToken')}`,
+          'Authorization': `Bearer ${tokenManager.getAccessToken()}`,
         },
       });
 
@@ -155,7 +156,7 @@ export function useLiveNotifications({
               method: 'PATCH',
               headers: {
                 'Content-Type': 'application/json',
-                'Authorization': `Bearer ${localStorage.getItem('accessToken')}`,
+                'Authorization': `Bearer ${tokenManager.getAccessToken()}`,
               },
             })
           )
@@ -174,7 +175,7 @@ export function useLiveNotifications({
       await fetch(`/api/notifications/${notificationId}`, {
         method: 'DELETE',
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('accessToken')}`,
+          'Authorization': `Bearer ${tokenManager.getAccessToken()}`,
         },
       });
 

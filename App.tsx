@@ -451,6 +451,7 @@ const App: React.FC = () => {
                         onPostAnnouncement={handlePostAnnouncement}
                         onAttendanceUpdate={handleAttendanceUpdate}
                         onStudentsUpdate={setAllUsers}
+                        allUsers={allUsers}
                     />
                 )}
                 {currentUser.role === UserRoleEnum.STUDENT && (() => {
@@ -478,6 +479,9 @@ const App: React.FC = () => {
                             allStudents={students}
                             announcements={announcements}
                             onUpdateSession={handleUpdateSession}
+                            allUsers={allUsers}
+                            allSubjects={allSubjects}
+                            allClasses={allClasses}
                         />
                     );
                 })()}

@@ -42,10 +42,12 @@ export function useConnectionStatus(): UseConnectionStatusReturn {
     }
 
     const unsubConnect = websocketService.on('connected', handleConnect);
+    const unsubPong = websocketService.on('pong', handleConnect);
     const unsubHeartbeat = websocketService.on('heartbeat', handleConnect);
 
     return () => {
       unsubConnect();
+      unsubPong();
       unsubHeartbeat();
     };
   }, []);

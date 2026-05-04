@@ -8,7 +8,7 @@ const router = express.Router();
 import { ObjectId } from 'mongodb';
 import { connectToDatabase, COLLECTIONS } from '../db/mongoAtlas.js';
 import { authMiddleware } from '../middleware/auth.js';
-import { broadcast } from '../websocket.js';
+import { broadcastToAll, broadcastToRoom } from '../services/broadcast.js';
 
 function buildSubjectFilter(subjectId) {
   if (!subjectId) return null;
@@ -110,6 +110,27 @@ router.post('/upload', authMiddleware, async (req, res) => {
     });
 
     res.json({ ok: true, id: result.insertedId.toString() });
+    
+    // Broadcast note_uploaded event for real-time updates
+    if (classId) {
+      broadcastToRoom(`class:${classId}`, 'note_uploaded', {
+        id: result.insertedId.toString(),
+        classId,
+        subjectId,
+        fileName,
+        fileType,
+        uploadedBy: req.user?.id
+      });
+    } else {
+      broadcastToAll('note_uploaded', {
+        id: result.insertedId.toString(),
+        classId,
+        subjectId,
+        fileName,
+        fileType,
+        uploadedBy: req.user?.id
+      });
+    }
   } catch (error) {
     console.error('Upload note error:', error);
     res.status(500).json({ error: 'Failed to upload note' });
@@ -160,6 +181,17 @@ router.post('/centralized', authMiddleware, async (req, res) => {
     });
 
     res.status(201).json({ ok: true, id: result.insertedId.toString() });
+    
+    // Broadcast note_uploaded event for real-time updates
+    broadcastToAll('note_uploaded', {
+      id: result.insertedId.toString(),
+      classId,
+      subjectId,
+      unitNumber,
+      title,
+      noteType,
+      isCentralized: true
+    });
   } catch (error) {
     console.error('Create centralized note error:', error);
     res.status(500).json({ error: 'Failed to create note' });

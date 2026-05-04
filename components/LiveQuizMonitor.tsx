@@ -96,7 +96,6 @@ export const LiveQuizMonitor: React.FC<LiveQuizMonitorProps> = ({
   }, []);
 
   useEffect(() => {
-    realtimeClient.connect(`teacher:${Date.now()}`, 'teacher');
     realtimeClient.joinRoom(roomName);
     realtimeClient.subscribe(['quiz_submission', 'quiz_progress', 'quiz_state']);
 

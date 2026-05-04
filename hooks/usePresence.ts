@@ -170,8 +170,6 @@ export function useOnlineUsers() {
   const [count, setCount] = useState(0);
 
   useEffect(() => {
-    realtimeClient.connect(`user:${Date.now()}`, 'user');
-
     const unsubConnect = realtimeClient.onConnect(() => {
       realtimeClient.send({ type: 'get_online_users' });
     });

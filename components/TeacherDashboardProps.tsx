@@ -1,4 +1,4 @@
-import type { Teacher, Student, AttendanceRecord, ClassConfig, ClassSession, HistoricalSessionRecord, SubjectConfig } from '@/types';
+import type { Teacher, Student, AttendanceRecord, ClassConfig, ClassSession, HistoricalSessionRecord, SubjectConfig, AnyUser } from '@/types';
 import type { Announcement } from './AnnouncementBoard';
 
 export interface TeacherDashboardProps {
@@ -18,4 +18,5 @@ export interface TeacherDashboardProps {
   onPostAnnouncement?: (text: string) => void;
   onAttendanceUpdate?: (newAttendance: AttendanceRecord) => void;
   onStudentsUpdate?: (students: Student[]) => void;
+  allUsers: AnyUser[];
 }

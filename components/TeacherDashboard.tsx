@@ -48,6 +48,7 @@ import { DashboardLayout, Card, Button, Badge, Input } from './ui';
 import { fetchTeacherStats, fetchQuizStats, fetchWeeklyAttendance, fetchPerformanceBySubject } from '../services/dataService';
 import { realtimeClient } from '../services/realtimeClient';
 import { mapBackendSessionToClassSession } from '../services/sessionState';
+import Timetable from './Timetable';
 import { t } from '../services/i18n';
 const SIDEBAR_ITEMS = [
   { id: 'session', label: t('Session Control'), icon: Play },
@@ -55,6 +56,7 @@ const SIDEBAR_ITEMS = [
   { id: 'performance', label: t('Performance'), icon: LineChart },
   { id: 'quiz', label: t('Quiz Center'), icon: HelpCircle },
   { id: 'notes', label: t('Class Notes'), icon: FileText },
+  { id: 'timetable', label: t('Timetable'), icon: Clock },
   { id: 'announcements', label: t('Board'), icon: Bell },
   { id: 'analytics', label: t('Analytics'), icon: BarChart3 },
   { id: 'tickets', label: t('Tickets'), icon: HelpCircle },
@@ -64,7 +66,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
   teacher, students, attendance, classSession, onUpdateSession, 
   onLogout, theme, onUpdateFaceImage, historicalRecords, 
   onUpdateHistoricalRecords, allSubjects, allClasses, 
-  announcements = [], onPostAnnouncement, onAttendanceUpdate, onStudentsUpdate 
+  announcements = [], onPostAnnouncement, onAttendanceUpdate, onStudentsUpdate, allUsers 
 }) => {
   const [activeTab, setActiveTab] = useState('session');
   const [error, setError] = useState<string | null>(null);
@@ -1054,6 +1056,20 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
         </div>
       )}
 
+      {activeTab === 'timetable' && (
+        <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+          <Timetable 
+            currentUserRole="teacher"
+            currentUserId={teacher.id}
+            subjects={allSubjects}
+            teachers={allUsers.filter(u => u.role === 'teacher')}
+            classes={allClasses}
+            classId={teacherPrimaryClassId || undefined}
+            theme={theme}
+          />
+        </div>
+      )}
+
       {activeTab === 'analytics' && (
         <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
           <AnalyticsDashboard 
@@ -1093,18 +1109,6 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
               console.error(formatFaceAuthError(err, 'register'));
             }
             setShowFaceRegistration(false);
-          }}
-          onClose={() => setShowFaceRegistration(false)}
-          theme={theme}
-          title="Register Teacher Face"
-        />
-      )}
-    </DashboardLayout>
-  );
-};
-
-export default TeacherDashboard;
-FaceRegistration(false);
           }}
           onClose={() => setShowFaceRegistration(false)}
           theme={theme}

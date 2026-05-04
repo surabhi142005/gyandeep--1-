@@ -6,7 +6,6 @@
 import express from 'express';
 const router = express.Router();
 import { ObjectId } from 'mongodb';
-import path from 'path';
 import { connectToDatabase, COLLECTIONS } from '../db/mongoAtlas.js';
 import { broadcastAttendanceUpdated, broadcastToUser, broadcastToRoom, broadcastToAll } from '../services/broadcast.js';
 import { isWithinGeofence, validateCoordinates } from '../utils/locationUtils.js';
@@ -377,6 +376,14 @@ router.post('/bulk', authMiddleware, validateBody(attendanceSchemas.bulk), async
     }));
 
     const result = await db.collection(COLLECTIONS.ATTENDANCE).insertMany(docs);
+    
+    // Broadcast bulk update
+    broadcastToAll('attendance-changed', {
+      type: 'bulk',
+      count: result.insertedCount,
+      timestamp: now
+    });
+    
     res.json({ ok: true, count: result.insertedCount });
   } catch (error) {
     console.error('Bulk create attendance error:', error);
@@ -384,17 +391,9 @@ router.post('/bulk', authMiddleware, validateBody(attendanceSchemas.bulk), async
   }
 });
 
-router.post('/mark', authMiddleware, validateBody(attendanceSchemas.create), async (req, res) => {
-  // Alias for POST / - marks attendance
-  const originalPost = router.stack.find(r => r.route && r.route.path === '/' && r.route.methods.post);
-  if (originalPost) {
-    return originalPost.route.stack[0].handle(req, res);
-  }
-  res.status(404).json({ error: 'Attendance endpoint not found' });
-});
-
 router.patch('/:id', authMiddleware, async (req, res) => {
   try {
+    const db = await connectToDatabase();
     const idValidation = validators.isMongoId(req.params.id, 'id');
     if (!idValidation.isValid()) {
       return res.status(400).json({ error: 'Invalid attendance record ID format' });
@@ -425,6 +424,19 @@ router.patch('/:id', authMiddleware, async (req, res) => {
     }
 
     res.json({ ok: true, record: { ...result, id: result._id.toString() } });
+
+    // Broadcast the update
+    broadcastToAll('attendance-changed', {
+      id: req.params.id,
+      status: updates.status,
+      studentId: result.studentId,
+      sessionId: result.sessionId
+    });
+    broadcastToUser(result.studentId, 'attendance-changed', {
+      id: req.params.id,
+      status: updates.status,
+      sessionId: result.sessionId
+    });
   } catch (error) {
     console.error('Update attendance error:', error);
     res.status(500).json({ error: 'Failed to update attendance record' });
@@ -513,10 +525,6 @@ router.get('/weekly', authMiddleware, async (req, res) => {
   }
 });
 
-/**
- * GET /api/attendance/student/:id
- * Get attendance history for a specific student
- */
 router.get('/student/:id', authMiddleware, async (req, res) => {
   try {
     const db = await connectToDatabase();
@@ -538,7 +546,6 @@ router.get('/student/:id', authMiddleware, async (req, res) => {
       .limit(limitNum)
       .toArray();
 
-    // Get subject info for each record
     const recordsWithSubject = await Promise.all(records.map(async (record) => {
       let subjectName = null;
       if (record.sessionId) {
@@ -558,7 +565,6 @@ router.get('/student/:id', authMiddleware, async (req, res) => {
       };
     }));
 
-    // Calculate stats
     const stats = {
       total: records.length,
       present: records.filter(r => r.status === 'Present').length,
@@ -570,7 +576,6 @@ router.get('/student/:id', authMiddleware, async (req, res) => {
       ? ((stats.present + stats.late + stats.excused) / stats.total * 100).toFixed(1)
       : 0;
 
-    // Calculate streak (consecutive days present)
     let streak = 0;
     const sortedDates = [...new Set(records
       .filter(r => r.status === 'Present' || r.status === 'Late')
@@ -586,7 +591,7 @@ router.get('/student/:id', authMiddleware, async (req, res) => {
         for (let i = 1; i < sortedDates.length; i++) {
           const prevDate = new Date(sortedDates[i - 1]);
           const currDate = new Date(sortedDates[i]);
-          const diffDays = (prevDate - currDate) / 86400000;
+          const diffDays = (new Date(prevDate) - new Date(currDate)) / 86400000;
           if (diffDays === 1) {
             streak++;
           } else {

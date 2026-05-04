@@ -123,11 +123,8 @@ function handleMessage(clientId, data) {
 
       case 'emit':
         if (message.event && message.data !== undefined) {
-          broadcastToUser(clientId, {
-            type: 'event',
-            event: message.event,
-            data: message.data,
-          });
+          // Global broadcast for system-wide updates
+          broadcast(message.event, message.data);
         }
         break;
 
