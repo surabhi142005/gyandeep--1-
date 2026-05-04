@@ -174,7 +174,7 @@ router.get('/grade-distribution', authMiddleware, async (req, res) => {
     const db = await connectToDatabase();
     const { classId, subjectId } = req.query;
 
-    const match: any = {};
+    const match = {};
     if (classId) match.classId = classId;
     if (subjectId) match.subjectId = subjectId;
 
