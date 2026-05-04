@@ -11,4 +11,5 @@ server/server/data
 .env
 .env.local
 .env.production
+gyandeep.env
 npm-debug.log*
