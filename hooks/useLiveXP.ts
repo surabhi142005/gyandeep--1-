@@ -5,6 +5,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { realtimeClient } from '../services/realtimeClient';
+import { tokenManager } from '../services/tokenManager';
 
 interface XPState {
   current: number;
@@ -117,7 +118,10 @@ export function useLiveXP({ userId, initialXP = 0, initialLevel = 1 }: UseLiveXP
     if (!userId) return;
 
     try {
-      const response = await fetch(`/api/users/${userId}`);
+      const token = tokenManager.getAccessToken();
+      const response = await fetch(`/api/users/${userId}`, {
+        headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+      });
       if (response.ok) {
         const data = await response.json();
         setXP({

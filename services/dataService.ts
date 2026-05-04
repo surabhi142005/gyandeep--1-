@@ -5,6 +5,7 @@
  * No localStorage fallback - requires backend connection.
  */
 
+import { tokenManager } from './tokenManager';
 import { websocketService } from './websocketService';
 import { getCSRFHeaders, getCSRFToken } from './csrfService';
 import type { AnyUser, ClassConfig } from '../types';
@@ -53,9 +54,11 @@ async function apiRequest(path: string, init: RequestInit = {}) {
     csrfHeaders = getCSRFHeaders();
   }
 
+  const token = tokenManager.getAccessToken();
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
     ...csrfHeaders,
+    ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
     ...(init.headers as Record<string, string> || {}),
   };
 
@@ -72,9 +75,13 @@ async function apiRequest(path: string, init: RequestInit = {}) {
 async function multipartRequest(path: string, formData: FormData) {
   await getCSRFToken();
   const csrfHeaders = getCSRFHeaders();
+  const token = tokenManager.getAccessToken();
   const res = await fetchWithTimeout(`${API_BASE}${path}`, {
     method: 'POST',
-    headers: csrfHeaders,
+    headers: {
+      ...csrfHeaders,
+      ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+    },
     body: formData,
     credentials: 'include',
   });

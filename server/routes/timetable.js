@@ -8,6 +8,7 @@ const router = express.Router();
 import { ObjectId } from 'mongodb';
 import { connectToDatabase, COLLECTIONS } from '../db/mongoAtlas.js';
 import { authMiddleware } from '../middleware/auth.js';
+import { broadcastToAll } from '../services/broadcast.js';
 
 router.get('/', authMiddleware, async (req, res) => {
   try {
@@ -57,6 +58,7 @@ router.post('/', authMiddleware, async (req, res) => {
       await db.collection(COLLECTIONS.TIMETABLE).insertMany(docs);
     }
 
+    broadcastToAll('timetable-changed', { count: docs.length });
     res.json({ ok: true, count: docs.length });
   } catch (error) {
     console.error('Save timetable error:', error);
@@ -76,6 +78,7 @@ router.post('/entry', authMiddleware, async (req, res) => {
       updatedAt: now,
     });
 
+    broadcastToAll('timetable-changed', { type: 'added', entryId: result.insertedId.toString() });
     res.json({ ok: true, entry: { ...req.body, id: result.insertedId.toString() } });
   } catch (error) {
     console.error('Add timetable entry error:', error);
@@ -90,6 +93,7 @@ router.patch('/:id', authMiddleware, async (req, res) => {
       { _id: new ObjectId(req.params.id) },
       { $set: { ...req.body, updatedAt: new Date() } }
     );
+    broadcastToAll('timetable-changed', { type: 'updated', entryId: req.params.id });
     res.json({ ok: true });
   } catch (error) {
     console.error('Update timetable entry error:', error);
@@ -106,6 +110,7 @@ router.delete('/:id', authMiddleware, async (req, res) => {
     if (result.deletedCount === 0) {
       return res.status(404).json({ error: 'Entry not found' });
     }
+    broadcastToAll('timetable-changed', { type: 'deleted', entryId: req.params.id });
     res.json({ ok: true });
   } catch (error) {
     console.error('Delete timetable entry error:', error);

@@ -71,11 +71,14 @@ export function getAuthState(): AuthState {
 
 export async function getAccessToken(): Promise<string | null> {
   try {
+    const token = tokenManager.getAccessToken();
+    const headers = token ? { 'Authorization': `Bearer ${token}` } : {};
     const res = await fetchWithTimeout(`${API_BASE}/api/auth/me`, {
       credentials: 'include',
+      headers,
     });
     if (res.ok) {
-      return 'cookie-auth';
+      return token || 'cookie-auth';
     }
     return null;
   } catch {
@@ -277,8 +280,11 @@ export async function getCurrentUser() {
   }
 
   try {
+    const token = tokenManager.getAccessToken();
+    const headers = token ? { 'Authorization': `Bearer ${token}` } : {};
     const res = await fetch(`${API_BASE}/api/auth/me`, {
       credentials: 'include',
+      headers,
     });
 
     if (res.status === 401) {

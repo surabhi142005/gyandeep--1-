@@ -20,6 +20,7 @@ import { ThemeSwitcher, ToastQueue } from './components/ui';
 import ErrorBoundary from './components/ErrorBoundary';
 import { RealtimeProvider } from './services/RealtimeProvider';
 import { ConnectionStatus, NotificationCenter, NotificationToastList } from './components/realtime';
+import { updateUserPreferences } from './services/authService';
 
 
 // Extracted hooks
@@ -34,47 +35,47 @@ const AdminDashboard = lazy(() => import('./components/AdminDashboard').then(m =
 const Chatbot = lazy(() => import('./components/Chatbot'));
 const LandingPage = lazy(() => import('./components/LandingPage'));
 
-const getCurrentPath = () => {
-    if (typeof window === 'undefined') return '/';
-    return window.location.pathname || '/';
-};
-
-const getDashboardPathForRole = (role: UserRoleEnum) => {
-    switch (role) {
-        case UserRoleEnum.ADMIN:
-            return '/admin';
-        case UserRoleEnum.TEACHER:
-            return '/teacher/dashboard';
-        case UserRoleEnum.STUDENT:
-        default:
-            return '/student/dashboard';
-    }
-};
-
-const hasAdminAccount = (users: AnyUser[]) =>
-    Array.isArray(users) && users.some(user => user.role === UserRoleEnum.ADMIN);
-
-// ── localStorage helper (preferences only) ─────────────────────────────────────
-function useLocalStorage<T>(key: string, initialValue: T): [T, React.Dispatch<React.SetStateAction<T>>] {
-    const [storedValue, setStoredValue] = useState<T>(() => {
-        try {
-            const item = window.localStorage.getItem(key);
-            return item ? JSON.parse(item) : initialValue;
-        } catch { return initialValue; }
-    });
-    const setValue = (value: T | ((val: T) => T)) => {
-        try {
-            const valueToStore = value instanceof Function ? value(storedValue) : value;
-            setStoredValue(valueToStore);
-            window.localStorage.setItem(key, JSON.stringify(valueToStore));
-        } catch (error) { console.error(error); }
-    };
-    return [storedValue, setValue];
-}
-
 // ── App ───────────────────────────────────────────────────────────────────────
 const App: React.FC = () => {
-    // ── Preferences & UI state (localStorage - user preferences) ─────────────
+    // ── 0. Internal Helpers ──────────────────────────────────────────────────
+    const getCurrentPath = () => {
+        if (typeof window === 'undefined') return '/';
+        return window.location.pathname || '/';
+    };
+
+    const getDashboardPathForRole = (role: UserRoleEnum) => {
+        switch (role) {
+            case UserRoleEnum.ADMIN:
+                return '/admin';
+            case UserRoleEnum.TEACHER:
+                return '/teacher/dashboard';
+            case UserRoleEnum.STUDENT:
+            default:
+                return '/student/dashboard';
+        }
+    };
+
+    const hasAdminAccount = (users: AnyUser[]) =>
+        Array.isArray(users) && users.some(user => user.role === UserRoleEnum.ADMIN);
+    // ── localStorage helper (preferences only) ─────────────────────────────────────
+    function useLocalStorage<T>(key: string, initialValue: T): [T, React.Dispatch<React.SetStateAction<T>>] {
+        const [storedValue, setStoredValue] = useState<T>(() => {
+            try {
+                const item = window.localStorage.getItem(key);
+                return item ? JSON.parse(item) : initialValue;
+            } catch { return initialValue; }
+        });
+        const setValue = (value: T | ((val: T) => T)) => {
+            try {
+                const valueToStore = value instanceof Function ? value(storedValue) : value;
+                setStoredValue(valueToStore);
+                window.localStorage.setItem(key, JSON.stringify(valueToStore));
+            } catch (error) { console.error(error); }
+        };
+        return [storedValue, setValue];
+    }
+
+    // ── 1. Preferences & UI state ─────────────────────────────────────────────
     const [theme, setTheme] = useLocalStorage('gyandeep-theme', 'cosmic-purple');
     const [highContrast, setHighContrast] = useLocalStorage('gyandeep-high-contrast', false);
     const [fontScale, setFontScale] = useLocalStorage('gyandeep-font-scale', 1);
@@ -83,7 +84,64 @@ const App: React.FC = () => {
     const [voiceEnabled, setVoiceEnabled] = useLocalStorage('gyandeep-voice-enabled', false);
     const [darkMode, setDarkMode] = useLocalStorage('gyandeep-dark-mode', false);
     const [currentLocale, setCurrentLocale] = useState('en');
+    const [showProfile, setShowProfile] = useState(false);
+    const [showLanding, setShowLanding] = useState(true);
+    const [routePath, setRoutePath] = useState(getCurrentPath);
+    const [notification, setNotification] = useState<{ message: string; type: ToastType } | null>(null);
+    const [showLiquid, setShowLiquid] = useState(false);
+    const [isLoading, setIsLoading] = useState(true);
 
+    // ── 2. App Data State ─────────────────────────────────────────────────────
+    const [allUsers, setAllUsers] = useState<AnyUser[]>([]);
+    const [allSubjects, setAllSubjects] = useState<SubjectConfig[]>([
+        { id: 'math', name: 'Mathematics' },
+        { id: 'science', name: 'Science' },
+        { id: 'history', name: 'History' },
+        { id: 'english', name: 'English' },
+    ]);
+    const [allClasses, setAllClasses] = useState<ClassConfig[]>([]);
+    const [isSetupComplete, setIsSetupComplete] = useState(() => {
+        try { return localStorage.getItem('gyandeep_setup_complete') === 'true'; } catch { return false; }
+    });
+    const [announcements, setAnnouncements] = useState<Announcement[]>([]);
+
+    // ── 3. Helper Functions ───────────────────────────────────────────────────
+    const showNotification = (message: string, type: ToastType = 'info') => setNotification({ message, type });
+
+    const navigateTo = (path: string) => {
+        if (typeof window === 'undefined') return;
+        if (window.location.pathname !== path) {
+            window.history.pushState({}, '', path);
+        }
+        setRoutePath(path);
+    };
+
+    const handlePasswordResetSync = (email: string, hashedPassword: string): boolean => {
+        setAllUsers(prev => prev.map(u =>
+            u.email?.toLowerCase() === email.toLowerCase() ? { ...u, password: hashedPassword } : u
+        ));
+        return true;
+    };
+
+    // ── 4. Extracted hooks ────────────────────────────────────────────────────
+    const {
+        currentUser, setCurrentUser, userLocation,
+        handleLogin: _handleLogin, handleLogout,
+        handleUpdateFaceImage, handleUpdateUser, handlePasswordReset,
+    } = useAuth({ allUsers, setAllUsers, showNotification });
+
+    const {
+        classSession, attendance, historicalRecords, setHistoricalRecords,
+        handleUpdateSession, handleMarkAttendance, handleAttendanceUpdate, initTeacherSession, resetSession,
+    } = useClassSession({ allUsers, allSubjects, currentUserId: currentUser?.id });
+
+    const { handleUpdatePerformance } = usePerformance({ setAllUsers });
+
+    useThemeEngine({ theme, highContrast, fontScale, reducedMotion, darkMode, voiceEnabled, locale: currentLocale });
+
+    const students = useMemo(() => allUsers.filter(u => u.role === UserRoleEnum.STUDENT) as Student[], [allUsers]);
+
+    // ── 5. Side Effects ───────────────────────────────────────────────────────
     // Sync preferences to server
     useEffect(() => {
         if (!currentUser) return;
@@ -116,11 +174,6 @@ const App: React.FC = () => {
             if (prefs.darkMode !== undefined) setDarkMode(prefs.darkMode);
         }
     }, [currentUser?.id, setDarkMode, setFontScale, setHighContrast, setReducedMotion, setScreenReaderHints, setTheme, setVoiceEnabled]);
-    const [showProfile, setShowProfile] = useState(false);
-    const [showLanding, setShowLanding] = useState(true);
-    const [routePath, setRoutePath] = useState(getCurrentPath);
-    const [notification, setNotification] = useState<{ message: string; type: ToastType } | null>(null);
-    const [showLiquid, setShowLiquid] = useState(false);
 
     // Apply theme to document
     useEffect(() => {
@@ -139,51 +192,6 @@ const App: React.FC = () => {
         return () => window.removeEventListener('popstate', handlePopState);
     }, []);
 
-    // ── App data (from backend API) ───────────────────────────────────────────
-    const [allUsers, setAllUsers] = useState<AnyUser[]>([]);
-    const [allSubjects, setAllSubjects] = useState<SubjectConfig[]>([
-        { id: 'math', name: 'Mathematics' },
-        { id: 'science', name: 'Science' },
-        { id: 'history', name: 'History' },
-        { id: 'english', name: 'English' },
-    ]);
-    const [allClasses, setAllClasses] = useState<ClassConfig[]>([]);
-    const [isSetupComplete, setIsSetupComplete] = useState(() => {
-        try { return localStorage.getItem('gyandeep_setup_complete') === 'true'; } catch { return false; }
-    });
-    const [announcements, setAnnouncements] = useState<Announcement[]>([]);
-    const [isLoading, setIsLoading] = useState(true);
-
-    const students = useMemo(() => allUsers.filter(u => u.role === UserRoleEnum.STUDENT) as Student[], [allUsers]);
-
-    const showNotification = (message: string, type: ToastType = 'info') => setNotification({ message, type });
-
-    const navigateTo = (path: string) => {
-        if (typeof window === 'undefined') return;
-        if (window.location.pathname !== path) {
-            window.history.pushState({}, '', path);
-        }
-        setRoutePath(path);
-    };
-
-    // ── Extracted hooks ───────────────────────────────────────────────────────
-    const {
-        currentUser, setCurrentUser, userLocation,
-        handleLogin: _handleLogin, handleLogout,
-        handleUpdateFaceImage, handleUpdateUser, handlePasswordReset,
-    } = useAuth({ allUsers, setAllUsers, showNotification });
-
-    const {
-        classSession, attendance, historicalRecords, setHistoricalRecords,
-        handleUpdateSession, handleMarkAttendance, handleAttendanceUpdate, initTeacherSession, resetSession,
-    } = useClassSession({ allUsers, allSubjects, currentUserId: currentUser?.id });
-
-    const { handleUpdatePerformance } = usePerformance({ setAllUsers });
-
-    // ── Theme engine ──────────────────────────────────────────────────────────
-    useThemeEngine({ theme, highContrast, fontScale, reducedMotion, darkMode, voiceEnabled, locale: currentLocale });
-
-    // ── Data initialisation from backend API ─────────────────────────────────
     /**
      * Initial check to see if setup is complete by checking if an admin exists.
      */
@@ -389,12 +397,7 @@ const App: React.FC = () => {
     };
 
     // Sync in-memory user list after Login component completes its own password reset flow
-    const handlePasswordResetSync = (email: string, hashedPassword: string): boolean => {
-        setAllUsers(prev => prev.map(u =>
-            u.email?.toLowerCase() === email.toLowerCase() ? { ...u, password: hashedPassword } : u
-        ));
-        return true;
-    };
+    // (Helper function already defined above)
 
     // ── Render ────────────────────────────────────────────────────────────────
     const renderDashboard = () => {
@@ -579,9 +582,7 @@ const App: React.FC = () => {
                         <Chatbot theme={theme} userLocation={userLocation} />
                     </Suspense>
                 )}
-                {/* ThemeSwitcher removed - now integrated in each Dashboard */}
                 <ToastQueue />
-                <NotificationToastList />
                 {currentUser && (
                     <div className="fixed top-4 right-4 z-40 safe-area-top">
                         <NotificationCenter />

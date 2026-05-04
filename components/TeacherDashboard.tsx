@@ -284,6 +284,24 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
     
     const handleAttendanceChange = (data: any) => {
       console.log('Attendance changed:', data);
+      
+      if (data.type === 'bulk') {
+        // Refresh all attendance for this session
+        fetchSessionAttendance(classSession.id!).then(records => {
+          if (Array.isArray(records)) {
+             records.forEach(r => {
+               onAttendanceUpdate({
+                 studentId: r.studentId || r.student?._id,
+                 studentName: r.student?.name || 'Student',
+                 status: r.status === 'present' || r.status === 'Present' ? 'Present' : 'Absent',
+                 timestamp: new Date(r.markedAt),
+               });
+             });
+          }
+        }).catch(console.error);
+        return;
+      }
+
       const newAttendance: AttendanceRecord = {
         studentId: data.studentId,
         studentName: data.studentName || 'Student',
