@@ -117,7 +117,7 @@ function normalizePurpose(purpose) {
 }
 
 // ── CORE FUNCTION: callAI ───────────────────────────────────────
-// Unified AI call for Groq-backed text generation.
+// Unified AI call for Groq-backed text generation with Gemini fallback.
 // Returns raw text response.
 
 export async function callAI(prompt, options = {}) {
@@ -132,81 +132,141 @@ export async function callAI(prompt, options = {}) {
   const normalizedPurpose = normalizePurpose(purpose);
   const groqClient = getGroqClient(normalizedPurpose);
 
-  if (!groqClient) {
-    throw createUnavailableError(
-      `AI service unavailable for ${normalizedPurpose}. Set ${getRequiredGroqKeyName(normalizedPurpose)}.`
-    );
-  }
+  // 1. Try Groq if available
+  if (groqClient) {
+    try {
+      const messages = [
+        {
+          role: 'system',
+          content: jsonMode
+            ? systemPrompt + ' Return ONLY valid JSON. No markdown. No explanation.'
+            : systemPrompt
+        },
+        { role: 'user', content: prompt }
+      ];
 
-  try {
-    const messages = [
-      {
-        role: 'system',
-        content: jsonMode
-          ? systemPrompt + ' Return ONLY valid JSON. No markdown. No explanation.'
-          : systemPrompt
-      },
-      { role: 'user', content: prompt }
-    ];
+      const completion = await groqClient.chat.completions.create({
+        model: GROQ_MODEL,
+        messages,
+        max_tokens: maxTokens,
+        temperature,
+        ...(jsonMode ? { response_format: { type: 'json_object' } } : {})
+      });
 
-    const completion = await groqClient.chat.completions.create({
-      model: GROQ_MODEL,
-      messages,
-      max_tokens: maxTokens,
-      temperature,
-      ...(jsonMode ? { response_format: { type: 'json_object' } } : {})
-    });
-
-    const text = completion.choices[0]?.message?.content || '';
-    console.log(`[AI] Response from Groq (${normalizedPurpose})`);
-    return text;
-  } catch (groqErr) {
-    console.error(`[AI] Groq (${normalizedPurpose}) failed:`, groqErr.message);
-    if (groqErr.status === 429 || groqErr.message?.includes('429')) {
-      throw createQuotaError('AI service is currently busy (Quota exceeded). Please try again in a minute.');
+      const text = completion.choices[0]?.message?.content || '';
+      console.log(`[AI] Response from Groq (${normalizedPurpose})`);
+      return text;
+    } catch (groqErr) {
+      console.error(`[AI] Groq (${normalizedPurpose}) failed:`, groqErr.message);
+      // If it's a quota error, we might still want to try Gemini fallback
+      if (groqErr.status !== 429 && !HAS_GEMINI) {
+        throw groqErr;
+      }
+      console.log(`[AI] Attempting Gemini fallback for ${normalizedPurpose}...`);
     }
-    throw groqErr;
   }
+
+  // 2. Fallback to Gemini
+  if (HAS_GEMINI) {
+    try {
+      const model = geminiClient.getGenerativeModel({
+        model: GEMINI_MODEL,
+        generationConfig: {
+          maxOutputTokens: maxTokens,
+          temperature,
+          responseMimeType: jsonMode ? 'application/json' : 'text/plain'
+        }
+      });
+
+      const fullPrompt = jsonMode
+        ? `System: ${systemPrompt}\n\nReturn ONLY valid JSON. No markdown. No explanation.\n\nUser: ${prompt}`
+        : `System: ${systemPrompt}\n\nUser: ${prompt}`;
+
+      const result = await model.generateContent(fullPrompt);
+      const text = result.response.text().trim();
+      console.log(`[AI] Response from Gemini fallback (${normalizedPurpose})`);
+      return text;
+    } catch (geminiErr) {
+      console.error(`[AI] Gemini fallback failed:`, geminiErr.message);
+      if (geminiErr.message?.includes('429')) {
+        throw createQuotaError('AI service is currently busy (Quota exceeded). Please try again in a minute.');
+      }
+      throw geminiErr;
+    }
+  }
+
+  // 3. No providers available
+  throw createUnavailableError(
+    `AI service unavailable for ${normalizedPurpose}. Set ${getRequiredGroqKeyName(normalizedPurpose)} or GEMINI_API_KEY.`
+  );
 }
 
 // ── CHAT FUNCTION: callAIChat ─────────────────────────────────
-// Multi-turn conversation (chatbot)
+// Multi-turn conversation (chatbot) with Gemini fallback
 // history: [{ role: 'user'|'assistant', content: string }]
 
 export async function callAIChat(message, history = [], systemPrompt = '') {
   const defaultSystem = 'You are a helpful educational assistant.';
   const finalSystem = systemPrompt || defaultSystem;
-  const activeGroqChatClient = groqChatClient;
+  
+  // 1. Try Groq if available
+  if (HAS_GROQ_CHAT && groqChatClient) {
+    try {
+      const messages = [
+        { role: 'system', content: finalSystem },
+        ...history.slice(-10).map(h => ({
+          role: h.role === 'user' ? 'user' : 'assistant',
+          content: h.content || h.text || ''
+        })),
+        { role: 'user', content: message }
+      ];
 
-  if (!activeGroqChatClient) {
-    throw createUnavailableError('Chatbot unavailable: Set GROQ_API_KEY_CHAT.');
-  }
+      const completion = await groqChatClient.chat.completions.create({
+        model: GROQ_MODEL,
+        messages,
+        max_tokens: 500,
+        temperature: 0.7
+      });
 
-  try {
-    const messages = [
-      { role: 'system', content: finalSystem },
-      ...history.slice(-10).map(h => ({
-        role: h.role === 'user' ? 'user' : 'assistant',
-        content: h.content || h.text || ''
-      })),
-      { role: 'user', content: message }
-    ];
-
-    const completion = await activeGroqChatClient.chat.completions.create({
-      model: GROQ_MODEL,
-      messages,
-      max_tokens: 500,
-      temperature: 0.7
-    });
-
-    return completion.choices[0]?.message?.content || '';
-  } catch (groqErr) {
-    console.error('[AI] Groq chat failed:', groqErr.message);
-    if (groqErr.status === 429 || groqErr.message?.includes('429')) {
-      return "I'm currently experiencing high traffic and my API quota has been exceeded. Please wait about a minute and try again.";
+      return completion.choices[0]?.message?.content || '';
+    } catch (groqErr) {
+      console.error('[AI] Groq chat failed:', groqErr.message);
+      if (groqErr.status !== 429 && !HAS_GEMINI) {
+        throw groqErr;
+      }
+      console.log('[AI] Attempting Gemini fallback for chat...');
     }
-    throw groqErr;
   }
+
+  // 2. Fallback to Gemini
+  if (HAS_GEMINI) {
+    try {
+      const model = geminiClient.getGenerativeModel({
+        model: GEMINI_MODEL,
+        generationConfig: { maxOutputTokens: 1024, temperature: 0.7 }
+      });
+
+      const chat = model.startChat({
+        history: history.slice(-10).map(h => ({
+          role: h.role === 'user' ? 'user' : 'model',
+          parts: [{ text: h.content || h.text || '' }]
+        })),
+        systemInstruction: finalSystem
+      });
+
+      const result = await chat.sendMessage(message);
+      console.log('[AI] Response from Gemini fallback (chat)');
+      return result.response.text().trim();
+    } catch (geminiErr) {
+      console.error('[AI] Gemini chat fallback failed:', geminiErr.message);
+      if (geminiErr.message?.includes('429')) {
+        return "I'm currently experiencing high traffic and my API quota has been exceeded. Please wait about a minute and try again.";
+      }
+      throw geminiErr;
+    }
+  }
+
+  throw createUnavailableError('Chatbot unavailable: Set GROQ_API_KEY_CHAT or GEMINI_API_KEY.');
 }
 
 // ── VISION FUNCTION: callAIVision ───────────────────────────────
