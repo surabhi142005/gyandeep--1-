@@ -35,45 +35,48 @@ const AdminDashboard = lazy(() => import('./components/AdminDashboard').then(m =
 const Chatbot = lazy(() => import('./components/Chatbot'));
 const LandingPage = lazy(() => import('./components/LandingPage'));
 
-// ── App ───────────────────────────────────────────────────────────────────────
-const App: React.FC = () => {
-    // ── 0. Internal Helpers ──────────────────────────────────────────────────
-    const getCurrentPath = () => {
-        if (typeof window === 'undefined') return '/';
-        return window.location.pathname || '/';
-    };
+// ── 0. Internal Helpers (Outside component to avoid TDZ) ───────────────────────
+function getCurrentPath() {
+    if (typeof window === 'undefined') return '/';
+    return window.location.pathname || '/';
+}
 
-    const getDashboardPathForRole = (role: UserRoleEnum) => {
-        switch (role) {
-            case UserRoleEnum.ADMIN:
-                return '/admin';
-            case UserRoleEnum.TEACHER:
-                return '/teacher/dashboard';
-            case UserRoleEnum.STUDENT:
-            default:
-                return '/student/dashboard';
-        }
-    };
-
-    const hasAdminAccount = (users: AnyUser[]) =>
-        Array.isArray(users) && users.some(user => user.role === UserRoleEnum.ADMIN);
-    // ── localStorage helper (preferences only) ─────────────────────────────────────
-    function useLocalStorage<T>(key: string, initialValue: T): [T, React.Dispatch<React.SetStateAction<T>>] {
-        const [storedValue, setStoredValue] = useState<T>(() => {
-            try {
-                const item = window.localStorage.getItem(key);
-                return item ? JSON.parse(item) : initialValue;
-            } catch { return initialValue; }
-        });
-        const setValue = (value: T | ((val: T) => T)) => {
-            try {
-                const valueToStore = value instanceof Function ? value(storedValue) : value;
-                setStoredValue(valueToStore);
-                window.localStorage.setItem(key, JSON.stringify(valueToStore));
-            } catch (error) { console.error(error); }
-        };
-        return [storedValue, setValue];
+function getDashboardPathForRole(role: UserRoleEnum) {
+    switch (role) {
+        case UserRoleEnum.ADMIN:
+            return '/admin';
+        case UserRoleEnum.TEACHER:
+            return '/teacher/dashboard';
+        case UserRoleEnum.STUDENT:
+        default:
+            return '/student/dashboard';
     }
+}
+
+function hasAdminAccount(users: AnyUser[]) {
+    return Array.isArray(users) && users.some(user => user.role === UserRoleEnum.ADMIN);
+}
+
+// ── localStorage helper (preferences only) ─────────────────────────────────────
+function useLocalStorage<T>(key: string, initialValue: T): [T, React.Dispatch<React.SetStateAction<T>>] {
+    const [storedValue, setStoredValue] = useState<T>(() => {
+        try {
+            const item = window.localStorage.getItem(key);
+            return item ? JSON.parse(item) : initialValue;
+        } catch { return initialValue; }
+    });
+    const setValue = (value: T | ((val: T) => T)) => {
+        try {
+            const valueToStore = value instanceof Function ? value(storedValue) : value;
+            setStoredValue(valueToStore);
+            window.localStorage.setItem(key, JSON.stringify(valueToStore));
+        } catch (error) { console.error(error); }
+    };
+    return [storedValue, setValue];
+}
+
+// ── App ───────────────────────────────────────────────────────────────────────
+function App() {
 
     // ── 1. Preferences & UI state ─────────────────────────────────────────────
     const [theme, setTheme] = useLocalStorage('gyandeep-theme', 'cosmic-purple');
@@ -141,7 +144,7 @@ const App: React.FC = () => {
 
     const students = useMemo(() => allUsers.filter(u => u.role === UserRoleEnum.STUDENT) as Student[], [allUsers]);
 
-    // ── 5. Side Effects ───────────────────────────────────────────────────────
+    // ── Side Effects moved after hook calls to ensure all state is initialized ───
     // Sync preferences to server
     useEffect(() => {
         if (!currentUser) return;
@@ -595,6 +598,6 @@ const App: React.FC = () => {
             </RealtimeProvider>
         </ErrorBoundary>
     );
-};
+}
 
 export default App;

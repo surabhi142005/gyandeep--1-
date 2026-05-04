@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useEffect, useState, useCallback, useRef, ReactNode } from 'react';
 import { realtimeClient } from './realtimeClient';
 
+// ── Realtime Context & Hook (Defined at the top to avoid TDZ in production) ──
 export type ConnectionStatus = 'connecting' | 'connected' | 'disconnected' | 'error';
 
 export interface PresenceUser {
@@ -54,7 +55,7 @@ interface RealtimeContextType {
   broadcast: (room: string, event: string, data: any) => void;
 }
 
-const RealtimeContext = createContext<RealtimeContextType | null>(null);
+var RealtimeContext = createContext<RealtimeContextType | null>(null);
 
 export function useRealtime() {
   const context = useContext(RealtimeContext);

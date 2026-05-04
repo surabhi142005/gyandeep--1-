@@ -25,6 +25,8 @@ export function useAuth({ allUsers: _allUsers, setAllUsers, showNotification }: 
   const [isInitializing, setIsInitializing] = useState(true);
 
   const { notifyLogin, notifyLogout, notifyAuthUpdate } = useCrossTabSync({
+    // Disable cross-tab login/logout sync to allow testing parallel logins in different tabs
+    /*
     onLogin: (user) => {
       console.log('Login detected in another tab');
       handleLogin(user, true);
@@ -33,6 +35,7 @@ export function useAuth({ allUsers: _allUsers, setAllUsers, showNotification }: 
       console.log('Logout detected in another tab');
       handleLogout(true);
     },
+    */
     onAuthUpdate: (user) => {
       handleUpdateUser(user, true);
     }

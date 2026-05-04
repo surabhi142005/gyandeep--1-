@@ -269,6 +269,33 @@ async function createDemoData() {
   }
   console.log(`   ✓ Created ${auditTypes.length} audit logs`);
   
+  console.log('\n🔟 Creating session notes and centralized materials...');
+  const sessionNotes = [
+    { title: 'Quantum Physics Basics', content: 'Introduction to wave-particle duality and Schrödinger equation. Light behaves both as a particle and a wave.', subjectId: 'science', classId: classes[0]?._id, unitNumber: 1 },
+    { title: 'Organic Chemistry unit 2', content: 'Alkanes, Alkenes, and Alkynes properties. Hydrocarbons are organic compounds consisting entirely of hydrogen and carbon.', subjectId: 'science', classId: classes[0]?._id, unitNumber: 2 },
+    { title: 'World War II Summary', content: 'Key events and turning points of the global conflict from 1939 to 1945.', subjectId: 'history', classId: classes[0]?._id, unitNumber: 4 },
+    { title: 'Calculus: Derivatives', content: 'The derivative of a function of a real variable measures the sensitivity to change of the function value.', subjectId: 'math', classId: classes[0]?._id, unitNumber: 3 },
+  ];
+  
+  for (const note of sessionNotes) {
+    await db.collection('session_notes').insertOne({
+      ...note,
+      _id: new ObjectId(),
+      od_id: 'NOTE-' + crypto.randomBytes(4).toString('hex').toUpperCase(),
+      uploadedBy: teachers[0]._id,
+      createdAt: new Date(),
+    });
+    
+    await db.collection('centralized_notes').insertOne({
+      ...note,
+      _id: new ObjectId(),
+      od_id: 'CNOTE-' + crypto.randomBytes(4).toString('hex').toUpperCase(),
+      uploadedBy: teachers[0]._id,
+      createdAt: new Date(),
+    });
+  }
+  console.log(`   ✓ Created ${sessionNotes.length * 2} note entries`);
+  
   console.log('\n✅ Demo data creation complete!\n');
   console.log('📊 Summary:');
   console.log('   ✓ Additional students with varied performance');
