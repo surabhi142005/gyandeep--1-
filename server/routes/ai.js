@@ -1,6 +1,6 @@
 /**
  * server/routes/ai.js
- * AI-powered routes using unified AI service (Groq + Gemini)
+ * AI-powered routes using purpose-specific Groq keys and Gemini vision
  */
 
 import express from 'express';
@@ -58,7 +58,7 @@ Keep responses brief - 2 to 4 sentences unless explaining complex topics.`;
     res.json({ reply, text: reply, sources: [] });
   } catch (error) {
     console.error('[Chat] Error:', error.message, error.stack);
-    res.status(500).json({ error: error.message || 'Failed to process chat' });
+    res.status(error.status || 500).json({ error: error.message || 'Failed to process chat' });
   }
 });
 
@@ -197,7 +197,7 @@ Subject: [your subject line here]
     });
   } catch (error) {
     console.error('AI email error:', error);
-    res.status(500).json({ error: error.message || 'Failed to generate email' });
+    res.status(error.status || 500).json({ error: error.message || 'Failed to generate email' });
   }
 });
 
@@ -282,7 +282,7 @@ Respond ONLY with a JSON object:
     res.json({ totalScore, maxScore, results, overallFeedback });
   } catch (error) {
     console.error('Grading error:', error);
-    res.status(500).json({ error: error.message || 'Failed to grade submission' });
+    res.status(error.status || 500).json({ error: error.message || 'Failed to grade submission' });
   }
 });
 
@@ -298,6 +298,7 @@ router.post('/extract-text', authMiddleware, async (req, res) => {
 
     // Primary: Tesseract.js (free, no API key needed)
     let text = '';
+    let provider = 'tesseract';
     try {
       const cleanBase64 = imageBase64.replace(/^data:image\/\w+;base64,/, '');
       const { data: { text: extracted } } = await Tesseract.recognize(cleanBase64, 'eng');
@@ -313,6 +314,7 @@ router.post('/extract-text', authMiddleware, async (req, res) => {
           'Extract all readable text from this image. Preserve structure when possible.',
           imageBase64
         );
+        provider = 'gemini';
       } catch (visionError) {
         console.error('[OCR] Vision extraction failed:', visionError.message);
         throw new Error(`OCR extraction failed: ${visionError.message}`);
@@ -323,10 +325,10 @@ router.post('/extract-text', authMiddleware, async (req, res) => {
       return res.status(502).json({ error: 'OCR extraction failed: no text found' });
     }
 
-    res.json({ text, success: true, provider: text ? 'tesseract' : 'gemini' });
+    res.json({ text, success: true, provider });
   } catch (error) {
     console.error('OCR error:', error);
-    res.status(500).json({ error: error.message || 'Failed to extract text from image' });
+    res.status(error.status || 500).json({ error: error.message || 'Failed to extract text from image' });
   }
 });
 
@@ -360,7 +362,7 @@ Keep the summary concise and educational.`,
     res.json({ result, success: true });
   } catch (error) {
     console.error('Summarize error:', error);
-    res.status(500).json({ error: error.message || 'Failed to summarize notes' });
+    res.status(error.status || 500).json({ error: error.message || 'Failed to summarize notes' });
   }
 });
 

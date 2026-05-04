@@ -122,9 +122,10 @@ export function checkFeatureFlags(): Record<string, boolean> {
   const aiConfigured = !!(getEnv('GROQ_API_KEY_CHAT') || getEnv('GROQ_API_KEY_CONTENT') || getEnv('GROQ_API_KEY_ANALYTICS') || getEnv('GEMINI_API_KEY'));
   return {
     aiEnabled: aiConfigured,
-    aiChatEnabled: !!(getEnv('GROQ_API_KEY_CHAT') || getEnv('GEMINI_API_KEY')),
-    aiContentEnabled: !!(getEnv('GROQ_API_KEY_CONTENT') || getEnv('GEMINI_API_KEY')),
-    aiAnalyticsEnabled: !!(getEnv('GROQ_API_KEY_ANALYTICS') || getEnv('GEMINI_API_KEY')),
+    aiChatEnabled: !!getEnv('GROQ_API_KEY_CHAT'),
+    aiContentEnabled: !!getEnv('GROQ_API_KEY_CONTENT'),
+    aiAnalyticsEnabled: !!getEnv('GROQ_API_KEY_ANALYTICS'),
+    aiVisionEnabled: !!getEnv('GEMINI_API_KEY'),
     emailEnabled: !!getEnv('RESEND_API_KEY'),
     storageEnabled: !!(getEnv('R2_ACCOUNT_ID') && getEnv('R2_ACCESS_KEY_ID')),
     googleAuthEnabled: !!(getEnv('GOOGLE_CLIENT_ID') && getEnv('GOOGLE_CLIENT_SECRET')),

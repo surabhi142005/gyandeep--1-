@@ -22,13 +22,9 @@ const rootDir = path.resolve(__dirname, '../../');
  */
 export function loadEnv() {
   const nodeEnv = process.env.NODE_ENV || 'development';
+  const systemEnvKeys = new Set(Object.keys(process.env));
   
-  const envFiles = [
-    '.env',
-    `.env.${nodeEnv}`,
-    '.env.local',
-    'gyandeep.env',
-  ];
+  const envFiles = ['.env', `.env.${nodeEnv}`, '.env.local', 'gyandeep.env'];
 
   let loadedFile = null;
   const loadedFiles = [];
@@ -36,7 +32,11 @@ export function loadEnv() {
   for (const file of envFiles) {
     const envPath = path.join(rootDir, file);
     if (fs.existsSync(envPath)) {
-      dotenv.config({ path: envPath });
+      const parsed = dotenv.parse(fs.readFileSync(envPath));
+      for (const [key, value] of Object.entries(parsed)) {
+        if (systemEnvKeys.has(key)) continue;
+        process.env[key] = value;
+      }
       loadedFiles.push(file);
       loadedFile = loadedFile || file;
     }
