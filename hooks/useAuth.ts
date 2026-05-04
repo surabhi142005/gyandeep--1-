@@ -109,9 +109,17 @@ export function useAuth({ allUsers: _allUsers, setAllUsers, showNotification }: 
     if (!currentUser) return;
 
     try {
+      const { getCSRFHeaders, getCSRFToken } = await import('../services/csrfService');
+      await getCSRFToken();
+      const csrfHeaders = getCSRFHeaders();
+
       const response = await fetch('/api/auth/face-image', {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        headers: { 
+          'Content-Type': 'application/json',
+          ...csrfHeaders
+        },
         body: JSON.stringify({ faceImage: imageDataUrl }),
       });
 

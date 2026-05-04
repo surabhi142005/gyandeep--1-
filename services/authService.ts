@@ -256,6 +256,21 @@ export async function logout() {
   tokenManager.clearTokens();
 }
 
+export async function requestPasswordReset(email: string) {
+  const res = await fetch(`${API_BASE}/api/auth/password/request`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email }),
+  });
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || 'Failed to request password reset');
+  }
+
+  return res.json();
+}
+
 export async function getCurrentUser() {
   if (authState.user && authState.isAuthenticated) {
     return authState.user;

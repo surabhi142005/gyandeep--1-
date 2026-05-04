@@ -643,34 +643,6 @@ router.put('/face-image', async (req, res) => {
     res.json({ ok: true });
   } catch (error) {
     console.error('Face image update error:', error);
-    res.status(500).json({ error: 'Failed to update face image' });
-  }
-});
-
-router.put('/face-image', async (req, res) => {
-  try {
-    const token = req.cookies?.[TOKEN_COOKIE_NAME] || req.headers.authorization?.slice(7);
-
-    if (!token) {
-      return res.status(401).json({ error: 'Authentication required' });
-    }
-
-    const decoded = jwt.verify(token, JWT_SECRET);
-    const { faceImage } = req.body;
-
-    if (!faceImage || typeof faceImage !== 'string') {
-      return res.status(400).json({ error: 'Face image data required' });
-    }
-
-    const db = await connectToDatabase();
-    await db.collection(COLLECTIONS.USERS).updateOne(
-      { _id: new ObjectId(decoded.id) },
-      { $set: { faceImage, updatedAt: new Date() } }
-    );
-
-    res.json({ ok: true });
-  } catch (error) {
-    console.error('Face image update error:', error);
     if (error.name === 'TokenExpiredError') {
       return res.status(401).json({ error: 'Token expired', code: 'TOKEN_EXPIRED' });
     }
