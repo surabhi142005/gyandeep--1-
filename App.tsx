@@ -206,10 +206,13 @@ const App: React.FC = () => {
                     setIsSetupComplete(false);
                     setCurrentUser(null);
                     try {
-                    localStorage.removeItem('gyandeep_setup_complete');
-                    localStorage.removeItem('gyandeep_current_user');
-                    localStorage.removeItem('gyandeep_token');
-                    sessionStorage.removeItem('gyandeep_current_user');
+                        localStorage.removeItem('gyandeep_setup_complete');
+                        localStorage.removeItem('gyandeep_current_user');
+                        localStorage.removeItem('gyandeep_token');
+                        sessionStorage.removeItem('gyandeep_current_user');
+                    } catch (e) {
+                        console.warn('Failed to clear storage:', e);
+                    }
                 }
             } catch (err) {
                 console.warn('Initial setup check failed (backend might be offline):', err);

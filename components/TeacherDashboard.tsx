@@ -937,7 +937,8 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
                           });
                           
                           // Real-time broadcast for newly uploaded note
-                          realtimeClient.broadcast(classSession.classId || 'all', 'new-note', {
+                          realtimeClient.broadcast(classSession.classId || 'all', {
+                            event: 'note_uploaded',
                             title: file.name,
                             subject: selectedSubject,
                             url: (result as any)?.url

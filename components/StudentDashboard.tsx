@@ -103,7 +103,8 @@ const NotesList: React.FC<{ classId?: string; subjectId: string }> = ({ classId,
             target="_blank" 
             rel="noopener noreferrer"
             className="p-2 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 text-primary transition-colors"
-            title="Download/View"
+            title={t('Download/View')}
+            aria-label={`${t('Download')} ${note.title || note.fileName || t('Note')}`}
           >
             <Download size={16} />
           </a>
