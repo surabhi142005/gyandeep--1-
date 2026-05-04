@@ -46,6 +46,8 @@ router.post('/chat', optionalAuth, async (req, res) => {
       return res.status(400).json({ error: 'Message is required' });
     }
 
+    console.log('[Chat] Processing request:', { hasHistory: Array.isArray(history), historyLength: history?.length, model });
+
     const systemPrompt = `You are Gyandeep AI, a concise educational assistant for students and teachers.
 Current user: ${userName} (${userRole}).
 Answer clearly, accurately, and in a classroom-safe way.
@@ -55,7 +57,7 @@ Keep responses brief - 2 to 4 sentences unless explaining complex topics.`;
 
     res.json({ reply, text: reply, sources: [] });
   } catch (error) {
-    console.error('Chat error:', error);
+    console.error('[Chat] Error:', error.message, error.stack);
     res.status(500).json({ error: error.message || 'Failed to process chat' });
   }
 });

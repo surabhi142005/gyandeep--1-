@@ -1,6 +1,10 @@
 # Gyandeep Dockerfile - Full Stack on Render
+# Rebuild: 2026-05-04
 
 FROM node:22-alpine
+
+# Force rebuild
+ARG CACHEBUST=1
 
 WORKDIR /app
 
