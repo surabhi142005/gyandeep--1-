@@ -10,8 +10,8 @@
  *   GROQ_API_KEY_CONTENT    - Groq API key for content generation (quizzes, grading, etc.)
  *   GROQ_API_KEY_ANALYTICS  - Groq API key for analytics
  *   GEMINI_API_KEY          - Gemini API key (fallback for all purposes)
- *   GROQ_MODEL              - Groq model (default: llama3-8b-8192)
- *   GEMINI_MODEL            - Gemini model (default: gemini-1.5-flash)
+ *   GROQ_MODEL              - Groq model (default: llama-3.3-70b-versatile)
+ *   GEMINI_MODEL            - Gemini model (default: gemini-2.0-flash)
  */
 
 import Groq from 'groq-sdk';
@@ -28,11 +28,18 @@ const HAS_ANY_GROQ = HAS_GROQ_CHAT || HAS_GROQ_CONTENT || HAS_GROQ_ANALYTICS;
 if (!HAS_ANY_GROQ && !HAS_GEMINI) {
   console.error('[AI] No AI API key configured. Set GROQ_API_KEY_CHAT, GROQ_API_KEY_CONTENT, GROQ_API_KEY_ANALYTICS, or GEMINI_API_KEY.');
 } else {
-  if (HAS_GROQ_CHAT) console.log('[AI] Provider: Groq (chat) ready');
-  if (HAS_GROQ_CONTENT) console.log('[AI] Provider: Groq (content) ready');
-  if (HAS_GROQ_ANALYTICS) console.log('[AI] Provider: Groq (analytics) ready');
-  if (HAS_GEMINI) console.log('[AI] Provider: Gemini ready (fallback)');
+  if (HAS_GROQ_CHAT) console.log('[AI] Provider: Groq (chat) ready with model:', GROQ_MODEL);
+  if (HAS_GROQ_CONTENT) console.log('[AI] Provider: Groq (content) ready with model:', GROQ_MODEL);
+  if (HAS_GROQ_ANALYTICS) console.log('[AI] Provider: Groq (analytics) ready with model:', GROQ_MODEL);
+  if (HAS_GEMINI) console.log('[AI] Provider: Gemini ready (fallback) with model:', GEMINI_MODEL);
 }
+
+// Debug: log env key presence (masked)
+console.log('[AI] Env check - GROQ_API_KEY_CHAT present:', !!process.env.GROQ_API_KEY_CHAT);
+console.log('[AI] Env check - GROQ_API_KEY_CONTENT present:', !!process.env.GROQ_API_KEY_CONTENT);
+console.log('[AI] Env check - GROQ_API_KEY_ANALYTICS present:', !!process.env.GROQ_API_KEY_ANALYTICS);
+console.log('[AI] Env check - GROQ_BASE_URL:', process.env.GROQ_BASE_URL || 'not set (using default)');
+console.log('[AI] Env check - GEMINI_API_KEY present:', !!process.env.GEMINI_API_KEY);
 
 // ── Initialize clients ─────────────────────────────────────────
 const groqChatClient = HAS_GROQ_CHAT
@@ -52,8 +59,8 @@ const geminiClient = HAS_GEMINI
   : null;
 
 // ── Model configuration ─────────────────────────────────────────
-const GROQ_MODEL = process.env.GROQ_MODEL || 'llama3-8b-8192';
-const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-1.5-flash';
+const GROQ_MODEL = process.env.GROQ_MODEL || 'llama-3.3-70b-versatile';
+const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-2.0-flash';
 
 // ── Helper: get groq client for purpose ─────────────────────────
 function getGroqClient(purpose) {
@@ -115,37 +122,37 @@ export async function callAI(prompt, options = {}) {
       console.log(`[AI] Response from Groq (${purpose})`);
       return text;
     } catch (groqErr) {
-      console.warn(`[AI] Groq (${purpose}) failed, trying Gemini:`, groqErr.message);
-      if (!geminiClient) throw groqErr;
+      console.warn(`[AI] Groq (${purpose}) failed:`, groqErr.message);
+      // Only fallback to Gemini if Groq was configured for this purpose
+      if (geminiClient && hasGroq) {
+        console.warn(`[AI] Attempting Gemini (${purpose}) fallback...`);
+        try {
+          const model = geminiClient.getGenerativeModel({
+            model: GEMINI_MODEL,
+            generationConfig: { maxOutputTokens: maxTokens, temperature }
+          });
+
+          const fullPrompt = jsonMode
+            ? `${systemPrompt}\nReturn ONLY valid JSON. No markdown. No explanation.\n\n${prompt}`
+            : `${systemPrompt}\n\n${prompt}`;
+
+          const result = await model.generateContent(fullPrompt);
+          let text = result.response.text().trim();
+
+          // Strip markdown code blocks if AI adds them
+          text = text.replace(/^```json\n?/g, '').replace(/^```\n?/g, '').replace(/```json\n?$/g, '').replace(/```\n?$/g, '').trim();
+          console.log('[AI] Response from Gemini (fallback)');
+          return text;
+        } catch (geminiErr) {
+          console.error('[AI] Gemini fallback also failed:', geminiErr.message);
+          throw new Error(`AI service unavailable. Groq error: ${groqErr.message}. Gemini error: ${geminiErr.message}`);
+        }
+      }
+      throw groqErr;
     }
   }
 
-  // Fallback to Gemini
-  if (geminiClient) {
-    try {
-      const model = geminiClient.getGenerativeModel({
-        model: GEMINI_MODEL,
-        generationConfig: { maxOutputTokens: maxTokens, temperature }
-      });
-
-      const fullPrompt = jsonMode
-        ? `${systemPrompt}\nReturn ONLY valid JSON. No markdown. No explanation.\n\n${prompt}`
-        : `${systemPrompt}\n\n${prompt}`;
-
-      const result = await model.generateContent(fullPrompt);
-      let text = result.response.text().trim();
-
-      // Strip markdown code blocks if AI adds them
-      text = text.replace(/^```json\n?/g, '').replace(/^```\n?/g, '').replace(/```json\n?$/g, '').replace(/```\n?$/g, '').trim();
-      console.log('[AI] Response from Gemini');
-      return text;
-    } catch (geminiErr) {
-      console.error('[AI] Gemini also failed:', geminiErr.message);
-      throw geminiErr;
-    }
-  }
-
-  throw new Error(`No AI provider configured for ${purpose}. Set GROQ_API_KEY_${purpose.toUpperCase()} or GEMINI_API_KEY.`);
+  throw new Error(`No AI provider configured for ${purpose}. Set GROQ_API_KEY_${purpose.toUpperCase()}.`);
 }
 
 // ── CHAT FUNCTION: callAIChat ─────────────────────────────────
@@ -155,6 +162,11 @@ export async function callAI(prompt, options = {}) {
 export async function callAIChat(message, history = [], systemPrompt = '') {
   const defaultSystem = 'You are a helpful educational assistant.';
   const finalSystem = systemPrompt || defaultSystem;
+
+  // Check if Groq chat client is available
+  if (!groqChatClient) {
+    throw new Error('Chatbot unavailable: GROQ_API_KEY_CHAT not configured. Please set GROQ_API_KEY_CHAT environment variable.');
+  }
 
   // Try Groq chat client first
   if (groqChatClient) {
@@ -176,34 +188,42 @@ export async function callAIChat(message, history = [], systemPrompt = '') {
       });
 
       return completion.choices[0]?.message?.content || '';
-    } catch (err) {
-      console.warn('[AI] Groq chat failed, trying Gemini:', err.message);
-      if (!geminiClient) throw err;
+    } catch (groqErr) {
+      console.warn('[AI] Groq chat failed:', groqErr.message);
+      // Only try Gemini fallback if GROQ_API_KEY_CHAT was configured but failed
+      if (geminiClient && HAS_GROQ_CHAT) {
+        console.warn('[AI] Attempting Gemini fallback...');
+        try {
+          const model = geminiClient.getGenerativeModel({
+            model: GEMINI_MODEL,
+            generationConfig: { maxOutputTokens: 500 }
+          });
+
+          const chatHistory = [
+            { role: 'user', parts: [{ text: finalSystem }] },
+            { role: 'model', parts: [{ text: 'Understood, ready to help!' }] },
+            ...history.slice(-10).map(h => ({
+              role: h.role === 'user' ? 'user' : 'model',
+              parts: [{ text: h.content || h.text || '' }]
+            }))
+          ];
+
+          const chatSession = model.startChat({ history: chatHistory });
+          const result = await chatSession.sendMessage(message);
+          console.log('[AI] Response from Gemini (fallback)');
+          return result.response.text();
+        } catch (geminiErr) {
+          console.error('[AI] Gemini fallback also failed:', geminiErr.message);
+          throw new Error(`AI services unavailable. Groq error: ${groqErr.message}. Gemini error: ${geminiErr.message}`);
+        }
+      }
+      // No Gemini or no GROQ_CHAT - throw the original Groq error
+      throw groqErr;
     }
   }
 
-  // Fallback to Gemini
-  if (geminiClient) {
-    const model = geminiClient.getGenerativeModel({
-      model: GEMINI_MODEL,
-      generationConfig: { maxOutputTokens: 500 }
-    });
-
-    const chatHistory = [
-      { role: 'user', parts: [{ text: finalSystem }] },
-      { role: 'model', parts: [{ text: 'Understood, ready to help!' }] },
-      ...history.slice(-10).map(h => ({
-        role: h.role === 'user' ? 'user' : 'model',
-        parts: [{ text: h.content || h.text || '' }]
-      }))
-    ];
-
-    const chatSession = model.startChat({ history: chatHistory });
-    const result = await chatSession.sendMessage(message);
-    return result.response.text();
-  }
-
-  throw new Error('No AI provider configured for chat. Set GROQ_API_KEY_CHAT or GEMINI_API_KEY.');
+  // No Groq client - throw error
+  throw new Error('Chatbot unavailable: No GROQ_API_KEY_CHAT configured.');
 }
 
 // ── VISION FUNCTION: callAIVision ───────────────────────────────
