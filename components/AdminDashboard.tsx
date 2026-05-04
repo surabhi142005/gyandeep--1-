@@ -1081,40 +1081,31 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
               <Card padding="xl">
                  <h3 className="text-lg font-bold mb-6">{t('User Distribution')}</h3>
-                 <div className="h-64 w-full">
+                 <div className="h-64 w-full flex items-center justify-center bg-gray-50/30 dark:bg-gray-800/20 rounded-xl overflow-hidden">
                     {analytics.totalUsers > 0 ? (
-                      <ResponsiveContainer width="100%" height="100%">
-                         <PieChart>
-                            <Pie
-                               data={[
-                                  { name: t('Students'), value: analytics.students || 0 },
-                                  { name: t('Teachers'), value: analytics.teachers || 0 },
-                                  { name: t('Admins'), value: analytics.admins || 0 },
-                               ].filter(d => d.value > 0)}
-                               cx="50%"
-                               cy="50%"
-                               innerRadius={60}
-                               outerRadius={80}
-                               paddingAngle={5}
-                               dataKey="value"
-                               label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
-                            >
-                               <Cell fill="#6C63FF" /> {/* Primary */}
-                               <Cell fill="#FF6584" /> {/* Secondary */}
-                               <Cell fill="#94A3B8" /> {/* Muted */}
-                            </Pie>
-                            <Tooltip 
-                              contentStyle={{ 
-                                 backgroundColor: '#FFFFFF', 
-                                 border: 'none',
-                                 borderRadius: '0.75rem',
-                                 boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)',
-                                 color: '#1A1A2E'
-                              }}
-                            />
-                            <Legend verticalAlign="bottom" height={36}/>
-                         </PieChart>
-                      </ResponsiveContainer>
+                       <PieChart width={350} height={250}>
+                          <Pie
+                             data={[
+                                { name: t('Students'), value: Number(analytics.students) || 0 },
+                                { name: t('Teachers'), value: Number(analytics.teachers) || 0 },
+                                { name: t('Admins'), value: Number(analytics.admins) || 0 },
+                             ].filter(d => d.value > 0)}
+                             cx={175}
+                             cy={100}
+                             innerRadius={60}
+                             outerRadius={80}
+                             paddingAngle={5}
+                             dataKey="value"
+                             isAnimationActive={false}
+                             label={({ percent }) => `${(percent * 100).toFixed(0)}%`}
+                          >
+                             <Cell fill="#6C63FF" />
+                             <Cell fill="#FF6584" />
+                             <Cell fill="#94A3B8" />
+                          </Pie>
+                          <Tooltip />
+                          <Legend verticalAlign="bottom" height={36}/>
+                       </PieChart>
                     ) : (
                       <div className="h-full flex items-center justify-center text-gray-400 text-sm">
                         {t('No user data available')}
