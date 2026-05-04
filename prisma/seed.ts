@@ -228,12 +228,9 @@ async function main() {
     data: {
       odId: generateOdId('NOTE'),
       sessionId: activeSession.id,
-      classId: classes[0].id,
-      subjectId: subjectMap['Mathematics'].id,
-      title: 'Algebra Fundamentals - Lesson 1',
-      content: 'Introduction to variables, constants and expressions. We will cover linear equations today.',
-      url: 'https://example.com/notes/algebra-l1.pdf',
-      uploadedById: teachers[0].id
+      content: 'Algebra Fundamentals - Lesson 1: Introduction to variables, constants and expressions. We will cover linear equations today.',
+      filePath: 'https://example.com/notes/algebra-l1.pdf',
+      authorId: teachers[0].id
     }
   });
 
@@ -241,12 +238,9 @@ async function main() {
     data: {
       odId: generateOdId('NOTE'),
       sessionId: activeSession.id,
-      classId: classes[0].id,
-      subjectId: subjectMap['Mathematics'].id,
-      title: 'Practice Problems - Algebra',
-      content: 'Set of 10 problems for home practice.',
-      url: 'https://example.com/notes/algebra-practice.pdf',
-      uploadedById: teachers[0].id
+      content: 'Practice Problems - Algebra: Set of 10 problems for home practice.',
+      filePath: 'https://example.com/notes/algebra-practice.pdf',
+      authorId: teachers[0].id
     }
   });
 
@@ -254,12 +248,9 @@ async function main() {
     data: {
       odId: generateOdId('NOTE'),
       sessionId: activeSession.id,
-      classId: classes[0].id,
-      subjectId: subjectMap['Science'].id,
-      title: 'Periodic Table Guide',
-      content: 'Complete guide to atomic numbers and groups.',
-      url: 'https://example.com/notes/science-periodic.png',
-      uploadedById: teachers[1].id
+      content: 'Periodic Table Guide: Complete guide to atomic numbers and groups.',
+      filePath: 'https://example.com/notes/science-periodic.png',
+      authorId: teachers[1].id
     }
   });
 

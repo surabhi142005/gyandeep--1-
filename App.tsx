@@ -512,6 +512,12 @@ function App() {
 
     const showLandingPage = showLanding && !currentUser && isSetupComplete && routePath === '/';
 
+    const liquidProps = useMemo(() => ({
+        color: currentUser ? [0.62, 0.62, 0.62] : [0.56, 0.56, 0.56],
+        amplitude: currentUser ? 0.15 : 0.1,
+        speed: currentUser ? 1.2 : 1
+    }), [!!currentUser]);
+
     return (
         <ErrorBoundary>
             <RealtimeProvider userId={currentUser?.id} userRole={currentUser?.role}>
@@ -519,8 +525,10 @@ function App() {
             <a href="#main-content" className="skip-link">{t('Skip to content')}</a>
             {showLiquid && (
                 <LiquidChrome
-                    color={currentUser ? [0.62, 0.62, 0.62] : [0.56, 0.56, 0.56]}
-                    mouseReact amplitude={currentUser ? 0.15 : 0.1} speed={currentUser ? 1.2 : 1}
+                    color={liquidProps.color as [number, number, number]}
+                    mouseReact 
+                    amplitude={liquidProps.amplitude} 
+                    speed={liquidProps.speed}
                 />
             )}
             <div id="main-content" className="relative z-10" role="main">

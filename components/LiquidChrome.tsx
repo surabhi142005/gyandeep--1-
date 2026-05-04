@@ -79,10 +79,6 @@ void main() {
 
   vec3 col = baseColor + specular + tint * uColor;
 
-  // Subtle pulsing
-  float pulse = sin(t * 0.6 * uSpeed) * 0.05 + 0.95;
-  col *= pulse;
-
   // Vignette
   float vignette = 1.0 - 0.25 * length(vUv - 0.5);
   col *= vignette;
@@ -104,21 +100,24 @@ const LiquidChrome: React.FC<LiquidChromeProps> = ({
   const ctnDom = useRef<HTMLDivElement | null>(null);
   const mousePos = useRef({ x: 0.5, y: 0.5 });
 
+  const rendererRef = useRef<Renderer | null>(null);
+  const programRef = useRef<Program | null>(null);
+
+  // Initialize WebGL once
   useEffect(() => {
     if (!ctnDom.current) return;
     const ctn = ctnDom.current;
     const renderer = new Renderer();
+    rendererRef.current = renderer;
     const gl = renderer.gl;
     gl.clearColor(1, 1, 1, 1);
-
-    let program: Program | null = null;
 
     function resize() {
       const width = ctn.offsetWidth || window.innerWidth;
       const height = ctn.offsetHeight || window.innerHeight;
       renderer.setSize(width, height);
-      if (program) {
-        program.uniforms.uResolution.value = new Color(
+      if (programRef.current) {
+        programRef.current.uniforms.uResolution.value = new Color(
           gl.canvas.width,
           gl.canvas.height,
           gl.canvas.width / gl.canvas.height
@@ -130,7 +129,7 @@ const LiquidChrome: React.FC<LiquidChromeProps> = ({
     resize();
 
     const geometry = new Triangle(gl);
-    program = new Program(gl, {
+    const program = new Program(gl, {
       vertex: vertexShader,
       fragment: fragmentShader,
       uniforms: {
@@ -144,14 +143,15 @@ const LiquidChrome: React.FC<LiquidChromeProps> = ({
         uSpeed: { value: speed }
       }
     });
+    programRef.current = program;
 
     const mesh = new Mesh(gl, { geometry, program });
     let animateId: number;
 
     const update = (t: number) => {
       animateId = requestAnimationFrame(update);
-      if (program) {
-        program.uniforms.uTime.value = t * 0.001;
+      if (programRef.current) {
+        programRef.current.uniforms.uTime.value = t * 0.001;
       }
       renderer.render({ scene: mesh });
     };
@@ -164,8 +164,8 @@ const LiquidChrome: React.FC<LiquidChromeProps> = ({
       const x = (e.clientX - rect.left) / rect.width;
       const y = 1.0 - (e.clientY - rect.top) / rect.height;
       mousePos.current = { x, y };
-      if (program) {
-        const mouseUniform = program.uniforms.uMouse.value as Float32Array;
+      if (programRef.current) {
+        const mouseUniform = programRef.current.uniforms.uMouse.value as Float32Array;
         mouseUniform[0] = x;
         mouseUniform[1] = y;
       }
@@ -188,8 +188,19 @@ const LiquidChrome: React.FC<LiquidChromeProps> = ({
       if (ext) {
         ext.loseContext();
       }
+      rendererRef.current = null;
+      programRef.current = null;
     };
-  }, [color, speed, amplitude, mouseReact]);
+  }, []); // Only once
+
+  // Update uniforms when props change
+  useEffect(() => {
+    if (programRef.current) {
+      programRef.current.uniforms.uColor.value = new Color(color[0], color[1], color[2]);
+      programRef.current.uniforms.uAmplitude.value = amplitude;
+      programRef.current.uniforms.uSpeed.value = speed;
+    }
+  }, [color, amplitude, speed]);
 
   return <div ref={ctnDom} className="liquid-chrome-container" {...rest} />;
 };

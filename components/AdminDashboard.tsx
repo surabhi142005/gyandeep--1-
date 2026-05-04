@@ -208,11 +208,12 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
   // Analytics data
   const analytics = useMemo(() => {
-    const totalUsers = users.length;
-    const students = users.filter(u => u.role === UserRoleEnum.STUDENT).length;
-    const teachers = users.filter(u => u.role === UserRoleEnum.TEACHER).length;
-    const admins = users.filter(u => u.role === UserRoleEnum.ADMIN).length;
-    const usersWithFace = users.filter(u => u.faceImage).length;
+    const safeUsers = Array.isArray(users) ? users : [];
+    const totalUsers = safeUsers.length;
+    const students = safeUsers.filter(u => u.role === UserRoleEnum.STUDENT).length;
+    const teachers = safeUsers.filter(u => u.role === UserRoleEnum.TEACHER).length;
+    const admins = safeUsers.filter(u => u.role === UserRoleEnum.ADMIN).length;
+    const usersWithFace = safeUsers.filter(u => u.faceImage).length;
 
     return { totalUsers, students, teachers, admins, usersWithFace };
   }, [users]);
@@ -1077,40 +1078,48 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
       {activeTab === 'analytics' && (
         <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-           <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
               <Card padding="xl">
                  <h3 className="text-lg font-bold mb-6">{t('User Distribution')}</h3>
-                 <div className="h-64">
-                    <ResponsiveContainer width="100%" height="100%">
-                       <PieChart>
-                          <Pie
-                             data={[
-                                { name: t('Students'), value: analytics.students },
-                                { name: t('Teachers'), value: analytics.teachers },
-                                { name: t('Admins'), value: analytics.admins },
-                             ]}
-                             cx="50%"
-                             cy="50%"
-                             innerRadius={60}
-                             outerRadius={80}
-                             paddingAngle={5}
-                             dataKey="value"
-                          >
-                             <Cell fill="var(--color-primary)" />
-                             <Cell fill="var(--color-secondary)" />
-                             <Cell fill="#94A3B8" />
-                          </Pie>
-                          <Tooltip 
-                            contentStyle={{ 
-                               backgroundColor: 'var(--color-surface)', 
-                               border: 'none',
-                               borderRadius: '0.75rem',
-                               boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)'
-                            }}
-                          />
-                          <Legend verticalAlign="bottom" height={36}/>
-                       </PieChart>
-                    </ResponsiveContainer>
+                 <div className="h-64 w-full">
+                    {analytics.totalUsers > 0 ? (
+                      <ResponsiveContainer width="100%" height="100%">
+                         <PieChart>
+                            <Pie
+                               data={[
+                                  { name: t('Students'), value: analytics.students || 0 },
+                                  { name: t('Teachers'), value: analytics.teachers || 0 },
+                                  { name: t('Admins'), value: analytics.admins || 0 },
+                               ].filter(d => d.value > 0)}
+                               cx="50%"
+                               cy="50%"
+                               innerRadius={60}
+                               outerRadius={80}
+                               paddingAngle={5}
+                               dataKey="value"
+                               label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                            >
+                               <Cell fill="#6C63FF" /> {/* Primary */}
+                               <Cell fill="#FF6584" /> {/* Secondary */}
+                               <Cell fill="#94A3B8" /> {/* Muted */}
+                            </Pie>
+                            <Tooltip 
+                              contentStyle={{ 
+                                 backgroundColor: '#FFFFFF', 
+                                 border: 'none',
+                                 borderRadius: '0.75rem',
+                                 boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)',
+                                 color: '#1A1A2E'
+                              }}
+                            />
+                            <Legend verticalAlign="bottom" height={36}/>
+                         </PieChart>
+                      </ResponsiveContainer>
+                    ) : (
+                      <div className="h-full flex items-center justify-center text-gray-400 text-sm">
+                        {t('No user data available')}
+                      </div>
+                    )}
                  </div>
               </Card>
 
