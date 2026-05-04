@@ -1,19 +1,35 @@
 import { useState, useCallback, useEffect } from 'react';
 import type { Coordinates, ClassSession, HistoricalSessionRecord } from '../types';
 import { getCurrentPosition } from '../services/locationService';
+import {
+    createClassSession,
+    endClassSession,
+    regenerateSessionCode,
+    startClassSession,
+} from '../services/dataService';
+import { mapBackendSessionToClassSession } from '../services/sessionState';
 
 interface UseTeacherSessionProps {
     classSession: ClassSession;
     onUpdateSession: (update: Partial<ClassSession>) => void;
     historicalRecords?: HistoricalSessionRecord[];
     duration?: number;
+    teacherId: string;
+    defaultClassId?: string | null;
 }
 
 /**
  * Humanizes teacher session management logic.
  * Handles timers, location fetching, and session code generation.
  */
-export function useTeacherSession({ classSession, onUpdateSession, historicalRecords = [], duration = 600 }: UseTeacherSessionProps) {
+export function useTeacherSession({
+    classSession,
+    onUpdateSession,
+    historicalRecords = [],
+    duration = 600,
+    teacherId,
+    defaultClassId = null,
+}: UseTeacherSessionProps) {
     const [timeLeft, setTimeLeft] = useState(0);
     const [isFetchingLocation, setIsFetchingLocation] = useState(false);
     const [teacherLocation, setTeacherLocation] = useState<Coordinates | null>(classSession.teacherLocation || null);
@@ -54,25 +70,50 @@ export function useTeacherSession({ classSession, onUpdateSession, historicalRec
         }
         
         const code = Math.floor(100000 + Math.random() * 900000).toString();
-        const expiry = Date.now() + duration * 1000;
+        const created = await createClassSession({
+            teacherId,
+            classId: classSession.classId || defaultClassId || null,
+            subjectId: subject,
+            code,
+            locationEnabled: Boolean(location),
+            locationRadius: classSession.attendanceRadius || 100,
+            locationLat: location?.lat,
+            locationLng: location?.lng,
+            faceEnabled: true,
+        });
+
+        const sessionId = created?.session?.id;
+        if (!sessionId) {
+            throw new Error('Session creation failed');
+        }
+
+        await startClassSession(sessionId);
 
         onUpdateSession({
-            code,
-            expiry,
+            ...mapBackendSessionToClassSession({
+                ...created.session,
+                sessionStatus: 'active',
+                startedAt: new Date().toISOString(),
+                expiry: created.session.expiry || new Date(Date.now() + duration * 1000).toISOString(),
+            }),
+            classId: created.session.classId || classSession.classId || defaultClassId || null,
             teacherLocation: location,
             subject,
             quiz: null,
             notes: null,
             quizPublished: false,
-            startedAt: Date.now(),
-            isActive: true
+            isActive: true,
         });
     };
 
     const endSession = async () => {
+        if (classSession.id) {
+            await endClassSession(classSession.id);
+        }
         onUpdateSession({
             endedAt: Date.now(),
-            isActive: false
+            isActive: false,
+            sessionStatus: 'ended',
         });
     };
 
@@ -97,11 +138,32 @@ export function useTeacherSession({ classSession, onUpdateSession, historicalRec
         return sessionData;
     };
 
-    const generateCode = (subject: string = classSession.subject || '', radius: number = 10) => {
+    const generateCode = async (subject: string = classSession.subject || '', radius: number = 10) => {
         if (!teacherLocation) throw new Error("Location not set");
 
         const code = Math.floor(100000 + Math.random() * 900000).toString();
         const expiry = Date.now() + duration * 1000;
+
+        if (classSession.id) {
+            const response = await regenerateSessionCode(classSession.id, {
+                code,
+                expiresInSeconds: duration,
+                subjectId: subject,
+                locationRadius: radius,
+                locationLat: teacherLocation.lat,
+                locationLng: teacherLocation.lng,
+            });
+
+            onUpdateSession({
+                ...mapBackendSessionToClassSession(response?.session),
+                subject,
+                teacherLocation,
+                attendanceRadius: radius,
+                isActive: true,
+            });
+
+            return { code, expiry };
+        }
 
         onUpdateSession({
             code,
@@ -111,7 +173,7 @@ export function useTeacherSession({ classSession, onUpdateSession, historicalRec
             quiz: null,
             notes: null,
             quizPublished: false,
-            attendanceRadius: radius
+            attendanceRadius: radius,
         });
 
         return { code, expiry };

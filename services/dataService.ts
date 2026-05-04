@@ -772,6 +772,56 @@ export const fetchActiveSession = async (teacherId: string) => {
   return apiRequest(`/api/sessions/active?teacherId=${teacherId}`, { method: 'GET' });
 };
 
+export const fetchActiveSessionByClass = async (classId: string) => {
+  return apiRequest(`/api/sessions/active?classId=${classId}`, { method: 'GET' });
+};
+
+export const createClassSession = async (payload: {
+  teacherId: string;
+  classId?: string | null;
+  subjectId: string;
+  code?: string;
+  locationEnabled?: boolean;
+  locationRadius?: number;
+  locationLat?: number;
+  locationLng?: number;
+  faceEnabled?: boolean;
+}) => {
+  return apiRequest('/api/sessions', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+};
+
+export const startClassSession = async (sessionId: string) => {
+  return apiRequest(`/api/sessions/${sessionId}/start`, {
+    method: 'PATCH',
+  });
+};
+
+export const endClassSession = async (sessionId: string) => {
+  return apiRequest(`/api/sessions/${sessionId}/end`, {
+    method: 'PATCH',
+  });
+};
+
+export const regenerateSessionCode = async (
+  sessionId: string,
+  payload: {
+    code?: string;
+    expiresInSeconds?: number;
+    subjectId?: string;
+    locationRadius?: number;
+    locationLat?: number;
+    locationLng?: number;
+  } = {}
+) => {
+  return apiRequest(`/api/sessions/${sessionId}/code`, {
+    method: 'PATCH',
+    body: JSON.stringify(payload),
+  });
+};
+
 export const fetchSessionById = async (sessionId: string) => {
   return apiRequest(`/api/sessions/${sessionId}`, { method: 'GET' });
 };

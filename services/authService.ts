@@ -302,18 +302,32 @@ export async function initAuth() {
   }
 }
 
-export async function requestPasswordReset(email: string) {
+export async function updateUserPreferences(userId: string, preferences: any) {
   await getCSRFToken();
   const csrfHeaders = getCSRFHeaders();
-  const res = await fetch(`${API_BASE}/api/auth/password/request`, {
-    method: 'POST',
+  
+  const res = await fetch(`${API_BASE}/api/users/profile`, {
+    method: 'PUT',
     credentials: 'include',
     headers: { 
       'Content-Type': 'application/json',
       ...csrfHeaders,
     },
-    body: JSON.stringify({ email }),
+    body: JSON.stringify({ userId, updates: { preferences } }),
   });
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || 'Failed to update preferences');
+  }
+
+  // Update local state
+  if (authState.user && authState.user.id === userId) {
+    updateAuthState({
+      user: { ...authState.user, preferences: { ...authState.user.preferences, ...preferences } }
+    });
+  }
+
   return res.json();
 }
 

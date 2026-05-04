@@ -36,6 +36,7 @@ import AnnouncementBoard from './AnnouncementBoard';
 import TicketPanel from './TicketPanel';
 import type { Announcement } from './AnnouncementBoard';
 import {
+  fetchActiveSessionByClass,
   fetchAvailableQuizzes,
   fetchBadges,
   fetchCentralizedNotesCombined,
@@ -45,6 +46,7 @@ import {
   listClassNotes
 } from '../services/dataService';
 import { realtimeClient } from '../services/realtimeClient';
+import { mapBackendSessionToClassSession } from '../services/sessionState';
 const Dashboard3D = React.lazy(() => import('./Dashboard3D'));
 import StudentLearningTwin from './StudentLearningTwin';
 import { DashboardLayout, Card, Button, Badge, Input } from './ui';
@@ -124,8 +126,18 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({
   student, classSession, onMarkAttendance, onUpdatePerformance, 
   onLogout, onShowNotification, theme, onUpdateFaceImage, 
   historicalSessions, allStudents = [], announcements = [], 
-  onUpdateSession 
-}) => {
+  onUpdateSession,
+  }) => {
+  // Real-time notes
+  const { newNotes } = useLiveNotes(student.classId || undefined, classSession.id || undefined);
+
+  useEffect(() => {
+    if (newNotes.length > 0) {
+      const latest = newNotes[0];
+      onShowNotification(`${t('New note uploaded')}: ${latest.title}`, 'info');
+    }
+  }, [newNotes, onShowNotification]);
+
   const [activeTab, setActiveTab] = useState('learning');
   const [code, setCode] = useState('');
   const [showWebcam, setShowWebcam] = useState(false);
@@ -209,6 +221,57 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({
   useEffect(() => {
     setQuizTaken(false);
   }, [selectedQuiz?.id]);
+
+  useEffect(() => {
+    if (!student.classId || !onUpdateSession) {
+      return;
+    }
+
+    let cancelled = false;
+
+    const syncActiveSession = async () => {
+      try {
+        const data = await fetchActiveSessionByClass(student.classId!);
+        if (cancelled) {
+          return;
+        }
+
+        if (data?.active && data?.session) {
+          onUpdateSession({
+            ...mapBackendSessionToClassSession(data.session),
+            isActive: true,
+          });
+          return;
+        }
+
+        onUpdateSession({
+          id: '',
+          code: null,
+          expiry: null,
+          startedAt: null,
+          endedAt: null,
+          isActive: false,
+          sessionStatus: 'ended',
+          subject: classSession.subject || '',
+          notes: null,
+          quiz: null,
+          quizPublished: false,
+          teacherLocation: null,
+          lat: undefined,
+          lng: undefined,
+        });
+      } catch (err) {
+        console.error('Failed to sync student session:', err);
+      }
+    };
+
+    syncActiveSession();
+    const interval = setInterval(syncActiveSession, 10000);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, [student.classId]);
 
   // RT-4: Subscribe to XP updates in real-time
   useEffect(() => {
@@ -419,7 +482,14 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({
                 </Card>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                   <Card padding="lg" hover onClick={() => setActiveTab('quiz')}>
+                   <Card 
+                     padding="lg" 
+                     hover 
+                     onClick={() => setActiveTab('quiz')}
+                     role="button"
+                     tabIndex={0}
+                     onKeyDown={(e) => e.key === 'Enter' && setActiveTab('quiz')}
+                   >
                       <div className="flex items-center gap-4">
                          <div className="w-12 h-12 rounded-xl flex items-center justify-center" style={{ backgroundColor: 'rgba(249, 115, 22, 0.15)', color: '#F97316' }}>
                             <HelpCircle size={24} />
@@ -431,7 +501,14 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({
                          <ChevronRight className="ml-auto" size={20} style={{ color: 'var(--color-text-muted)' }} />
                       </div>
                    </Card>
-                   <Card padding="lg" hover onClick={() => setActiveTab('twin')}>
+                   <Card 
+                     padding="lg" 
+                     hover 
+                     onClick={() => setActiveTab('twin')}
+                     role="button"
+                     tabIndex={0}
+                     onKeyDown={(e) => e.key === 'Enter' && setActiveTab('twin')}
+                   >
                       <div className="flex items-center gap-4">
                          <div className="w-12 h-12 rounded-xl flex items-center justify-center" style={{ backgroundColor: 'var(--color-secondary-15)', color: 'var(--color-secondary)' }}>
                             <Zap size={24} />

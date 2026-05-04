@@ -39,6 +39,7 @@ import {
 import { TeacherDashboardProps } from './TeacherDashboardProps';
 import GradeBook from './GradeBook';
 import TicketPanel from './TicketPanel';
+import DigitalClassroom from './DigitalClassroom';
 import AnalyticsDashboard from './AnalyticsDashboard';
 import AnnouncementBoard from './AnnouncementBoard';
 import { useTeacherSession } from '../hooks/useTeacherSession';
@@ -46,6 +47,7 @@ import { useQuizWorker } from '../hooks/useQuizWorker';
 import { DashboardLayout, Card, Button, Badge, Input } from './ui';
 import { fetchTeacherStats, fetchQuizStats, fetchWeeklyAttendance, fetchPerformanceBySubject } from '../services/dataService';
 import { realtimeClient } from '../services/realtimeClient';
+import { mapBackendSessionToClassSession } from '../services/sessionState';
 import { t } from '../services/i18n';
 const SIDEBAR_ITEMS = [
   { id: 'session', label: t('Session Control'), icon: Play },
@@ -143,6 +145,30 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
   const [selectedQuizId, setSelectedQuizId] = useState<string>('');
   const [quizResultsSummary, setQuizResultsSummary] = useState<any>(null);
   const [quizResultsRows, setQuizResultsRows] = useState<any[]>([]);
+  const teacherPrimaryClassId = classSession.classId || allClasses.find((cls) => cls.teacherId === teacher.id)?.id || null;
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadExistingSession = async () => {
+      try {
+        const data = await fetchActiveSession(teacher.id);
+        if (!cancelled && data?.active && data?.session) {
+          onUpdateSession({
+            ...mapBackendSessionToClassSession(data.session),
+            isActive: true,
+          });
+        }
+      } catch (err) {
+        console.warn('Failed to load existing teacher session:', err);
+      }
+    };
+
+    loadExistingSession();
+    return () => {
+      cancelled = true;
+    };
+  }, [teacher.id]);
   
   // RT-1: Sync session with server every 10 seconds for accurate timer
   useEffect(() => {
@@ -356,11 +382,21 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
   const [sessionInsights, setSessionInsights] = useState<any>(null);
   const [loadingInsights, setLoadingInsights] = useState(false);
 
-  const { startSession, endSession, generateCode, exportSession } = useTeacherSession({ classSession, onUpdateSession, historicalRecords });
+  const { startSession, endSession, generateCode, exportSession } = useTeacherSession({
+    classSession,
+    onUpdateSession,
+    historicalRecords,
+    teacherId: teacher.id,
+    defaultClassId: teacherPrimaryClassId,
+  });
 
   const handleStartSession = async () => {
     if (!selectedSubject) {
       setError('Please select a subject first.');
+      return;
+    }
+    if (!teacherPrimaryClassId) {
+      setError('Assign this teacher to a class before starting a live session.');
       return;
     }
     setError(null);
@@ -884,6 +920,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
                   <div>
                     <label className="block text-sm font-bold mb-2">{t('Upload File')}</label>
                     <input
+                      id="session-note-file"
                       type="file"
                       accept=".pdf,.doc,.docx,.txt,.png,.jpg,.jpeg"
                       onChange={async (e) => {
@@ -891,13 +928,21 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
                         if (!file) return;
                         setIsUploading(true);
                         try {
-                          await uploadSessionFile({
+                          const result = await uploadSessionFile({
                             file,
                             classId: classSession.classId || '',
                             subjectId: selectedSubject,
                             type: 'session_notes',
                             userId: teacher.id,
                           });
+                          
+                          // Real-time broadcast for newly uploaded note
+                          realtimeClient.broadcast(classSession.classId || 'all', 'new-note', {
+                            title: file.name,
+                            subject: selectedSubject,
+                            url: (result as any)?.url
+                          });
+
                           setSuccessMessage(t('File uploaded successfully!'));
                           setTimeout(() => setSuccessMessage(null), 3000);
                         } catch (err) {
@@ -906,16 +951,19 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
                           setIsUploading(false);
                         }
                       }}
-                      className="w-full px-4 py-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800"
+                      className="w-full px-4 py-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 focus:ring-2 focus:ring-primary/20 outline-none"
+                      aria-label={t('Select file to upload as session note')}
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-bold mb-2">{t('Quick Notes')}</label>
+                    <label htmlFor="notes-textarea" className="block text-sm font-bold mb-2">{t('Quick Notes')}</label>
                     <textarea
+                      id="notes-textarea"
                       value={notesText}
                       onChange={(e) => setNotesText(e.target.value)}
-                      className="w-full px-4 py-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 h-40"
+                      className="w-full px-4 py-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 h-40 focus:ring-2 focus:ring-primary/20 outline-none transition-all"
                       placeholder={t('Type your notes here...')}
+                      aria-label={t('Write session notes')}
                     />
                     <Button
                       variant="primary"
@@ -1044,6 +1092,18 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
               console.error(formatFaceAuthError(err, 'register'));
             }
             setShowFaceRegistration(false);
+          }}
+          onClose={() => setShowFaceRegistration(false)}
+          theme={theme}
+          title="Register Teacher Face"
+        />
+      )}
+    </DashboardLayout>
+  );
+};
+
+export default TeacherDashboard;
+FaceRegistration(false);
           }}
           onClose={() => setShowFaceRegistration(false)}
           theme={theme}

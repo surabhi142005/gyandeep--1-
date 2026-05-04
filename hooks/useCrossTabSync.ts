@@ -12,7 +12,9 @@ type SyncMessage =
   | { type: 'QUIZ_SUBMITTED'; data: any }
   | { type: 'XP_UPDATED'; data: any }
   | { type: 'REFRESH_DATA'; source: string }
+  | { type: 'LOGIN'; user: any }
   | { type: 'LOGOUT' }
+  | { type: 'AUTH_UPDATE'; user: any }
   | { type: 'CUSTOM'; event: string; data: any };
 
 interface UseCrossTabSyncOptions {
@@ -22,7 +24,9 @@ interface UseCrossTabSyncOptions {
   onQuizSubmitted?: (data: any) => void;
   onXpUpdated?: (data: any) => void;
   onRefreshData?: (source: string) => void;
+  onLogin?: (user: any) => void;
   onLogout?: () => void;
+  onAuthUpdate?: (user: any) => void;
   onCustomEvent?: (event: string, data: any) => void;
 }
 
@@ -67,8 +71,14 @@ export function useCrossTabSync(options: UseCrossTabSyncOptions = {}) {
         case 'REFRESH_DATA':
           options.onRefreshData?.(data.source);
           break;
+        case 'LOGIN':
+          options.onLogin?.(data.user);
+          break;
         case 'LOGOUT':
           options.onLogout?.();
+          break;
+        case 'AUTH_UPDATE':
+          options.onAuthUpdate?.(data.user);
           break;
         case 'CUSTOM':
           options.onCustomEvent?.(data.event, data.data);
@@ -89,7 +99,9 @@ export function useCrossTabSync(options: UseCrossTabSyncOptions = {}) {
     options.onQuizSubmitted,
     options.onXpUpdated,
     options.onRefreshData,
+    options.onLogin,
     options.onLogout,
+    options.onAuthUpdate,
     options.onCustomEvent,
   ]);
 
@@ -136,6 +148,16 @@ export function useCrossTabSync(options: UseCrossTabSyncOptions = {}) {
     [broadcast]
   );
 
+  const notifyLogin = useCallback(
+    (user: any) => broadcast({ type: 'LOGIN', user }),
+    [broadcast]
+  );
+
+  const notifyAuthUpdate = useCallback(
+    (user: any) => broadcast({ type: 'AUTH_UPDATE', user }),
+    [broadcast]
+  );
+
   const broadcastCustom = useCallback(
     (event: string, data: any) => broadcast({ type: 'CUSTOM', event, data }),
     [broadcast]
@@ -150,7 +172,9 @@ export function useCrossTabSync(options: UseCrossTabSyncOptions = {}) {
     notifyQuizSubmitted,
     notifyXpUpdated,
     requestRefresh,
+    notifyLogin,
     notifyLogout,
+    notifyAuthUpdate,
     broadcastCustom,
   };
 }

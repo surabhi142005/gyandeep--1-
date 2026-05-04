@@ -63,7 +63,7 @@ async function main() {
   console.log('👤 Creating Users...');
   const commonPassword = await hashPassword('password123');
   
-  // Admin
+  // Admins
   const admin = await prisma.user.create({
     data: {
       odId: 'USER-ADMIN-001',
@@ -72,10 +72,24 @@ async function main() {
       name: 'System Administrator',
       role: 'admin',
       emailVerified: true,
-      xp: 2500,
-      coins: 5000,
-      level: 25,
+      xp: 5000,
+      coins: 10000,
+      level: 50,
       preferences: { theme: 'dark', notifications: true, highContrast: false, fontScale: 1.0 }
+    }
+  });
+
+  const subAdmin = await prisma.user.create({
+    data: {
+      odId: 'USER-ADMIN-002',
+      email: 'coordinator@gyandeep.edu',
+      password: await hashPassword('admin123'),
+      name: 'Academic Coordinator',
+      role: 'admin',
+      emailVerified: true,
+      xp: 3000,
+      coins: 5000,
+      level: 30,
     }
   });
 
@@ -85,6 +99,7 @@ async function main() {
     { name: 'Sarah Johnson', email: 'sarah.j@gyandeep.edu', subjects: ['Science', 'Biology', 'Chemistry'] },
     { name: 'Michael Brown', email: 'm.brown@gyandeep.edu', subjects: ['English', 'History'] },
     { name: 'Dr. Emily Wilson', email: 'emily.w@gyandeep.edu', subjects: ['Computer Science', 'Mathematics'] },
+    { name: 'Prof. David Miller', email: 'd.miller@gyandeep.edu', subjects: ['Economics', 'Geography'] },
   ];
 
   const teachers = await Promise.all(
@@ -125,7 +140,8 @@ async function main() {
   // Students
   const studentNames = [
     'Aarav Sharma', 'Priya Patel', 'Rahul Kumar', 'Ananya Singh', 'Ishaan Gupta',
-    'Sanya Malhotra', 'Arjun Verma', 'Kavya Reddy', 'Vikram Singh', 'Riya Kapoor'
+    'Sanya Malhotra', 'Arjun Verma', 'Kavya Reddy', 'Vikram Singh', 'Riya Kapoor',
+    'Zoya Khan', 'Kabir Das', 'Myra Iyer', 'Advait Joshi', 'Sia Mehra'
   ];
 
   const students = await Promise.all(
@@ -143,12 +159,18 @@ async function main() {
           coins: 1000 + (i * 100),
           level: Math.floor(i / 2) + 5,
           streak: 5 + i,
-          performance: { averageScore: 75 + (i * 2), quizzesTaken: 5 + i },
-          faceImage: i < 3 ? 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==' : null,
+          performance: { 
+            averageScore: 75 + (i * 2), 
+            quizzesTaken: 5 + i,
+            attendanceRate: 85 + (i % 15)
+          },
+          faceImage: i < 5 ? 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==' : null,
           preferences: { 
-            theme: i % 2 === 0 ? 'teal' : 'indigo', 
-            highContrast: i === 0, 
-            fontScale: i === 1 ? 1.2 : 1.0 
+            theme: i % 3 === 0 ? 'teal' : i % 3 === 1 ? 'indigo' : 'crimson', 
+            highContrast: i === 0 || i === 10, 
+            fontScale: i === 1 ? 1.2 : i === 11 ? 1.4 : 1.0,
+            screenReaderHints: i === 0 || i === 12,
+            reducedMotion: i === 5 || i === 14
           }
         }
       })
@@ -198,6 +220,60 @@ async function main() {
       expiry: new Date(Date.now() + 3600000),
       sessionStatus: 'active',
       quizPublished: true
+    }
+  });
+
+  console.log('📝 Creating Notes...');
+  await prisma.sessionNote.create({
+    data: {
+      odId: generateOdId('NOTE'),
+      sessionId: activeSession.id,
+      classId: classes[0].id,
+      subjectId: subjectMap['Mathematics'].id,
+      title: 'Algebra Fundamentals - Lesson 1',
+      content: 'Introduction to variables, constants and expressions. We will cover linear equations today.',
+      url: 'https://example.com/notes/algebra-l1.pdf',
+      uploadedById: teachers[0].id
+    }
+  });
+
+  await prisma.sessionNote.create({
+    data: {
+      odId: generateOdId('NOTE'),
+      sessionId: activeSession.id,
+      classId: classes[0].id,
+      subjectId: subjectMap['Mathematics'].id,
+      title: 'Practice Problems - Algebra',
+      content: 'Set of 10 problems for home practice.',
+      url: 'https://example.com/notes/algebra-practice.pdf',
+      uploadedById: teachers[0].id
+    }
+  });
+
+  await prisma.sessionNote.create({
+    data: {
+      odId: generateOdId('NOTE'),
+      sessionId: activeSession.id,
+      classId: classes[0].id,
+      subjectId: subjectMap['Science'].id,
+      title: 'Periodic Table Guide',
+      content: 'Complete guide to atomic numbers and groups.',
+      url: 'https://example.com/notes/science-periodic.png',
+      uploadedById: teachers[1].id
+    }
+  });
+
+  console.log('🏛️ Creating Centralized Notes...');
+  await prisma.centralizedNote.create({
+    data: {
+      odId: generateOdId('CNOTE'),
+      classId: classes[0].id,
+      subjectId: subjectMap['Mathematics'].id,
+      unitNumber: 1,
+      unitName: 'Number Systems',
+      title: 'Real Numbers & Proofs',
+      content: 'Detailed explanation of rational and irrational numbers.',
+      noteType: 'class_notes'
     }
   });
 

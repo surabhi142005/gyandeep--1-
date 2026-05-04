@@ -117,6 +117,7 @@ export interface ClassSession {
   endedAt?: number | null;
   startedAt?: number | null;
   isActive?: boolean;
+  sessionStatus?: 'waiting' | 'active' | 'ended';
   timetableEntryId?: string | null;
   notes: string | null;
   quiz: QuizQuestion[] | null;
@@ -142,6 +143,13 @@ export interface HistoricalSessionRecord {
 export interface ClassConfig {
   id: string;
   name: string;
+  description?: string;
+  section?: string;
+  grade?: number;
+  subject?: string;
+  academicYear?: string;
+  teacherId?: string | null;
+  active?: boolean;
 }
 
 // ========== Digital Twin Types ==========

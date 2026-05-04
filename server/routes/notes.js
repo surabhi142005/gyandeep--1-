@@ -8,6 +8,7 @@ const router = express.Router();
 import { ObjectId } from 'mongodb';
 import { connectToDatabase, COLLECTIONS } from '../db/mongoAtlas.js';
 import { authMiddleware } from '../middleware/auth.js';
+import { broadcast } from '../websocket.js';
 
 function buildSubjectFilter(subjectId) {
   if (!subjectId) return null;
@@ -74,15 +75,24 @@ router.post('/upload', authMiddleware, async (req, res) => {
     const db = await connectToDatabase();
     const { classId, subjectId, content, url, extractedText, fileName, fileType } = req.body;
 
-    // Validate file type - only PDF allowed
-    const allowedTypes = ['application/pdf', 'text/pdf'];
+    // Validate file type - PDF, Images, and Docs allowed
+    const allowedTypes = [
+      'application/pdf', 
+      'text/pdf',
+      'image/jpeg',
+      'image/png',
+      'image/webp',
+      'application/msword',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+    ];
     if (fileType && !allowedTypes.includes(fileType.toLowerCase())) {
-      return res.status(400).json({ error: 'Only PDF files are allowed' });
+      return res.status(400).json({ error: 'Unsupported file type. Allowed: PDF, Images, Word' });
     }
 
     // Validate file extension if provided
-    if (fileName && !fileName.toLowerCase().endsWith('.pdf')) {
-      return res.status(400).json({ error: 'Only PDF files are allowed' });
+    const allowedExtensions = ['.pdf', '.jpg', '.jpeg', '.png', '.webp', '.doc', '.docx'];
+    if (fileName && !allowedExtensions.some(ext => fileName.toLowerCase().endsWith(ext))) {
+      return res.status(400).json({ error: 'Unsupported file extension' });
     }
 
     const result = await db.collection(COLLECTIONS.SESSION_NOTES).insertOne({

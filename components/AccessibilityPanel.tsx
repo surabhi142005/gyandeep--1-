@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { t } from '../services/i18n';
+import { useFocusTrap } from '../hooks/useAccessibility';
 
 interface AccessibilityPanelProps {
   highContrast: boolean;
@@ -27,6 +28,7 @@ const AccessibilityPanel: React.FC<AccessibilityPanelProps> = ({
   theme,
 }) => {
   const [isOpen, setIsOpen] = useState(false);
+  const containerRef = useFocusTrap({ enabled: isOpen, onEscape: () => setIsOpen(false) });
 
   const themeColor = theme === 'teal' ? 'bg-teal-600' : theme === 'crimson' ? 'bg-red-600' : theme === 'purple' ? 'bg-purple-600' : 'bg-indigo-600';
 
@@ -34,7 +36,7 @@ const AccessibilityPanel: React.FC<AccessibilityPanelProps> = ({
     <>
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className={`fixed bottom-6 left-6 z-50 ${themeColor} text-white w-12 h-12 rounded-full shadow-lg flex items-center justify-center hover:scale-110 transition-transform`}
+        className={`fixed bottom-6 left-6 z-50 ${themeColor} text-white w-12 h-12 rounded-full shadow-lg flex items-center justify-center hover:scale-110 transition-transform focus:ring-4 focus:ring-white/50 outline-none`}
         aria-label={t('Accessibility Settings')}
         title={t('Accessibility Settings')}
       >
@@ -45,18 +47,23 @@ const AccessibilityPanel: React.FC<AccessibilityPanelProps> = ({
 
       {isOpen && (
         <div
-          className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-4"
+          className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm"
           onClick={(e) => { if (e.target === e.currentTarget) setIsOpen(false); }}
-          role="dialog"
-          aria-modal="true"
-          aria-label={t('Accessibility Settings')}
+          role="presentation"
         >
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 max-h-[80vh] overflow-y-auto">
+          <div 
+            ref={containerRef}
+            className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 max-h-[80vh] overflow-y-auto outline-none"
+            role="dialog"
+            aria-modal="true"
+            aria-label={t('Accessibility Settings')}
+            tabIndex={-1}
+          >
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-xl font-bold text-gray-800">{t('Accessibility Settings')}</h2>
               <button
                 onClick={() => setIsOpen(false)}
-                className="text-gray-400 hover:text-gray-600 text-2xl leading-none"
+                className="text-gray-400 hover:text-gray-600 text-2xl leading-none w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 transition-colors focus:ring-2 focus:ring-primary"
                 aria-label={t('Close accessibility panel')}
               >
                 &times;
@@ -75,7 +82,7 @@ const AccessibilityPanel: React.FC<AccessibilityPanelProps> = ({
                     role="switch"
                     aria-checked={!!darkMode}
                     onClick={() => setDarkMode(!darkMode)}
-                    className={`relative w-12 h-6 rounded-full transition-colors ${darkMode ? themeColor : 'bg-gray-300'}`}
+                    className={`relative w-12 h-6 rounded-full transition-colors ${darkMode ? themeColor : 'bg-gray-300'} focus:ring-2 focus:ring-offset-2 focus:ring-primary`}
                   >
                     <span className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full transition-transform ${darkMode ? 'translate-x-6' : ''}`} />
                   </button>
@@ -92,7 +99,7 @@ const AccessibilityPanel: React.FC<AccessibilityPanelProps> = ({
                   role="switch"
                   aria-checked={highContrast}
                   onClick={() => setHighContrast(!highContrast)}
-                  className={`relative w-12 h-6 rounded-full transition-colors ${highContrast ? themeColor : 'bg-gray-300'}`}
+                  className={`relative w-12 h-6 rounded-full transition-colors ${highContrast ? themeColor : 'bg-gray-300'} focus:ring-2 focus:ring-offset-2 focus:ring-primary`}
                 >
                   <span className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full transition-transform ${highContrast ? 'translate-x-6' : ''}`} />
                 </button>
@@ -108,7 +115,7 @@ const AccessibilityPanel: React.FC<AccessibilityPanelProps> = ({
                   role="switch"
                   aria-checked={reducedMotion}
                   onClick={() => setReducedMotion(!reducedMotion)}
-                  className={`relative w-12 h-6 rounded-full transition-colors ${reducedMotion ? themeColor : 'bg-gray-300'}`}
+                  className={`relative w-12 h-6 rounded-full transition-colors ${reducedMotion ? themeColor : 'bg-gray-300'} focus:ring-2 focus:ring-offset-2 focus:ring-primary`}
                 >
                   <span className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full transition-transform ${reducedMotion ? 'translate-x-6' : ''}`} />
                 </button>
@@ -127,7 +134,7 @@ const AccessibilityPanel: React.FC<AccessibilityPanelProps> = ({
                   step={0.05}
                   value={fontScale}
                   onChange={(e) => setFontScale(Number(e.target.value))}
-                  className="w-full accent-indigo-600"
+                  className="w-full accent-indigo-600 focus:ring-2 focus:ring-primary"
                   aria-label={t('Adjust font size')}
                 />
                 <div className="flex justify-between text-xs text-gray-400 mt-1">
@@ -147,7 +154,7 @@ const AccessibilityPanel: React.FC<AccessibilityPanelProps> = ({
                   role="switch"
                   aria-checked={screenReaderHints}
                   onClick={() => setScreenReaderHints(!screenReaderHints)}
-                  className={`relative w-12 h-6 rounded-full transition-colors ${screenReaderHints ? themeColor : 'bg-gray-300'}`}
+                  className={`relative w-12 h-6 rounded-full transition-colors ${screenReaderHints ? themeColor : 'bg-gray-300'} focus:ring-2 focus:ring-offset-2 focus:ring-primary`}
                 >
                   <span className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full transition-transform ${screenReaderHints ? 'translate-x-6' : ''}`} />
                 </button>
@@ -163,7 +170,7 @@ const AccessibilityPanel: React.FC<AccessibilityPanelProps> = ({
                   role="switch"
                   aria-checked={voiceEnabled}
                   onClick={() => setVoiceEnabled(!voiceEnabled)}
-                  className={`relative w-12 h-6 rounded-full transition-colors ${voiceEnabled ? themeColor : 'bg-gray-300'}`}
+                  className={`relative w-12 h-6 rounded-full transition-colors ${voiceEnabled ? themeColor : 'bg-gray-300'} focus:ring-2 focus:ring-offset-2 focus:ring-primary`}
                 >
                   <span className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full transition-transform ${voiceEnabled ? 'translate-x-6' : ''}`} />
                 </button>

@@ -66,18 +66,24 @@ router.get('/', async (req, res) => {
 router.get('/active', authMiddleware, async (req, res) => {
   try {
     const db = await connectToDatabase();
-    const { teacherId } = req.query;
+    const { teacherId, classId } = req.query;
     
-    if (!teacherId) {
-      return res.status(400).json({ error: 'teacherId is required' });
+    if (!teacherId && !classId) {
+      return res.status(400).json({ error: 'teacherId or classId is required' });
     }
 
     // Find active session (waiting or active status)
-    const activeSession = await db.collection(COLLECTIONS.CLASS_SESSIONS).findOne({
-      teacherId,
+    const activeSessionFilter = {
       sessionStatus: { $in: ['waiting', 'active'] },
-      expiry: { $gt: new Date() }, // Not expired
-    });
+      expiry: { $gt: new Date() },
+    };
+    if (teacherId) activeSessionFilter.teacherId = teacherId;
+    if (classId) activeSessionFilter.classId = classId;
+
+    const activeSession = await db.collection(COLLECTIONS.CLASS_SESSIONS).find(activeSessionFilter)
+      .sort({ createdAt: -1 })
+      .limit(1)
+      .next();
 
     if (!activeSession) {
       return res.json({ active: false, session: null });
@@ -95,11 +101,16 @@ router.get('/active', authMiddleware, async (req, res) => {
         teacherId: activeSession.teacherId,
         classId: activeSession.classId,
         subjectId: activeSession.subjectId,
+        subject: activeSession.subject || activeSession.subjectId,
         code: activeSession.code,
         sessionStatus: activeSession.sessionStatus,
         expiry: activeSession.expiry,
+        startedAt: activeSession.startedAt || activeSession.createdAt,
+        endedAt: activeSession.endedAt || null,
         remainingTime,
         locationEnabled: activeSession.locationEnabled,
+        locationRadius: activeSession.locationRadius || 100,
+        locationAnchor: activeSession.locationAnchor || null,
         faceEnabled: activeSession.faceEnabled,
         quizPublished: activeSession.quizPublished,
         createdAt: activeSession.createdAt,
@@ -127,6 +138,7 @@ router.post('/', authMiddleware, async (req, res) => {
       teacherId,
       classId: classId || null,
       subjectId,
+      subject: subjectId,
       code: sessionCode,
       sessionStatus: 'waiting',
       expiry,
@@ -147,10 +159,18 @@ router.post('/', authMiddleware, async (req, res) => {
     const session = {
       id: sessionId,
       teacherId,
-      classId,
+      classId: classId || null,
       subjectId,
+      subject: subjectId,
       code: sessionCode,
       sessionStatus: 'waiting',
+      expiry,
+      locationEnabled: locationEnabled || false,
+      locationRadius: locationRadius || 100,
+      locationAnchor: locationLat && locationLng ? { lat: locationLat, lng: locationLng } : null,
+      faceEnabled: faceEnabled || false,
+      quizPublished: false,
+      createdAt: sessionData.createdAt,
     };
 
     broadcastToAll('session-update', { ...session, type: 'created' });
@@ -188,7 +208,7 @@ router.patch('/:id/start', async (req, res) => {
 
     await db.collection(COLLECTIONS.CLASS_SESSIONS).updateOne(
       { _id: new ObjectId(sessionId) },
-      { $set: { sessionStatus: 'active', updatedAt: new Date() } }
+      { $set: { sessionStatus: 'active', startedAt: new Date(), updatedAt: new Date() } }
     );
 
     broadcastToRoom(room, 'session-update', { id: sessionId, sessionStatus: 'active', type: 'started' });
@@ -219,6 +239,73 @@ router.patch('/:id/end', async (req, res) => {
   } catch (error) {
     console.error('End session error:', error);
     res.status(500).json({ error: 'Failed to end session' });
+  }
+});
+
+router.patch('/:id/code', authMiddleware, async (req, res) => {
+  try {
+    const db = await connectToDatabase();
+    const sessionId = req.params.id;
+    const {
+      code,
+      expiresInSeconds = 600,
+      subjectId,
+      locationRadius,
+      locationLat,
+      locationLng,
+    } = req.body;
+
+    const session = await db.collection(COLLECTIONS.CLASS_SESSIONS).findOne({ _id: new ObjectId(sessionId) });
+    if (!session) {
+      return res.status(404).json({ error: 'Session not found' });
+    }
+
+    const nextCode = code || `SESSION-${Date.now().toString(36).toUpperCase()}`;
+    const expiry = new Date(Date.now() + Number(expiresInSeconds) * 1000);
+    const update = {
+      code: nextCode,
+      expiry,
+      updatedAt: new Date(),
+      subjectId: subjectId || session.subjectId,
+      subject: subjectId || session.subject || session.subjectId,
+      locationRadius: locationRadius || session.locationRadius || 100,
+      locationAnchor: locationLat && locationLng
+        ? { lat: locationLat, lng: locationLng }
+        : session.locationAnchor || null,
+    };
+
+    await db.collection(COLLECTIONS.CLASS_SESSIONS).updateOne(
+      { _id: new ObjectId(sessionId) },
+      { $set: update }
+    );
+
+    const updatedSession = await db.collection(COLLECTIONS.CLASS_SESSIONS).findOne({ _id: new ObjectId(sessionId) });
+
+    broadcastToRoom(`session-${sessionId}`, 'session-update', {
+      id: sessionId,
+      code: nextCode,
+      expiry,
+      sessionStatus: updatedSession?.sessionStatus || session.sessionStatus,
+      type: 'code-updated',
+    });
+    broadcastToAll('session-update', {
+      id: sessionId,
+      code: nextCode,
+      expiry,
+      sessionStatus: updatedSession?.sessionStatus || session.sessionStatus,
+      type: 'code-updated',
+    });
+
+    res.json({
+      ok: true,
+      session: {
+        ...updatedSession,
+        id: updatedSession?._id?.toString() || sessionId,
+      },
+    });
+  } catch (error) {
+    console.error('Regenerate session code error:', error);
+    res.status(500).json({ error: 'Failed to regenerate session code' });
   }
 });
 

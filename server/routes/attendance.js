@@ -22,7 +22,7 @@ const parsePagination = (query) => {
 };
 
 const validateQueryParams = (req, res, next) => {
-  const { studentId, classId, status, startDate, endDate } = req.query;
+  const { studentId, classId, sessionId, status, startDate, endDate } = req.query;
   
   if (studentId) {
     const validation = validators.isMongoId(studentId, 'studentId');
@@ -34,6 +34,12 @@ const validateQueryParams = (req, res, next) => {
     const validation = validators.isMongoId(classId, 'classId');
     if (!validation.isValid()) {
       return res.status(400).json({ error: 'Invalid classId format' });
+    }
+  }
+  if (sessionId) {
+    const validation = validators.isMongoId(sessionId, 'sessionId');
+    if (!validation.isValid()) {
+      return res.status(400).json({ error: 'Invalid sessionId format' });
     }
   }
   if (status && !['Present', 'Absent', 'Late', 'Excused'].includes(status)) {
@@ -110,12 +116,13 @@ async function verifyFaceWithApi(userId, faceImage, sessionId, classId, faceDesc
 router.get('/', authMiddleware, validateQueryParams, async (req, res) => {
   try {
     const db = await connectToDatabase();
-    const { studentId, classId, status, startDate, endDate } = req.query;
+    const { studentId, classId, sessionId, status, startDate, endDate } = req.query;
     const { pageNum, limitNum, skip } = req.pagination;
     
     const filter = {};
     if (studentId) filter.studentId = studentId;
     if (classId) filter.classId = classId;
+    if (sessionId) filter.sessionId = new ObjectId(sessionId);
     if (status) filter.status = status;
     if (startDate || endDate) {
       filter.timestamp = {};

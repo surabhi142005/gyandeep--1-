@@ -83,6 +83,39 @@ const App: React.FC = () => {
     const [voiceEnabled, setVoiceEnabled] = useLocalStorage('gyandeep-voice-enabled', false);
     const [darkMode, setDarkMode] = useLocalStorage('gyandeep-dark-mode', false);
     const [currentLocale, setCurrentLocale] = useState('en');
+
+    // Sync preferences to server
+    useEffect(() => {
+        if (!currentUser) return;
+        
+        const timer = setTimeout(() => {
+            updateUserPreferences(currentUser.id, {
+                theme,
+                highContrast,
+                fontScale,
+                reducedMotion,
+                screenReaderHints,
+                voiceEnabled,
+                darkMode
+            }).catch(err => console.error('Failed to sync preferences:', err));
+        }, 2000); // Debounce
+        
+        return () => clearTimeout(timer);
+    }, [theme, highContrast, fontScale, reducedMotion, screenReaderHints, voiceEnabled, darkMode, currentUser]);
+
+    // Update local preferences when currentUser changes (e.g. after login)
+    useEffect(() => {
+        if (currentUser?.preferences) {
+            const prefs = currentUser.preferences;
+            if (prefs.theme) setTheme(prefs.theme);
+            if (prefs.highContrast !== undefined) setHighContrast(prefs.highContrast);
+            if (prefs.fontScale) setFontScale(prefs.fontScale);
+            if (prefs.reducedMotion !== undefined) setReducedMotion(prefs.reducedMotion);
+            if (prefs.screenReaderHints !== undefined) setScreenReaderHints(prefs.screenReaderHints);
+            if (prefs.voiceEnabled !== undefined) setVoiceEnabled(prefs.voiceEnabled);
+            if (prefs.darkMode !== undefined) setDarkMode(prefs.darkMode);
+        }
+    }, [currentUser?.id, setDarkMode, setFontScale, setHighContrast, setReducedMotion, setScreenReaderHints, setTheme, setVoiceEnabled]);
     const [showProfile, setShowProfile] = useState(false);
     const [showLanding, setShowLanding] = useState(true);
     const [routePath, setRoutePath] = useState(getCurrentPath);
@@ -173,12 +206,10 @@ const App: React.FC = () => {
                     setIsSetupComplete(false);
                     setCurrentUser(null);
                     try {
-                        localStorage.removeItem('gyandeep_setup_complete');
-                        localStorage.removeItem('gyandeep_current_user');
-                        localStorage.removeItem('gyandeep_token');
-                    } catch (storageError) {
-                        console.warn('Failed to clear stale setup state:', storageError);
-                    }
+                    localStorage.removeItem('gyandeep_setup_complete');
+                    localStorage.removeItem('gyandeep_current_user');
+                    localStorage.removeItem('gyandeep_token');
+                    sessionStorage.removeItem('gyandeep_current_user');
                 }
             } catch (err) {
                 console.warn('Initial setup check failed (backend might be offline):', err);

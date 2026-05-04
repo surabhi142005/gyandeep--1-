@@ -9,6 +9,7 @@ import multer from 'multer';
 import { ObjectId } from 'mongodb';
 import { connectToDatabase, COLLECTIONS } from '../db/mongoAtlas.js';
 import { authMiddleware } from '../middleware/auth.js';
+import { broadcast } from '../websocket.js';
 
 const multerStorage = multer.memoryStorage();
 
@@ -61,13 +62,14 @@ router.post('/upload', authMiddleware, handleUpload, async (req, res) => {
     const R2_CONFIGURED = process.env.R2_ACCOUNT_ID && process.env.R2_ACCESS_KEY_ID;
     const CLOUDINARY_CONFIGURED = process.env.CLOUDINARY_CLOUD_NAME && process.env.CLOUDINARY_API_KEY;
 
+    let result;
     if (R2_CONFIGURED) {
       const { uploadFile } = await import('../lib/storage.js');
       const timestamp = Date.now();
       const safeName = file.originalname.replace(/[^a-zA-Z0-9.-]/g, '_');
       const key = `uploads/${classId || 'shared'}/${subjectId || 'general'}/${timestamp}-${safeName}`;
       
-      const result = await uploadFile(file.buffer, key, file.mimetype);
+      result = await uploadFile(file.buffer, key, file.mimetype);
       
       const db = await connectToDatabase();
       const note = {
@@ -90,6 +92,13 @@ router.post('/upload', authMiddleware, handleUpload, async (req, res) => {
       
       await db.collection(COLLECTIONS.SESSION_NOTES).insertOne(note);
       
+      broadcast('note_uploaded', {
+        id: note._id.toString(),
+        title: note.title,
+        subject: note.subject,
+        url: note.url,
+      }, classId ? `class:${classId}` : null);
+
       return res.json({
         ok: true,
         id: note._id.toString(),
@@ -103,7 +112,7 @@ router.post('/upload', authMiddleware, handleUpload, async (req, res) => {
       const safeName = file.originalname.replace(/[^a-zA-Z0-9.-]/g, '_');
       const key = `uploads/${classId || 'shared'}/${subjectId || 'general'}/${timestamp}-${safeName}`;
       
-      const result = await uploadFile(file.buffer, key, file.mimetype);
+      result = await uploadFile(file.buffer, key, file.mimetype);
       
       const db = await connectToDatabase();
       const note = {
@@ -127,6 +136,13 @@ router.post('/upload', authMiddleware, handleUpload, async (req, res) => {
       
       await db.collection(COLLECTIONS.SESSION_NOTES).insertOne(note);
       
+      broadcast('note_uploaded', {
+        id: note._id.toString(),
+        title: note.title,
+        subject: note.subject,
+        url: note.url,
+      }, classId ? `class:${classId}` : null);
+
       return res.json({
         ok: true,
         id: note._id.toString(),
@@ -161,6 +177,13 @@ router.post('/upload', authMiddleware, handleUpload, async (req, res) => {
     
     await db.collection(COLLECTIONS.SESSION_NOTES).insertOne(note);
     
+    broadcast('note_uploaded', {
+      id: note._id.toString(),
+      title: note.title,
+      subject: note.subject,
+      url: dataUrl,
+    }, classId ? `class:${classId}` : null);
+
     res.json({
       ok: true,
       id: note._id.toString(),
@@ -208,6 +231,12 @@ router.post('/centralized', authMiddleware, handleUpload, async (req, res) => {
     
     await db.collection(COLLECTIONS.CENTRALIZED_NOTES).insertOne(note);
     
+    broadcast('centralized_note_uploaded', {
+      id: note._id.toString(),
+      title: note.title,
+      subjectId: note.subjectId,
+    }, classId ? `class:${classId}` : null);
+
     res.status(201).json({
       ok: true,
       id: note._id.toString(),

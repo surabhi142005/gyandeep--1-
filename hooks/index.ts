@@ -14,3 +14,4 @@ export { useTeacherSession } from './useTeacherSession';
 export { useQuizWorker } from './useQuizWorker';
 export { useLiveNotifications, type Notification } from './useLiveNotifications';
 export { useSessionPersistence } from './useSessionPersistence';
+export { useLiveNotes } from './useLiveNotes';

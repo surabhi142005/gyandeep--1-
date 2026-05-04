@@ -38,6 +38,10 @@ export function useClassSession({ allUsers, allSubjects, currentUserId }: UseCla
     id: '',
     code: null,
     expiry: null,
+    startedAt: null,
+    endedAt: null,
+    isActive: false,
+    sessionStatus: 'ended',
     notes: null,
     quiz: null,
     quizPublished: false,
@@ -76,7 +80,7 @@ export function useClassSession({ allUsers, allSubjects, currentUserId }: UseCla
       allSubjects[0]?.name || 'Math';
     setClassSession({
       id: '',
-      code: null, expiry: null, notes: null, quiz: null,
+      code: null, expiry: null, startedAt: null, endedAt: null, isActive: false, sessionStatus: 'ended', notes: null, quiz: null,
       quizPublished: false, subject: defaultSubject,
       teacherLocation: null, attendanceRadius: 100,
     });
@@ -118,7 +122,7 @@ export function useClassSession({ allUsers, allSubjects, currentUserId }: UseCla
   const resetSession = () => {
     setClassSession({
       id: '',
-      code: null, expiry: null, notes: null, quiz: null,
+      code: null, expiry: null, startedAt: null, endedAt: null, isActive: false, sessionStatus: 'ended', notes: null, quiz: null,
       quizPublished: false,
       subject: allSubjects[0]?.name || 'Math',
       teacherLocation: null, attendanceRadius: 100,

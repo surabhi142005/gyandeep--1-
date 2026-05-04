@@ -13,6 +13,7 @@ interface FileUploadProps {
   uploadEndpoint?: string;
   className?: string;
   disabled?: boolean;
+  metadata?: Record<string, string>;
 }
 
 interface UploadedFile {
@@ -42,6 +43,7 @@ export const FileUpload: React.FC<FileUploadProps> = ({
   uploadEndpoint = '/api/storage/upload',
   className = '',
   disabled = false,
+  metadata,
 }) => {
   const [files, setFiles] = useState<UploadedFile[]>([]);
   const [isDragging, setIsDragging] = useState(false);
@@ -84,6 +86,12 @@ export const FileUpload: React.FC<FileUploadProps> = ({
       try {
         const formData = new FormData();
         formData.append('file', uploadedFile.file);
+        
+        if (metadata) {
+          Object.entries(metadata).forEach(([key, value]) => {
+            formData.append(key, value);
+          });
+        }
 
         const token = getStoredToken();
         const apiBase = import.meta.env.VITE_API_URL || '';
@@ -124,7 +132,7 @@ export const FileUpload: React.FC<FileUploadProps> = ({
         abortControllers.current.delete(uploadedFile.id);
       }
     },
-    [uploadEndpoint, onError]
+    [uploadEndpoint, onError, metadata]
   );
 
   const handleFiles = useCallback(
