@@ -97,7 +97,8 @@ ${notesText.slice(0, 8000)}`;
     const rawResponse = await callAI(quizPrompt, {
       temperature: 0.3,
       maxTokens: 4096,
-      jsonMode: true
+      jsonMode: true,
+      purpose: 'content'
     });
 
     const quiz = parseQuizResponse(rawResponse, normalizedCount);
@@ -181,7 +182,7 @@ Subject: [your subject line here]
 ---
 [your email body here]`;
 
-    const reply = await callAI(emailPrompt, { temperature: 0.5, maxTokens: 1024 });
+    const reply = await callAI(emailPrompt, { temperature: 0.5, maxTokens: 1024, purpose: 'content' });
     const [subjectLine, ...bodyParts] = reply.split('---');
 
     res.json({
@@ -251,7 +252,7 @@ Max Score: ${questionMaxScore}
 Respond ONLY with a JSON object:
 { "score": number, "feedback": "string", "comment": "string" }`;
 
-      const response = await callAI(gradingPrompt, { temperature: 0.2, maxTokens: 512, jsonMode: true });
+      const response = await callAI(gradingPrompt, { temperature: 0.2, maxTokens: 512, jsonMode: true, purpose: 'content' });
       const parsed = parseAIJson(response);
       const score = Math.min(questionMaxScore, Math.max(0, parsed.score || 0));
       totalScore += score;
@@ -351,7 +352,7 @@ ${text.slice(0, 8000)}
 ${modeInstructions[mode] || modeInstructions.bullets}
 
 Keep the summary concise and educational.`,
-      { temperature: 0.5, maxTokens: 2048 }
+      { temperature: 0.5, maxTokens: 2048, purpose: 'content' }
     );
 
     res.json({ result, success: true });

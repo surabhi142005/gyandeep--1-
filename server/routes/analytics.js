@@ -36,7 +36,8 @@ Format your response ONLY as a JSON array of objects:
       const text = await callAI(prompt, {
         temperature: 0.4,
         maxTokens: 1024,
-        jsonMode: true
+        jsonMode: true,
+        purpose: 'analytics'
       });
       const insights = parseAIJson(text);
       if (Array.isArray(insights) && insights.length > 0) {

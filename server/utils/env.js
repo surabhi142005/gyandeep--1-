@@ -54,8 +54,10 @@ export function loadEnv() {
   }
 
   const missingOptionalProduction = [
-    'AI_API_KEY_GROQ',
-    'AI_API_KEY_GEMINI',
+    'GROQ_API_KEY_CHAT',
+    'GROQ_API_KEY_CONTENT',
+    'GROQ_API_KEY_ANALYTICS',
+    'GEMINI_API_KEY',
     'CLOUDINARY_CLOUD_NAME',
     'CLOUDINARY_API_KEY',
     'CLOUDINARY_API_SECRET',
