@@ -48,16 +48,24 @@ console.log('[AI] Env check - GROQ_BASE_URL:', process.env.GROQ_BASE_URL || 'not
 console.log('[AI] Env check - GEMINI_API_KEY present:', !!process.env.GEMINI_API_KEY);
 
 // ── Initialize clients ─────────────────────────────────────────
+// Clean baseURL if it ends with /openai/v1 to prevent duplication by the SDK
+const rawBaseUrl = process.env.GROQ_BASE_URL || 'https://api.groq.com';
+const GROQ_BASE_URL = rawBaseUrl.replace(/\/openai\/v1\/?$/, '');
+
+if (process.env.GROQ_BASE_URL) {
+  console.log('[AI] Using custom GROQ_BASE_URL (cleaned):', GROQ_BASE_URL);
+}
+
 const groqChatClient = HAS_GROQ_CHAT
-  ? new Groq({ apiKey: process.env.GROQ_API_KEY_CHAT.trim(), baseURL: process.env.GROQ_BASE_URL })
+  ? new Groq({ apiKey: process.env.GROQ_API_KEY_CHAT.trim(), baseURL: GROQ_BASE_URL })
   : null;
 
 const groqContentClient = HAS_GROQ_CONTENT
-  ? new Groq({ apiKey: process.env.GROQ_API_KEY_CONTENT.trim(), baseURL: process.env.GROQ_BASE_URL })
+  ? new Groq({ apiKey: process.env.GROQ_API_KEY_CONTENT.trim(), baseURL: GROQ_BASE_URL })
   : null;
 
 const groqAnalyticsClient = HAS_GROQ_ANALYTICS
-  ? new Groq({ apiKey: process.env.GROQ_API_KEY_ANALYTICS.trim(), baseURL: process.env.GROQ_BASE_URL })
+  ? new Groq({ apiKey: process.env.GROQ_API_KEY_ANALYTICS.trim(), baseURL: GROQ_BASE_URL })
   : null;
 
 const geminiClient = HAS_GEMINI
