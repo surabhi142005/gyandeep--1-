@@ -19,10 +19,12 @@ type RegisterableRole = UserRoleEnum.STUDENT | UserRoleEnum.TEACHER;
 const REGISTERABLE_ROLES: RegisterableRole[] = [UserRoleEnum.STUDENT, UserRoleEnum.TEACHER];
 
 const THEME_COLORS: Record<string, Record<string, string>> = {
+  'cosmic-purple': { primary: 'bg-primary', hover: 'hover:brightness-110', text: 'text-primary', ring: 'focus:ring-primary', border: 'border-primary' },
+  'ocean-breeze': { primary: 'bg-primary', hover: 'hover:brightness-110', text: 'text-primary', ring: 'focus:ring-primary', border: 'border-primary' },
+  'forest-gold': { primary: 'bg-primary', hover: 'hover:brightness-110', text: 'text-primary', ring: 'focus:ring-primary', border: 'border-primary' },
+  'midnight-ember': { primary: 'bg-primary', hover: 'hover:brightness-110', text: 'text-primary', ring: 'focus:ring-primary', border: 'border-primary' },
+  'rose-quartz': { primary: 'bg-primary', hover: 'hover:brightness-110', text: 'text-primary', ring: 'focus:ring-primary', border: 'border-primary' },
   indigo: { primary: 'bg-indigo-600', hover: 'hover:bg-indigo-700', text: 'text-indigo-600', ring: 'focus:ring-indigo-500', border: 'border-indigo-500' },
-  teal: { primary: 'bg-teal-600', hover: 'hover:bg-teal-700', text: 'text-teal-600', ring: 'focus:ring-teal-500', border: 'border-teal-500' },
-  crimson: { primary: 'bg-red-600', hover: 'hover:bg-red-700', text: 'text-red-600', ring: 'focus:ring-red-500', border: 'border-red-500' },
-  purple: { primary: 'bg-purple-600', hover: 'hover:bg-purple-700', text: 'text-purple-600', ring: 'focus:ring-purple-500', border: 'border-purple-500' },
 };
 
 const normalizeRegisteredUser = (user: any): User => {
@@ -85,7 +87,7 @@ const Register: React.FC<RegisterProps> = ({ onRegister, theme, onNavigateToLogi
     loadClasses();
   }, [role]);
 
-  const colors = useMemo(() => THEME_COLORS[theme] || THEME_COLORS.indigo, [theme]);
+  const colors = useMemo(() => THEME_COLORS[theme] || THEME_COLORS['cosmic-purple'], [theme]);
 
   const handleRegister = async () => {
     setError(null);

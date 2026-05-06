@@ -21,6 +21,9 @@
       (function() {
         try {
           var theme = localStorage.getItem('gyandeep-theme') || 'cosmic-purple';
+          if (theme.startsWith('"')) {
+            try { theme = JSON.parse(theme); } catch(e) {}
+          }
           document.documentElement.setAttribute('data-theme', theme);
           var darkRaw = localStorage.getItem('gyandeep-dark-mode');
           var dark = darkRaw ? JSON.parse(darkRaw) : false;

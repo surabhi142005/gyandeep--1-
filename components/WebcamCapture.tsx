@@ -10,10 +10,12 @@ interface WebcamCaptureProps {
 }
 
 const THEME_COLORS: Record<string, Record<string, string>> = {
+  'cosmic-purple': { primary: 'bg-primary', hover: 'hover:brightness-110', text: 'text-primary' },
+  'ocean-breeze': { primary: 'bg-primary', hover: 'hover:brightness-110', text: 'text-primary' },
+  'forest-gold': { primary: 'bg-primary', hover: 'hover:brightness-110', text: 'text-primary' },
+  'midnight-ember': { primary: 'bg-primary', hover: 'hover:brightness-110', text: 'text-primary' },
+  'rose-quartz': { primary: 'bg-primary', hover: 'hover:brightness-110', text: 'text-primary' },
   indigo: { primary: 'bg-indigo-600', hover: 'hover:bg-indigo-700' },
-  teal: { primary: 'bg-teal-600', hover: 'hover:bg-teal-700' },
-  crimson: { primary: 'bg-red-600', hover: 'hover:bg-red-700' },
-  purple: { primary: 'bg-purple-600', hover: 'hover:bg-purple-700' },
 };
 
 const WebcamCapture: React.FC<WebcamCaptureProps> = ({ onCapture, onClose, theme, title = 'Capture', buttonText = 'Capture', liveness = false }) => {
@@ -25,7 +27,7 @@ const WebcamCapture: React.FC<WebcamCaptureProps> = ({ onCapture, onClose, theme
   const [livenessSteps, setLivenessSteps] = useState<string[]>([]);
   const [capturedFrames, setCapturedFrames] = useState<string[]>([]);
 
-  const colors = useMemo(() => THEME_COLORS[theme] || THEME_COLORS.indigo, [theme]);
+  const colors = useMemo(() => THEME_COLORS[theme] || THEME_COLORS['cosmic-purple'], [theme]);
 
   const startWebcam = useCallback(async () => {
     try {

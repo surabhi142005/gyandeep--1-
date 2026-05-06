@@ -130,7 +130,7 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({
   student, classSession, onMarkAttendance, onUpdatePerformance, 
   onLogout, onShowNotification, theme, onUpdateFaceImage, 
   historicalSessions, allStudents = [], announcements = [], 
-  onUpdateSession, allUsers, allSubjects, allClasses,
+  onUpdateSession, allUsers, allSubjects, allClasses, onThemeChange
   }) => {
   // Real-time notes
   const { newNotes } = useLiveNotes(student.classId || undefined, classSession.id || undefined);
@@ -382,6 +382,7 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({
       onLogout={onLogout}
       onShowProfile={() => setActiveTab('profile')}
       theme={theme}
+      onThemeChange={onThemeChange}
     >
       <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
         {/* Gamification Bar */}
@@ -943,6 +944,7 @@ interface StudentDashboardProps {
   allUsers: AnyUser[];
   allSubjects: any[];
   allClasses: any[];
+  onThemeChange?: (theme: string) => void;
 }
 
 export default StudentDashboard;

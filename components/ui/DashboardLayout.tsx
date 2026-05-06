@@ -229,7 +229,7 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({
         <header 
           className="sticky top-0 z-30 h-16 flex items-center justify-between px-4 md:px-6 backdrop-blur-md transition-all duration-300"
           style={{
-            backgroundColor: 'rgba(255, 255, 255, 0.85)',
+            backgroundColor: 'var(--color-surface)',
             borderBottom: '1px solid var(--color-border)'
           }}
         >

@@ -66,7 +66,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
   teacher, students, attendance, classSession, onUpdateSession, 
   onLogout, theme, onUpdateFaceImage, historicalRecords, 
   onUpdateHistoricalRecords, allSubjects, allClasses, 
-  announcements = [], onPostAnnouncement, onAttendanceUpdate, onStudentsUpdate, allUsers 
+  announcements = [], onPostAnnouncement, onAttendanceUpdate, onStudentsUpdate, allUsers, onThemeChange
 }) => {
   const [activeTab, setActiveTab] = useState('session');
   const [error, setError] = useState<string | null>(null);
@@ -482,6 +482,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
       onLogout={onLogout}
       onShowProfile={() => setShowFaceRegistration(true)}
       theme={theme}
+      onThemeChange={onThemeChange}
     >
       {activeTab === 'session' && (
         <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">

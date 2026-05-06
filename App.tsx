@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect, lazy, Suspense } from 'react';
+import React, { useState, useMemo, useEffect, lazy, Suspense, useRef } from 'react';
 import type { Student, Teacher, AnyUser, Admin, SubjectConfig, ClassConfig } from './types';
 import { UserRole as UserRoleEnum } from './types';
 import Login from './components/Login';
@@ -164,11 +164,15 @@ function App() {
         return () => clearTimeout(timer);
     }, [theme, highContrast, fontScale, reducedMotion, screenReaderHints, voiceEnabled, darkMode, currentUser]);
 
-    // Update local preferences when currentUser changes (e.g. after login)
+    // Sync preferences from server only on first load (not when user manually changes)
+    const preferencesSynced = useRef(false);
     useEffect(() => {
-        if (currentUser?.preferences) {
+        if (currentUser?.preferences && !preferencesSynced.current) {
+            preferencesSynced.current = true;
             const prefs = currentUser.preferences;
-            if (prefs.theme) setTheme(prefs.theme);
+            // Only sync theme if user hasn't manually set one in localStorage
+            const savedTheme = localStorage.getItem('gyandeep-theme');
+            if (!savedTheme && prefs.theme) setTheme(prefs.theme);
             if (prefs.highContrast !== undefined) setHighContrast(prefs.highContrast);
             if (prefs.fontScale) setFontScale(prefs.fontScale);
             if (prefs.reducedMotion !== undefined) setReducedMotion(prefs.reducedMotion);
@@ -178,10 +182,7 @@ function App() {
         }
     }, [currentUser?.id, setDarkMode, setFontScale, setHighContrast, setReducedMotion, setScreenReaderHints, setTheme, setVoiceEnabled]);
 
-    // Apply theme to document
-    useEffect(() => {
-        document.documentElement.setAttribute('data-theme', theme);
-    }, [theme]);
+    // Apply theme to document (handled by useThemeEngine)
 
     // Delay LiquidChrome to improve LCP
     useEffect(() => {
@@ -448,6 +449,7 @@ function App() {
                         onUpdateSession={handleUpdateSession}
                         onLogout={handleLogoutWithReset}
                         theme={theme}
+                        onThemeChange={setTheme}
                         onUpdateFaceImage={handleUpdateFaceImage}
                         historicalRecords={historicalRecords}
                         onUpdateHistoricalRecords={setHistoricalRecords}
@@ -479,6 +481,7 @@ function App() {
                             onUpdatePerformance={handleUpdatePerformance}
                             onLogout={handleLogoutWithReset}
                             theme={theme}
+                            onThemeChange={setTheme}
                             onShowNotification={showNotification}
                             onUpdateFaceImage={handleUpdateFaceImage}
                             historicalSessions={historicalRecords.filter(rec => rec.notes)}

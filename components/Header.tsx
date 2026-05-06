@@ -106,12 +106,12 @@ const Header: React.FC<HeaderProps> = ({
             <div className="flex items-center gap-4">
               <div className="flex items-center gap-2">
                 <img src="/logo.png" alt="Gyandeep" className="w-8 h-8 sm:w-10 sm:h-10 object-contain drop-shadow-[0_2px_4px_rgba(0,0,0,0.5)]" />
-                <span className="font-bold text-lg bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent hidden sm:block">
+                <span className="font-bold text-lg bg-gradient-to-r from-[var(--color-primary)] to-[var(--color-secondary)] bg-clip-text text-transparent hidden sm:block">
                   Gyandeep
                 </span>
               </div>
               <div className="hidden md:flex items-center gap-1 ml-4">
-                <span className="px-3 py-1.5 text-sm font-medium text-indigo-700 bg-indigo-50 rounded-lg">
+                <span className="px-3 py-1.5 text-sm font-medium text-[var(--color-primary)] bg-[var(--color-primary-10)] rounded-lg">
                   {user.role === 'teacher' ? t('Teacher') : user.role === 'admin' ? t('Admin') : t('Student')}
                 </span>
               </div>
@@ -179,7 +179,7 @@ const Header: React.FC<HeaderProps> = ({
                                 key={t_item.id}
                                 onClick={() => onThemeChange(t_item.id)}
                                 title={t(t_item.label)}
-                                className={`flex flex-col items-center gap-1 p-2 rounded-xl transition-all ${theme === t_item.id ? 'bg-gray-100 ring-2 ring-indigo-400' : 'hover:bg-gray-50'}`}
+                                className={`flex flex-col items-center gap-1 p-2 rounded-xl transition-all ${theme === t_item.id ? 'bg-[var(--color-primary-10)] ring-2 ring-[var(--color-primary)]' : 'hover:bg-gray-50'}`}
                               >
                                 <span className={`w-5 h-5 rounded-full ${t_item.color}`} />
                                 <span className="text-[10px] text-gray-600">{t(t_item.label)}</span>
@@ -200,12 +200,12 @@ const Header: React.FC<HeaderProps> = ({
                                 <button
                                   key={l.id}
                                   onClick={() => { onLocaleChange(l.id); setSettingsOpen(false); }}
-                                  className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl text-sm transition-colors ${locale === l.id ? 'bg-indigo-50 text-indigo-700 font-semibold' : 'text-gray-700 hover:bg-gray-50'}`}
+                                  className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl text-sm transition-colors ${locale === l.id ? 'bg-[var(--color-primary-10)] text-[var(--color-primary)] font-semibold' : 'text-gray-700 hover:bg-gray-50'}`}
                                 >
                                   <span>{l.flag}</span>
                                   <span>{l.label}</span>
                                   {locale === l.id && (
-                                    <svg className="w-4 h-4 ml-auto text-indigo-500" fill="currentColor" viewBox="0 0 20 20">
+                                    <svg className="w-4 h-4 ml-auto text-[var(--color-primary)]" fill="currentColor" viewBox="0 0 20 20">
                                       <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
                                     </svg>
                                   )}

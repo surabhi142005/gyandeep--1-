@@ -19,4 +19,5 @@ export interface TeacherDashboardProps {
   onAttendanceUpdate?: (newAttendance: AttendanceRecord) => void;
   onStudentsUpdate?: (students: Student[]) => void;
   allUsers: AnyUser[];
+  onThemeChange?: (theme: string) => void;
 }
