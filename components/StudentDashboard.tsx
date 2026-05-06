@@ -24,6 +24,7 @@ import {
   Download
 } from 'lucide-react';
 import type { Student, ClassSession, HistoricalSessionRecord, AnyUser } from '../types';
+import { useLiveNotes } from '../hooks';
 import Timetable from './Timetable';
 import WebcamCapture from './WebcamCapture';
 import StudentFaceRegistration from './StudentFaceRegistration';
