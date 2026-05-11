@@ -20,20 +20,21 @@ async function handleQuizGeneration(req, res) {
     const quizPrompt = `Generate exactly ${normalizedCount} multiple choice quiz questions based on the following study content about ${subject || 'the topic'}.
 
 Strict requirements:
-- Return ONLY a JSON array
-- No markdown
-- No code fences
-- Each question must include exactly 4 options
-- correctAnswer must exactly match one of the options
+- Return ONLY a JSON array of objects
+- DO NOT wrap the array in an object (e.g., no { "questions": [...] })
+- No markdown formatting, no backticks, no code fences
+- Each question must have exactly 4 options
+- "correctAnswer" must match one of the strings in the "options" array exactly
+- Do not include any text outside the JSON array
 
-JSON format:
+Example structure:
 [
   {
     "id": "q1",
-    "question": "Question text?",
-    "options": ["Option A", "Option B", "Option C", "Option D"],
-    "correctAnswer": "Option A",
-    "explanation": "Short explanation"
+    "question": "What is 2+2?",
+    "options": ["3", "4", "5", "6"],
+    "correctAnswer": "4",
+    "explanation": "Simple arithmetic."
   }
 ]
 
@@ -86,6 +87,12 @@ function parseQuizResponse(rawResponse, count) {
     const arrayKey = Object.keys(quiz).find(key => Array.isArray(quiz[key]));
     if (arrayKey) {
       quiz = quiz[arrayKey];
+    } else {
+      // Maybe it's an object where values are the questions?
+      const values = Object.values(quiz);
+      if (values.length > 0 && values.every(v => v && typeof v === 'object' && v.question)) {
+        quiz = values;
+      }
     }
   }
 
@@ -93,10 +100,13 @@ function parseQuizResponse(rawResponse, count) {
     throw new Error('AI did not return any quiz questions.');
   }
 
-  return quiz.slice(0, count).map((question, index) => {
+  const validQuestions = [];
+  quiz.forEach((question, index) => {
     const options = Array.isArray(question.options) ? question.options.filter(Boolean).slice(0, 4) : [];
+    
     if (!question.question || options.length < 2) {
-      throw new Error(`AI returned invalid data for question ${index + 1}.`);
+      console.warn(`[Quiz] Malformed question at index ${index}:`, JSON.stringify(question).substring(0, 200));
+      return; // Skip this one
     }
 
     let correctAnswer = question.correctAnswer;
@@ -104,14 +114,21 @@ function parseQuizResponse(rawResponse, count) {
       correctAnswer = options[0];
     }
 
-    return {
-      id: question.id || `q${index + 1}`,
+    validQuestions.push({
+      id: question.id || `q${validQuestions.length + 1}`,
       question: question.question,
       options,
       correctAnswer,
       explanation: question.explanation || ''
-    };
+    });
   });
+
+  if (validQuestions.length === 0) {
+    console.error('[Quiz] All generated questions were invalid. Raw:', rawResponse.substring(0, 500));
+    throw new Error('AI returned invalid data format for all questions.');
+  }
+
+  return validQuestions.slice(0, count);
 }
 
 router.post('/generate', authMiddleware, handleQuizGeneration);
