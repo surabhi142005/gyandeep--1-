@@ -2,8 +2,140 @@ import express from 'express';
 import { ObjectId } from 'mongodb';
 import { connectToDatabase, COLLECTIONS } from '../db/mongoAtlas.js';
 import { authMiddleware } from '../middleware/auth.js';
+import { callAI, parseAIJson } from '../services/aiService.js';
 
 const router = express.Router();
+
+// ── QUIZ GENERATION (AI-POWERED) ───────────────────────────────
+
+async function handleQuizGeneration(req, res) {
+  try {
+    const { notesText, subject, count = 10, sessionId, classId, title } = req.body;
+    const normalizedCount = Math.min(20, Math.max(1, Number(count) || 10));
+
+    if (!notesText || !notesText.trim()) {
+      return res.status(400).json({ error: 'Notes text is required' });
+    }
+
+    const quizPrompt = `Generate exactly ${normalizedCount} multiple choice quiz questions based on the following study content about ${subject || 'the topic'}.
+
+Strict requirements:
+- Return ONLY a JSON array
+- No markdown
+- No code fences
+- Each question must include exactly 4 options
+- correctAnswer must exactly match one of the options
+
+JSON format:
+[
+  {
+    "id": "q1",
+    "question": "Question text?",
+    "options": ["Option A", "Option B", "Option C", "Option D"],
+    "correctAnswer": "Option A",
+    "explanation": "Short explanation"
+  }
+]
+
+Study content:
+${notesText.slice(0, 8000)}`;
+
+    const rawResponse = await callAI(quizPrompt, {
+      temperature: 0.3,
+      maxTokens: 4096,
+      jsonMode: true,
+      purpose: 'content'
+    });
+
+    const quiz = parseQuizResponse(rawResponse, normalizedCount);
+
+    // Save quiz to MongoDB
+    let quizId = null;
+    try {
+      const db = await connectToDatabase();
+      const quizDoc = {
+        sessionId: sessionId || null,
+        classId: classId || null,
+        title: title || `${subject || 'Quiz'} - ${new Date().toLocaleDateString()}`,
+        questions: quiz,
+        published: false,
+        createdBy: req.user?.id || null,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      };
+      const result = await db.collection(COLLECTIONS.QUIZZES).insertOne(quizDoc);
+      quizId = result.insertedId.toString();
+    } catch (dbErr) {
+      console.warn('[Quiz] Failed to save to database:', dbErr.message);
+    }
+
+    res.json({ quiz, subject, count: quiz.length, quizId, saved: !!quizId });
+  } catch (error) {
+    console.error('Quiz generation error:', error);
+    res.status(error.status || 500).json({ error: error.message || 'Failed to generate quiz' });
+  }
+}
+
+function parseQuizResponse(rawResponse, count) {
+  const quiz = parseAIJson(rawResponse);
+  if (!Array.isArray(quiz) || quiz.length === 0) {
+    throw new Error('AI did not return any quiz questions.');
+  }
+
+  return quiz.slice(0, count).map((question, index) => {
+    const options = Array.isArray(question.options) ? question.options.filter(Boolean).slice(0, 4) : [];
+    if (!question.question || options.length < 2) {
+      throw new Error(`AI returned invalid data for question ${index + 1}.`);
+    }
+
+    let correctAnswer = question.correctAnswer;
+    if (!options.includes(correctAnswer)) {
+      correctAnswer = options[0];
+    }
+
+    return {
+      id: question.id || `q${index + 1}`,
+      question: question.question,
+      options,
+      correctAnswer,
+      explanation: question.explanation || ''
+    };
+  });
+}
+
+router.post('/generate', authMiddleware, handleQuizGeneration);
+router.post('/', authMiddleware, handleQuizGeneration);
+
+router.post('/publish-to-class', authMiddleware, async (req, res) => {
+  try {
+    const db = await connectToDatabase();
+    const { title, questions, classId, subject } = req.body;
+
+    if (!classId || !questions) {
+      return res.status(400).json({ error: 'classId and questions are required' });
+    }
+
+    const quiz = {
+      classId: classId,
+      questions,
+      title: title || 'Class Quiz',
+      subject: subject || 'General',
+      published: true,
+      publishedAt: new Date(),
+      createdBy: req.user?.id || null,
+      _id: new ObjectId(),
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+
+    await db.collection(COLLECTIONS.QUIZZES).insertOne(quiz);
+
+    res.status(201).json({ ok: true, quiz: { ...quiz, id: quiz._id.toString() } });
+  } catch (error) {
+    console.error('Publish to class error:', error);
+    res.status(500).json({ error: 'Failed to publish quiz to class' });
+  }
+});
 
 router.get('/available/:classId', authMiddleware, async (req, res) => {
   try {

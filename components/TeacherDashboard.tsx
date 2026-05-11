@@ -82,8 +82,13 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
   const { generateQuiz: generateQuizWorker, isGenerating: workerGenerating, progress: workerProgress, error: workerError } = useQuizWorker();
   const [isGeneratingQuiz, setIsGeneratingQuiz] = useState(false);
   const [quizTopic, setQuizTopic] = useState('');
+  const [selectedClassId, setSelectedClassId] = useState<string>(
+    classSession.classId || 
+    allClasses.find((cls) => cls.teacherId === teacher.id)?.id || 
+    (allClasses.length > 0 ? allClasses[0].id : '')
+  );
   const [generatedQuiz, setGeneratedQuiz] = useState<any[]>([]);
-  const [quizQuestionCount, setQuizQuestionCount] = useState(10);
+  const [quizQuestionCount, setQuizQuestionCount] = useState(5);
   const [isPublishingQuiz, setIsPublishingQuiz] = useState(false);
   const [quizThinkingMode, setQuizThinkingMode] = useState(false);
   const [weeklyAttendance, setWeeklyAttendance] = useState<{ date: string; present: number }[]>([]);
@@ -407,16 +412,16 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
     onUpdateSession,
     historicalRecords,
     teacherId: teacher.id,
-    defaultClassId: teacherPrimaryClassId,
+    defaultClassId: selectedClassId || teacherPrimaryClassId,
   });
 
   const handleStartSession = async () => {
-    if (!selectedSubject) {
+    if (!selectedSubject || selectedSubject === '') {
       setError('Please select a subject first.');
       return;
     }
-    if (!teacherPrimaryClassId) {
-      setError('Assign this teacher to a class before starting a live session.');
+    if (!selectedClassId) {
+      setError('Please select a class before starting a live session.');
       return;
     }
     setError(null);
@@ -503,18 +508,29 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
                <div className="space-y-6">
                   {!classSession.isActive ? (
                     <div className="space-y-4 max-w-md">
-                      <div>
-                        <label className="block text-sm font-bold mb-2 text-gray-700">{t('Select Subject')}</label>
+                        <div className="flex-1">
+                          <label className="block text-xs font-bold uppercase tracking-wider text-gray-400 mb-2">{t('Select Class')}</label>
+                          <select 
+                            value={selectedClassId} 
+                            onChange={e => setSelectedClassId(e.target.value)}
+                            className="w-full p-3 rounded-xl bg-gray-50 dark:bg-gray-800 border border-gray-100 dark:border-gray-700 font-medium focus:ring-2 focus:ring-primary/20 outline-none transition-all"
+                          >
+                            <option value="">{t('Choose a class...')}</option>
+                            {allClasses.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                          </select>
+                        </div>
+                       <div className="flex-1">
+                         <label className="block text-xs font-bold uppercase tracking-wider text-gray-400 mb-2">{t('Subject')}</label>
                         <select 
-                          value={selectedSubject} 
-                          onChange={(e) => setSelectedSubject(e.target.value)}
-                          className="w-full h-12 px-4 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-sm focus:ring-2 focus:ring-primary/20 outline-none transition-all"
-                        >
-                          <option value="">{t('Choose a subject...')}</option>
-                          {allSubjects.filter(s => teacher.assignedSubjects?.includes(s.id)).map(s => (
-                            <option key={s.id} value={s.name}>{s.name}</option>
-                          ))}
-                        </select>
+                           value={selectedSubject} 
+                           onChange={(e) => setSelectedSubject(e.target.value)}
+                           className="w-full h-12 px-4 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-sm focus:ring-2 focus:ring-primary/20 outline-none transition-all"
+                         >
+                           <option value="">{t('Choose a subject...')}</option>
+                           {(teacher.assignedSubjects?.length ? allSubjects.filter(s => teacher.assignedSubjects.includes(s.id)) : allSubjects).map(s => (
+                             <option key={s.id} value={s.name}>{s.name}</option>
+                           ))}
+                         </select>
                       </div>
                       <Button variant="primary" className="w-full h-12 text-lg" onClick={handleStartSession} icon={<Play size={20} />}>
                         {t('Start Live Session')}
@@ -685,6 +701,28 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
                  <h3 className="text-xl font-bold mb-2">{t('AI Quiz Generator')}</h3>
                  <p className="text-gray-500 mb-6">{t('Generate assessment questions instantly using Google Gemini AI.')}</p>
                  <div className="space-y-4">
+                    <div className="grid grid-cols-2 gap-4">
+                       <div className="flex-1">
+                         <label className="block text-xs font-bold uppercase tracking-wider text-gray-400 mb-2">{t('Select Class')}</label>
+                         <select 
+                           value={selectedClassId} 
+                           onChange={e => setSelectedClassId(e.target.value)}
+                           className="w-full h-11 px-4 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-sm font-medium"
+                         >
+                           {allClasses.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                         </select>
+                       </div>
+                       <div className="flex-1">
+                         <label className="block text-xs font-bold uppercase tracking-wider text-gray-400 mb-2">{t('Subject')}</label>
+                         <select 
+                           value={selectedSubject} 
+                           onChange={e => setSelectedSubject(e.target.value)}
+                           className="w-full h-11 px-4 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-sm font-medium"
+                         >
+                           {allSubjects.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                         </select>
+                       </div>
+                    </div>
                     <Input 
                       placeholder={t('Enter topic or paste content...')}
                       value={quizTopic}
@@ -825,6 +863,29 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
                        setIsPublishingQuiz(false);
                      }
                    }} loading={isPublishingQuiz} disabled={!generatedQuiz.length}>{t('Publish Live Quiz')}</Button>
+                   <Button variant="secondary" size="sm" onClick={async () => {
+                     if (!selectedClassId) {
+                       setError(t('Please select a class to publish to.'));
+                       return;
+                     }
+                     if (generatedQuiz.length === 0) return;
+                     setIsPublishingQuiz(true);
+                     try {
+                       const m = await import('../services/dataService');
+                       const response = await m.publishQuizToClass({
+                         title: `${selectedSubject || t('General')} ${t('Quiz')}`,
+                         questions: generatedQuiz,
+                         classId: selectedClassId,
+                         subject: selectedSubject,
+                       });
+                       setSuccessMessage(t('Quiz published to class successfully!'));
+                       setTimeout(() => setSuccessMessage(null), 3000);
+                     } catch (err: any) {
+                       setError(err?.message || t('Failed to publish quiz'));
+                     } finally {
+                       setIsPublishingQuiz(false);
+                     }
+                   }} loading={isPublishingQuiz} disabled={!generatedQuiz.length}>{t('Publish to Class')}</Button>
                    <Button variant="secondary" size="sm" onClick={async () => {
                      try {
                        await import('../services/dataService').then(m => m.upsertQuizToBank(generatedQuiz, selectedSubject));

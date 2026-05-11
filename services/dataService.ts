@@ -883,6 +883,13 @@ export const publishQuiz = async (quizId: string) => {
   });
 };
 
+export const publishQuizToClass = async (payload: { title: string; questions: any[]; classId: string; subject: string }) => {
+  return apiRequest('/api/quiz/publish-to-class', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+};
+
 export const submitStandaloneQuiz = async (quizId: string, answers: Array<{ questionIndex: number; selectedAnswer: string }>) => {
   return apiRequest(`/api/quiz/${quizId}/submit`, {
     method: 'POST',
