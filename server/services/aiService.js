@@ -310,6 +310,9 @@ export async function callAIVision(prompt, imageBase64) {
 // Parse AI JSON response, handling markdown and common issues
 
 export function parseAIJson(text) {
+  if (!text || text.trim() === '') {
+    return [];
+  }
   let clean = text.trim()
     .replace(/^```json\n?/g, '')
     .replace(/^```\n?/g, '')
@@ -325,6 +328,19 @@ export function parseAIJson(text) {
   try {
     return JSON.parse(jsonStr);
   } catch (err) {
+    console.error('[AI] JSON Parse Error:', err.message);
+    console.error('[AI] Attempted to parse:', jsonStr.substring(0, 500));
+    
+    // Final attempt: find anything that looks like an array if the structured match failed
+    if (text.includes('[') && text.includes(']')) {
+       try {
+         const start = text.indexOf('[');
+         const end = text.lastIndexOf(']') + 1;
+         return JSON.parse(text.substring(start, end));
+       } catch (innerErr) {
+         throw new Error('AI returned invalid JSON: ' + err.message + '\nRaw: ' + text.substring(0, 200));
+       }
+    }
     throw new Error('AI returned invalid JSON: ' + err.message + '\nRaw: ' + text.substring(0, 200));
   }
 }

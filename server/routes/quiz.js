@@ -47,7 +47,9 @@ ${notesText.slice(0, 8000)}`;
       purpose: 'content'
     });
 
+    console.log('[Quiz] Raw AI Response Length:', rawResponse?.length || 0);
     const quiz = parseQuizResponse(rawResponse, normalizedCount);
+    console.log('[Quiz] Parsed Questions Count:', quiz?.length || 0);
 
     // Save quiz to MongoDB
     let quizId = null;
@@ -77,7 +79,16 @@ ${notesText.slice(0, 8000)}`;
 }
 
 function parseQuizResponse(rawResponse, count) {
-  const quiz = parseAIJson(rawResponse);
+  let quiz = parseAIJson(rawResponse);
+  
+  // If AI returned an object with a property that is an array (e.g. { "quiz": [...] })
+  if (!Array.isArray(quiz) && typeof quiz === 'object' && quiz !== null) {
+    const arrayKey = Object.keys(quiz).find(key => Array.isArray(quiz[key]));
+    if (arrayKey) {
+      quiz = quiz[arrayKey];
+    }
+  }
+
   if (!Array.isArray(quiz) || quiz.length === 0) {
     throw new Error('AI did not return any quiz questions.');
   }

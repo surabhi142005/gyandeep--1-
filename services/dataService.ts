@@ -1,14 +1,13 @@
 /**
  * dataService.ts
  *
- * All data operations go through the Express API (SQLite backend).
- * No localStorage fallback - requires backend connection.
+ * All data operations go through the Express API (MongoDB/Redis backend).
  */
 
 import { tokenManager } from './tokenManager';
 import { websocketService } from './websocketService';
 import { getCSRFHeaders, getCSRFToken } from './csrfService';
-import type { AnyUser, ClassConfig } from '../types';
+import type { AnyUser, ClassConfig, SubjectConfig } from '../types';
 
 const API_BASE = import.meta.env.VITE_API_URL || '';
 const API_TIMEOUT = 10000;
@@ -34,9 +33,6 @@ const extractArrayPayload = <T>(payload: unknown): T[] => {
 
 /**
  * Fetch with timeout to prevent hanging requests
- * @param url - The URL to fetch
- * @param options - Fetch options
- * @returns Promise<Response>
  */
 function fetchWithTimeout(url: string, options: RequestInit = {}): Promise<Response> {
   const controller = new AbortController();
@@ -93,20 +89,7 @@ async function multipartRequest(path: string, formData: FormData) {
   return body;
 }
 
-// ─── Utility ────────────────────────────────────────────────────────────────
-
-const lsGet = <T>(key: string, defaultValue: T): T => {
-  try {
-    const raw = localStorage.getItem(key);
-    return raw ? JSON.parse(raw) : defaultValue;
-  } catch { return defaultValue; }
-};
-
-const lsSet = (_key: string, _value: unknown) => {
-  // Reserved for future localStorage caching
-};
-
-// ─── Users / Profiles ────────────────────────────────────────────────────────
+// ─── Users & Auth ────────────────────────────────────────────────────────────
 
 export const fetchUsers = async (): Promise<AnyUser[]> => {
   const data = await apiRequest('/api/users', { method: 'GET' });
@@ -114,13 +97,32 @@ export const fetchUsers = async (): Promise<AnyUser[]> => {
 };
 
 export const saveUsers = async (users: any[]) => {
-  return apiRequest('/api/users/bulk', {
+  return apiRequest('/api/admin/save-users', {
     method: 'POST',
     body: JSON.stringify({ users }),
   });
 };
 
-export const bulkImportUsers = async (users: any[]) => saveUsers(users);
+export const bulkImportUsers = async (users: any[]) => {
+  return apiRequest('/api/admin/bulk-import', {
+    method: 'POST',
+    body: JSON.stringify({ users }),
+  });
+};
+
+export const importUsersBulk = async (users: any[], defaultPassword?: string) => {
+  return apiRequest('/api/admin/import-users', {
+    method: 'POST',
+    body: JSON.stringify({ users, defaultPassword }),
+  });
+};
+
+export const importUsersCSV = async (csvData: string, defaultPassword?: string) => {
+  return apiRequest('/api/admin/import-users/csv', {
+    method: 'POST',
+    body: JSON.stringify({ csvData, defaultPassword }),
+  });
+};
 
 export const updateUserProfile = async (userId: string, updates: any) => {
   return apiRequest('/api/users/profile', {
@@ -133,162 +135,6 @@ export const fetchBadges = async (userId: string): Promise<string[]> => {
   const data = await apiRequest(`/api/users/${userId}/badges`, { method: 'GET' });
   return Array.isArray(data?.badges) ? data.badges : [];
 };
-
-// ─── Classes ─────────────────────────────────────────────────────────────────
-
-export const fetchClasses = async (): Promise<ClassConfig[]> => {
-  const data = await apiRequest('/api/classes', { method: 'GET' });
-  return extractArrayPayload<ClassConfig>(data);
-};
-
-export const saveClasses = async (classes: any[]) => {
-  return apiRequest('/api/classes', {
-    method: 'POST',
-    body: JSON.stringify(classes),
-  });
-};
-
-export const assignStudentToClass = async (studentId: string, classId: string | null) => {
-  return apiRequest('/api/classes/assign', {
-    method: 'POST',
-    body: JSON.stringify({ userId: studentId, classId }),
-  });
-};
-
-export const assignUserToClass = async (userId: string, classId: string | null) => {
-  return apiRequest('/api/classes/assign', {
-    method: 'POST',
-    body: JSON.stringify({ userId, classId }),
-  });
-};
-
-// ─── Notes ───────────────────────────────────────────────────────────────────
-
-export const uploadClassNotes = async (params: { classId: string; subjectId: string; content?: string; file?: File }) => {
-  if (params.file) {
-    const formData = new FormData();
-    formData.append('file', params.file);
-    formData.append('classId', params.classId);
-    formData.append('subjectId', params.subjectId);
-    return await multipartRequest('/api/storage/upload', formData) as { ok: boolean; url: string; extractedText?: string };
-  }
-
-  // Text content upload
-  return apiRequest('/api/notes/upload', {
-    method: 'POST',
-    body: JSON.stringify({ classId: params.classId, subjectId: params.subjectId, content: params.content }),
-  });
-};
-
-export const uploadSessionFile = async (params: { classId: string; subjectId: string; file: File; type?: string; userId?: string }) => {
-  const formData = new FormData();
-  formData.append('file', params.file);
-  formData.append('classId', params.classId);
-  formData.append('subjectId', params.subjectId);
-  if (params.type) formData.append('type', params.type);
-  if (params.userId) formData.append('userId', params.userId);
-  return multipartRequest('/api/storage/upload', formData);
-};
-
-export const uploadCentralizedFile = async (params: {
-  classId?: string;
-  subjectId: string;
-  file: File;
-  title?: string;
-  noteType?: string;
-  userId?: string;
-}) => {
-  const formData = new FormData();
-  formData.append('file', params.file);
-  if (params.classId) formData.append('classId', params.classId);
-  formData.append('subjectId', params.subjectId);
-  if (params.title) formData.append('title', params.title);
-  if (params.noteType) formData.append('noteType', params.noteType);
-  if (params.userId) formData.append('userId', params.userId);
-  return multipartRequest('/api/storage/centralized', formData);
-};
-
-export const listClassNotes = async (params: { classId: string; subjectId: string }) => {
-  const qs = new URLSearchParams({ classId: params.classId, subjectId: params.subjectId });
-  return await apiRequest(`/api/notes?${qs.toString()}`, { method: 'GET' });
-};
-
-export const fetchStudentNotes = async (classId: string, subjectId?: string) => {
-  const params = new URLSearchParams();
-  if (subjectId) params.set('subjectId', subjectId);
-  const query = params.toString();
-  return apiRequest(`/api/notes/student/${classId}${query ? `?${query}` : ''}`, { method: 'GET' });
-};
-
-// ─── Centralized Notes ──────────────────────────────────────────────────────
-
-export const fetchCentralizedNotes = async (params: { subjectId: string; unitNumber?: number; classId?: string }) => {
-  const qs = new URLSearchParams({ subjectId: params.subjectId });
-  if (params.unitNumber != null) qs.set('unitNumber', String(params.unitNumber));
-  if (params.classId) qs.set('classId', params.classId);
-  return apiRequest(`/api/notes/centralized?${qs.toString()}`, { method: 'GET' });
-};
-
-export const fetchCentralizedNotesCombined = async (params: { subjectId: string; classId?: string }) => {
-  const qs = new URLSearchParams({ subjectId: params.subjectId });
-  if (params.classId) qs.set('classId', params.classId);
-  const notes = await apiRequest(`/api/notes/centralized?${qs.toString()}`, { method: 'GET' });
-  if (!Array.isArray(notes)) return [];
-
-  const grouped = new Map<number, { unitNumber: number; unitName: string; notes: any[] }>();
-  for (const note of notes) {
-    const unit = Number(note.unitNumber) || 0;
-    if (!grouped.has(unit)) {
-      grouped.set(unit, { unitNumber: unit, unitName: note.unitName || `Unit ${unit || 1}`, notes: [] });
-    }
-    grouped.get(unit)!.notes.push(note);
-  }
-  return Array.from(grouped.values()).sort((a, b) => a.unitNumber - b.unitNumber);
-};
-
-export const uploadCentralizedNotes = async (payload: {
-  classId?: string; subjectId: string; unitNumber: number; unitName: string;
-  title: string; content: string; noteType?: string;
-}) => {
-  return apiRequest('/api/notes/centralized', {
-    method: 'POST',
-    body: JSON.stringify(payload),
-  });
-};
-
-// ─── Question Bank ───────────────────────────────────────────────────────────
-
-export const fetchQuestionBank = async () => {
-  const data = await apiRequest('/api/question-bank', { method: 'GET' });
-  return Array.isArray(data) ? data : [];
-};
-
-export const addQuestionsToBank = async (questions: any[]) => {
-  return apiRequest('/api/question-bank/add', {
-    method: 'POST',
-    body: JSON.stringify({ questions }),
-  });
-};
-
-export const upsertQuizToBank = async (quiz: any[], subject: string) => {
-  return apiRequest('/api/question-bank/upsert-quiz', {
-    method: 'POST',
-    body: JSON.stringify({ quiz, subject }),
-  });
-};
-
-export const updateQuestionInBank = async (id: string, patch: any) => {
-  return apiRequest('/api/question-bank/update', {
-    method: 'POST',
-    body: JSON.stringify({ id, patch }),
-  });
-};
-
-export const deleteQuestionFromBank = async (id: string) => {
-  return apiRequest(`/api/question-bank/${id}`, { method: 'DELETE' });
-};
-
-// ─── Password Reset ──────────────────────────────────────────────────────────
 
 export const requestPasswordReset = async (email: string) => {
   return apiRequest('/api/auth/password/request', {
@@ -311,305 +157,6 @@ export const completePasswordReset = async (email: string, newPassword: string) 
   });
 };
 
-// ─── Tag Presets ─────────────────────────────────────────────────────────────
-
-const DEFAULT_TAG_PRESETS: Record<string, string[]> = {
-  Mathematics: ['algebra', 'geometry', 'trigonometry', 'calculus', 'practice'],
-  Science: ['physics', 'chemistry', 'biology', 'lab', 'experiment'],
-  History: ['timeline', 'event', 'figure', 'cause', 'effect'],
-  English: ['grammar', 'vocabulary', 'reading', 'writing', 'comprehension'],
-};
-
-export const fetchTagPresets = async () => {
-  const data = await apiRequest('/api/tags-presets', { method: 'GET' });
-  return { ...DEFAULT_TAG_PRESETS, ...data };
-};
-
-export const updateTagPresets = async (subject: string, tags: string[]) => {
-  return apiRequest('/api/tags-presets/update', {
-    method: 'POST',
-    body: JSON.stringify({ subject, tags }),
-  });
-};
-
-// ─── Grades ──────────────────────────────────────────────────────────────────
-
-export interface PaginatedGrades {
-  items: any[];
-  pagination: {
-    page: number;
-    limit: number;
-    total: number;
-    totalPages: number;
-    hasNext: boolean;
-    hasPrev: boolean;
-  };
-}
-
-export interface FetchGradesOptions {
-  studentId?: string;
-  subjectId?: string;
-  page?: number;
-  limit?: number;
-  sortBy?: string;
-  sortOrder?: 'asc' | 'desc';
-}
-
-export const fetchGrades = async (options?: FetchGradesOptions): Promise<any[]> => {
-  const params = new URLSearchParams();
-  if (options?.studentId) params.set('studentId', options.studentId);
-  if (options?.subjectId) params.set('subjectId', options.subjectId);
-  if (options?.page) params.set('page', String(options.page));
-  if (options?.limit) params.set('limit', String(options.limit));
-  if (options?.sortBy) params.set('sortBy', options.sortBy);
-  if (options?.sortOrder) params.set('sortOrder', options.sortOrder);
-
-  const queryString = params.toString();
-  const rows = await apiRequest(`/api/grades${queryString ? `?${queryString}` : ''}`, { method: 'GET' });
-  if (Array.isArray(rows)) return rows;
-  return Array.isArray(rows?.items) ? rows.items : [];
-};
-
-export const fetchGradesPaginated = async (options?: FetchGradesOptions): Promise<PaginatedGrades> => {
-  const params = new URLSearchParams();
-  if (options?.studentId) params.set('studentId', options.studentId);
-  if (options?.subjectId) params.set('subjectId', options.subjectId);
-  if (options?.page) params.set('page', String(options.page));
-  if (options?.limit) params.set('limit', String(options.limit));
-  if (options?.sortBy) params.set('sortBy', options.sortBy);
-  if (options?.sortOrder) params.set('sortOrder', options.sortOrder);
-
-  const queryString = params.toString();
-  const result = await apiRequest(`/api/grades${queryString ? `?${queryString}` : ''}`, { method: 'GET' });
-  if (result?.items && result?.pagination) return result;
-  return { items: Array.isArray(result) ? result : [], pagination: { page: 1, limit: 20, total: 0, totalPages: 0, hasNext: false, hasPrev: false } };
-};
-
-export const addGrade = async (grade: { studentId: string; subject: string; category: string; title: string; score: number; maxScore: number; weight?: number; date?: string; teacherId?: string }) => {
-  const newGrade = { ...grade, id: `g_${Date.now()}`, date: grade.date || new Date().toISOString().split('T')[0] };
-  const payload = await apiRequest('/api/grades', {
-    method: 'POST',
-    headers: { 'Idempotency-Key': idempotencyKey('grade-create') },
-    body: JSON.stringify(newGrade),
-  });
-  websocketService.sendGradesUpdate({ type: 'created', id: payload?.grade?.id || newGrade.id });
-  return payload?.grade || newGrade;
-};
-
-export const addGradesBulk = async (grades: any[]) => {
-  const payload = await apiRequest('/api/grades/bulk', {
-    method: 'POST',
-    headers: { 'Idempotency-Key': idempotencyKey('grade-bulk') },
-    body: JSON.stringify({ grades }),
-  });
-  websocketService.sendGradesUpdate({ type: 'bulk-created', count: payload?.count || grades.length });
-  return payload;
-};
-
-export const deleteGrade = async (id: string) => {
-  const payload = await apiRequest(`/api/grades/${id}`, {
-    method: 'DELETE',
-    headers: { 'Idempotency-Key': idempotencyKey('grade-delete') },
-  });
-  websocketService.sendGradesUpdate({ type: 'deleted', id });
-  return payload;
-};
-
-// ─── Timetable ───────────────────────────────────────────────────────────────
-
-export const fetchTimetable = async () => {
-  const rows = await apiRequest('/api/timetable', { method: 'GET' });
-  return Array.isArray(rows) ? rows : [];
-};
-
-export const saveTimetable = async (entries: any[]) => {
-  return apiRequest('/api/timetable', {
-    method: 'POST',
-    headers: { 'Idempotency-Key': idempotencyKey('tt-replace') },
-    body: JSON.stringify(entries),
-  });
-};
-
-export const addTimetableEntry = async (entry: any) => {
-  const newEntry = { ...entry, id: `tt_${Date.now()}` };
-  const payload = await apiRequest('/api/timetable/entry', {
-    method: 'POST',
-    headers: { 'Idempotency-Key': idempotencyKey('tt-create') },
-    body: JSON.stringify(entry),
-  });
-  websocketService.sendTimetableUpdate({ type: 'created', id: payload?.entry?.id || newEntry.id });
-  return payload?.entry || newEntry;
-};
-
-export const deleteTimetableEntry = async (id: string) => {
-  const payload = await apiRequest(`/api/timetable/${id}`, {
-    method: 'DELETE',
-    headers: { 'Idempotency-Key': idempotencyKey('tt-delete') },
-  });
-  websocketService.sendTimetableUpdate({ type: 'deleted', id });
-  return payload;
-};
-
-// ─── Tickets ─────────────────────────────────────────────────────────────────
-
-export const fetchTickets = async () => {
-  const rows = await apiRequest('/api/tickets', { method: 'GET' });
-  return Array.isArray(rows) ? rows : [];
-};
-
-export const fetchUnassignedTickets = async () => {
-  const rows = await apiRequest('/api/tickets/unassigned', { method: 'GET' });
-  return Array.isArray(rows) ? rows : [];
-};
-
-export const createTicket = async (ticket: { subject: string; message: string; category?: string; priority?: 'low' | 'medium' | 'high' }) => {
-  const newTicket = { ...ticket, id: `t_${Date.now()}`, status: 'open', createdAt: new Date().toISOString(), replies: [], version: 1, priority: ticket.priority || 'medium' };
-  const payload = await apiRequest('/api/tickets', {
-    method: 'POST',
-    headers: { 'Idempotency-Key': idempotencyKey('ticket-create') },
-    body: JSON.stringify(newTicket),
-  });
-  websocketService.sendTicketsUpdate({ type: 'created', id: payload?.ticket?.id || newTicket.id });
-  return payload?.ticket || newTicket;
-};
-
-export const replyToTicket = async (ticketId: string, reply: any, expectedVersion?: number) => {
-  const payload = await apiRequest(`/api/tickets/${ticketId}/reply`, {
-    method: 'POST',
-    headers: { 'Idempotency-Key': idempotencyKey('ticket-reply') },
-    body: JSON.stringify({ ...reply, expectedVersion }),
-  });
-  websocketService.sendTicketsUpdate({ type: 'replied', id: ticketId });
-  return payload;
-};
-
-export const closeTicket = async (ticketId: string, expectedVersion?: number) => {
-  const payload = await apiRequest(`/api/tickets/${ticketId}/close`, {
-    method: 'POST',
-    headers: { 'Idempotency-Key': idempotencyKey('ticket-close') },
-    body: JSON.stringify({ expectedVersion }),
-  });
-  websocketService.sendTicketsUpdate({ type: 'closed', id: ticketId });
-  return payload;
-};
-
-export const assignTicket = async (ticketId: string, adminId?: string) => {
-  const payload = await apiRequest(`/api/tickets/${ticketId}/assign`, {
-    method: 'PATCH',
-    body: JSON.stringify({ adminId }),
-  });
-  websocketService.sendTicketsUpdate({ type: 'assigned', id: ticketId, assignedToId: payload?.assignedToId });
-  return payload;
-};
-
-// ─── Notifications ───────────────────────────────────────────────────────────
-
-export const fetchNotifications = async (userId: string) => {
-  try {
-    const rows = await apiRequest('/api/notifications', { method: 'GET' });
-    return Array.isArray(rows) ? rows : [];
-  } catch {
-    return lsGet(`gyandeep-notifications-${userId}`, []);
-  }
-};
-
-export const createNotification = async (notif: any) => {
-  const newNotif = { ...notif, id: `n_${Date.now()}`, read: false, createdAt: new Date().toISOString() };
-  const payload = await apiRequest('/api/notifications', {
-    method: 'POST',
-    headers: { 'Idempotency-Key': idempotencyKey('notif-create') },
-    body: JSON.stringify({
-      userId: notif.userId || 'all',
-      title: notif.title,
-      message: notif.message,
-      type: notif.type || 'system',
-      relatedId: notif.relatedId || null,
-      relatedType: notif.relatedType || null,
-    }),
-  });
-  return payload?.notification || newNotif;
-};
-
-export const markNotificationRead = async (id: string) => {
-  return apiRequest(`/api/notifications/${id}/read`, { method: 'PATCH' });
-};
-
-export const deleteNotification = async (id: string) => {
-  return apiRequest(`/api/notifications/${id}`, { method: 'DELETE' });
-};
-
-// ─── Integrations ───────────────────────────────────────────────────
-
-export const syncCalendar = async (title: string, start: string, end: string) => {
-  return apiRequest('/api/integrations/calendar/sync', {
-    method: 'POST',
-    body: JSON.stringify({ title, start, end }),
-  });
-};
-
-export const uploadToDrive = async (name: string, url: string) => {
-  return apiRequest('/api/integrations/drive/upload', {
-    method: 'POST',
-    body: JSON.stringify({ name, url }),
-  });
-};
-
-// ─── Analytics ───────────────────────────────────────────────────────────────
-
-export const getAnalyticsInsights = async (studentData: any, type?: string) => {
-  try {
-    return await apiRequest('/api/analytics/insights', {
-      method: 'POST',
-      body: JSON.stringify({ studentData, type }),
-    });
-  } catch {
-    return { insights: [] };
-  }
-};
-
-export const fetchPerformanceBySubject = async (classId?: string) => {
-  try {
-    const params = classId ? `?classId=${classId}` : '';
-    const data = await apiRequest(`/api/analytics/performance-by-subject${params}`, { method: 'GET' });
-    return Array.isArray(data) ? data : [];
-  } catch {
-    return [];
-  }
-};
-
-// ─── Admin Override ──────────────────────────────────────────────────────────
-
-export const adminOverride = async (adminId: string, userId: string, action: string, reason?: string) => {
-  return apiRequest('/api/admin/audit-logs', {
-    method: 'POST',
-    body: JSON.stringify({
-      type: 'admin_override',
-      userId: adminId,
-      details: { targetUserId: userId, action, reason },
-    }),
-  });
-};
-
-// ─── Webhooks ────────────────────────────────────────────────────────────────
-
-export const fetchWebhooks = async () => {
-  const data = await apiRequest('/api/webhooks', { method: 'GET' });
-  return Array.isArray(data) ? data : [];
-};
-
-export const createWebhook = async (webhook: any) => {
-  return apiRequest('/api/webhooks', {
-    method: 'POST',
-    body: JSON.stringify(webhook),
-  });
-};
-
-export const deleteWebhook = async (id: string) => {
-  return apiRequest(`/api/webhooks/${id}`, { method: 'DELETE' });
-};
-
-// ─── Email Verification ─────────────────────────────────────────────────────
-
 export const sendEmailVerification = async (email: string) => {
   return apiRequest('/api/auth/email/verify-send', {
     method: 'POST',
@@ -624,176 +171,42 @@ export const checkEmailVerification = async (email: string, code: string) => {
   });
 };
 
-export const sendEmailNotification = async (payload: { to: string | string[]; subject: string; html: string }) => {
-  return apiRequest('/api/email-notification', {
+// ─── Classes & Subjects ──────────────────────────────────────────────────────
+
+export const fetchClasses = async (): Promise<ClassConfig[]> => {
+  const data = await apiRequest('/api/classes', { method: 'GET' });
+  return extractArrayPayload<ClassConfig>(data);
+};
+
+export const saveClasses = async (classes: any[]) => {
+  return apiRequest('/api/classes', {
     method: 'POST',
-    body: JSON.stringify(payload),
+    body: JSON.stringify(classes),
   });
 };
 
-export const sendAIEmail = async (payload: { prompt: string; recipients: string | string[]; context?: string }) => {
-  return apiRequest('/api/ai-email', {
+export const fetchSubjects = async (): Promise<SubjectConfig[]> => {
+  const data = await apiRequest('/api/subjects', { method: 'GET' });
+  return extractArrayPayload<SubjectConfig>(data);
+};
+
+export const assignUserToClass = async (userId: string, classId: string | null) => {
+  return apiRequest('/api/admin/assign-class', {
     method: 'POST',
-    body: JSON.stringify(payload),
+    body: JSON.stringify({ userId, classId }),
   });
 };
 
-export const checkEmailServiceHealth = async () => {
-  return apiRequest('/api/admin/email/health', { method: 'GET' });
-};
-
-// ─── Attendance ───────────────────────────────────────────────────────────────
-
-export interface PaginatedAttendance {
-  items: any[];
-  pagination: {
-    page: number;
-    limit: number;
-    total: number;
-    totalPages: number;
-    hasNext: boolean;
-    hasPrev: boolean;
-  };
-}
-
-export interface FetchAttendanceOptions {
-  studentId?: string;
-  classId?: string;
-  status?: string;
-  startDate?: string;
-  endDate?: string;
-  page?: number;
-  limit?: number;
-  sortBy?: string;
-  sortOrder?: 'asc' | 'desc';
-}
-
-export const fetchAttendance = async (options?: FetchAttendanceOptions): Promise<any[]> => {
-  const params = new URLSearchParams();
-  if (options?.studentId) params.set('studentId', options.studentId);
-  if (options?.classId) params.set('classId', options.classId);
-  if (options?.status) params.set('status', options.status);
-  if (options?.startDate) params.set('startDate', options.startDate);
-  if (options?.endDate) params.set('endDate', options.endDate);
-  if (options?.page) params.set('page', String(options.page));
-  if (options?.limit) params.set('limit', String(options.limit));
-  if (options?.sortBy) params.set('sortBy', options.sortBy);
-  if (options?.sortOrder) params.set('sortOrder', options.sortOrder);
-
-  const queryString = params.toString();
-  const rows = await apiRequest(`/api/attendance${queryString ? `?${queryString}` : ''}`, { method: 'GET' });
-  if (Array.isArray(rows)) return rows;
-  return Array.isArray(rows?.items) ? rows.items : [];
-};
-
-export const fetchAttendancePaginated = async (options?: FetchAttendanceOptions): Promise<PaginatedAttendance> => {
-  const params = new URLSearchParams();
-  if (options?.studentId) params.set('studentId', options.studentId);
-  if (options?.classId) params.set('classId', options.classId);
-  if (options?.status) params.set('status', options.status);
-  if (options?.startDate) params.set('startDate', options.startDate);
-  if (options?.endDate) params.set('endDate', options.endDate);
-  if (options?.page) params.set('page', String(options.page));
-  if (options?.limit) params.set('limit', String(options.limit));
-  if (options?.sortBy) params.set('sortBy', options.sortBy);
-  if (options?.sortOrder) params.set('sortOrder', options.sortOrder);
-
-  const queryString = params.toString();
-  const result = await apiRequest(`/api/attendance${queryString ? `?${queryString}` : ''}`, { method: 'GET' });
-  if (result?.items && result?.pagination) return result;
-  return { items: Array.isArray(result) ? result : [], pagination: { page: 1, limit: 20, total: 0, totalPages: 0, hasNext: false, hasPrev: false } };
-};
-
-export const createAttendanceRecord = async (record: { studentId: string; classId?: string; sessionId?: string; status: string; notes?: string }) => {
-  const payload = await apiRequest('/api/attendance', {
+export const assignStudentToClass = async (studentId: string, classId: string | null) => {
+  return apiRequest('/api/classes/assign', {
     method: 'POST',
-    body: JSON.stringify(record),
+    body: JSON.stringify({ userId: studentId, classId }),
   });
-  websocketService.sendAttendanceUpdate({ type: 'created', id: payload?.record?.id });
-  return payload?.record;
 };
 
-export const createAttendanceBulk = async (records: Array<{ studentId: string; classId?: string; sessionId?: string; status: string; notes?: string }>) => {
-  const payload = await apiRequest('/api/attendance/bulk', {
-    method: 'POST',
-    body: JSON.stringify({ records }),
-  });
-  websocketService.sendAttendanceUpdate({ type: 'bulk-created', count: payload?.count || records.length });
-  return payload;
-};
+// ─── Sessions & Attendance ───────────────────────────────────────────────────
 
-export const updateAttendanceRecord = async (id: string, updates: { status?: string; notes?: string }) => {
-  const payload = await apiRequest(`/api/attendance/${id}`, {
-    method: 'PATCH',
-    body: JSON.stringify(updates),
-  });
-  websocketService.sendAttendanceUpdate({ type: 'updated', id });
-  return payload?.record;
-};
-
-export const fetchAttendanceStats = async (options?: { studentId?: string; classId?: string; startDate?: string; endDate?: string }) => {
-  const params = new URLSearchParams();
-  if (options?.studentId) params.set('studentId', options.studentId);
-  if (options?.classId) params.set('classId', options.classId);
-  if (options?.startDate) params.set('startDate', options.startDate);
-  if (options?.endDate) params.set('endDate', options.endDate);
-
-  const queryString = params.toString();
-  return apiRequest(`/api/attendance/stats${queryString ? `?${queryString}` : ''}`, { method: 'GET' });
-};
-
-export const fetchTeacherStats = async (teacherId: string) => {
-  const data = await apiRequest(`/api/teacher/stats?teacherId=${teacherId}`, { method: 'GET' });
-  return data || { quizzesTaken: 0, avgScore: 0, totalStudents: 0, attendanceRate: 0 };
-};
-
-export const fetchQuizStats = async (teacherId: string) => {
-  const data = await apiRequest(`/api/teacher/quiz-stats?teacherId=${teacherId}`, { method: 'GET' });
-  return data || { totalQuizzes: 0, avgScore: 0, totalAttempts: 0 };
-};
-
-export const fetchWeeklyAttendance = async (classId: string) => {
-  const data = await apiRequest(`/api/attendance/weekly?classId=${classId}`, { method: 'GET' });
-  return Array.isArray(data) ? data : [];
-};
-
-export const fetchSessionAttendance = async (sessionId: string) => {
-  const data = await apiRequest(`/api/attendance?sessionId=${sessionId}`, { method: 'GET' });
-  return Array.isArray(data) ? data : (data?.items || []);
-};
-
-export const fetchStudentAttendanceHistory = async (studentId: string, options?: { startDate?: string; endDate?: string; limit?: number }) => {
-  const params = new URLSearchParams();
-  if (options?.startDate) params.set('startDate', options.startDate);
-  if (options?.endDate) params.set('endDate', options.endDate);
-  if (options?.limit) params.set('limit', String(options.limit));
-  const query = params.toString();
-  return apiRequest(`/api/attendance/student/${studentId}${query ? `?${query}` : ''}`, { method: 'GET' });
-};
-
-export const verifySessionCode = async (code: string) => {
-  return apiRequest(`/api/sessions/code/${code.toUpperCase()}/verify`, { method: 'GET' });
-};
-
-export const fetchActiveSession = async (teacherId: string) => {
-  return apiRequest(`/api/sessions/active?teacherId=${teacherId}`, { method: 'GET' });
-};
-
-export const fetchActiveSessionByClass = async (classId: string) => {
-  return apiRequest(`/api/sessions/active?classId=${classId}`, { method: 'GET' });
-};
-
-export const createClassSession = async (payload: {
-  teacherId: string;
-  classId?: string | null;
-  subjectId: string;
-  code?: string;
-  locationEnabled?: boolean;
-  locationRadius?: number;
-  locationLat?: number;
-  locationLng?: number;
-  faceEnabled?: boolean;
-}) => {
+export const createClassSession = async (payload: any) => {
   return apiRequest('/api/sessions', {
     method: 'POST',
     body: JSON.stringify(payload),
@@ -801,43 +214,121 @@ export const createClassSession = async (payload: {
 };
 
 export const startClassSession = async (sessionId: string) => {
-  return apiRequest(`/api/sessions/${sessionId}/start`, {
-    method: 'PATCH',
-  });
+  return apiRequest(`/api/sessions/${sessionId}/start`, { method: 'PATCH' });
 };
 
 export const endClassSession = async (sessionId: string) => {
-  return apiRequest(`/api/sessions/${sessionId}/end`, {
-    method: 'PATCH',
-  });
+  return apiRequest(`/api/sessions/${sessionId}/end`, { method: 'PATCH' });
 };
 
-export const regenerateSessionCode = async (
-  sessionId: string,
-  payload: {
-    code?: string;
-    expiresInSeconds?: number;
-    subjectId?: string;
-    locationRadius?: number;
-    locationLat?: number;
-    locationLng?: number;
-  } = {}
-) => {
-  return apiRequest(`/api/sessions/${sessionId}/code`, {
-    method: 'PATCH',
-    body: JSON.stringify(payload),
-  });
+export const fetchActiveSession = async (teacherId: string) => {
+  const data = await apiRequest(`/api/sessions/active?teacherId=${teacherId}`, { method: 'GET' });
+  return data.active ? data.session : null;
+};
+
+export const fetchActiveSessionByClass = async (classId: string) => {
+  const data = await apiRequest(`/api/sessions/active?classId=${classId}`, { method: 'GET' });
+  return data.active ? data.session : null;
 };
 
 export const fetchSessionById = async (sessionId: string) => {
   return apiRequest(`/api/sessions/${sessionId}`, { method: 'GET' });
 };
 
-export const submitQuiz = async (sessionId: string, studentId: string, answers: Array<{ answer: string }>) => {
-  return apiRequest(`/api/sessions/${sessionId}/quiz/submit`, {
-    method: 'POST',
-    body: JSON.stringify({ studentId, answers }),
+export const regenerateSessionCode = async (sessionId: string, payload: any) => {
+  return apiRequest(`/api/sessions/${sessionId}/code`, {
+    method: 'PATCH',
+    body: JSON.stringify(payload),
   });
+};
+
+export const verifySessionCode = async (code: string) => {
+  return apiRequest(`/api/sessions/code/${code.toUpperCase()}/verify`, { method: 'GET' });
+};
+
+export const fetchAttendance = async (options: any = {}) => {
+  const qs = new URLSearchParams(options).toString();
+  const data = await apiRequest(`/api/attendance?${qs}`, { method: 'GET' });
+  return extractArrayPayload(data);
+};
+
+export const fetchAttendancePaginated = async (options: any = {}) => {
+  const qs = new URLSearchParams(options).toString();
+  return apiRequest(`/api/attendance?${qs}`, { method: 'GET' });
+};
+
+export const createAttendanceRecord = async (record: any) => {
+  return apiRequest('/api/attendance', {
+    method: 'POST',
+    body: JSON.stringify(record),
+  });
+};
+
+export const createAttendanceBulk = async (records: any[]) => {
+  return apiRequest('/api/attendance/bulk', {
+    method: 'POST',
+    body: JSON.stringify({ records }),
+  });
+};
+
+export const updateAttendanceRecord = async (id: string, updates: any) => {
+  return apiRequest(`/api/attendance/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify(updates),
+  });
+};
+
+export const fetchAttendanceStats = async (options: any = {}) => {
+  const qs = new URLSearchParams(options).toString();
+  return apiRequest(`/api/attendance/stats?${qs}`, { method: 'GET' });
+};
+
+export const fetchSessionAttendance = async (sessionId: string) => {
+  const data = await apiRequest(`/api/attendance?sessionId=${sessionId}`, { method: 'GET' });
+  return extractArrayPayload(data);
+};
+
+export const fetchStudentAttendanceHistory = async (studentId: string, options: any = {}) => {
+  const qs = new URLSearchParams(options).toString();
+  return apiRequest(`/api/attendance/student/${studentId}?${qs}`, { method: 'GET' });
+};
+
+export const fetchWeeklyAttendance = async (teacherId: string) => {
+  const data = await apiRequest(`/api/analytics/weekly-attendance/${teacherId}`, { method: 'GET' });
+  return extractArrayPayload(data);
+};
+
+// ─── Quizzes & Question Bank ─────────────────────────────────────────────────
+
+export const fetchQuestionBank = async (subject?: string) => {
+  const qs = subject ? `?subject=${subject}` : '';
+  const data = await apiRequest(`/api/question-bank${qs}`, { method: 'GET' });
+  return extractArrayPayload(data);
+};
+
+export const addQuestionsToBank = async (questions: any[]) => {
+  return apiRequest('/api/question-bank/add', {
+    method: 'POST',
+    body: JSON.stringify({ questions }),
+  });
+};
+
+export const upsertQuizToBank = async (questions: any[], subject: string) => {
+  return apiRequest('/api/quiz/bank', {
+    method: 'POST',
+    body: JSON.stringify({ questions, subject }),
+  });
+};
+
+export const updateQuestionInBank = async (id: string, patch: any) => {
+  return apiRequest('/api/question-bank/update', {
+    method: 'POST',
+    body: JSON.stringify({ id, patch }),
+  });
+};
+
+export const deleteQuestionFromBank = async (id: string) => {
+  return apiRequest(`/api/question-bank/${id}`, { method: 'DELETE' });
 };
 
 export const fetchAvailableQuizzes = async (classId: string) => {
@@ -855,73 +346,314 @@ export const startSessionQuiz = async (sessionId: string, payload: { title?: str
   });
 };
 
-export const fetchLeaderboard = async (classId?: string, limit?: number) => {
-  const params = new URLSearchParams();
-  if (classId) params.set('classId', classId);
-  if (limit) params.set('limit', String(limit));
-  const queryString = params.toString();
-  return apiRequest(`/api/analytics/leaderboard${queryString ? `?${queryString}` : ''}`, { method: 'GET' });
-};
-
-export const importUsersBulk = async (users: Array<{ name: string; email: string; role?: string; classId?: string }>, defaultPassword?: string) => {
-  return apiRequest('/api/admin/import-users', {
+export const submitQuiz = async (sessionId: string, studentId: string, answers: any[]) => {
+  return apiRequest(`/api/sessions/${sessionId}/quiz/submit`, {
     method: 'POST',
-    body: JSON.stringify({ users, defaultPassword }),
+    body: JSON.stringify({ studentId, answers }),
   });
 };
 
-export const importUsersCSV = async (csvData: string, defaultPassword?: string) => {
-  return apiRequest('/api/admin/import-users/csv', {
-    method: 'POST',
-    body: JSON.stringify({ csvData, defaultPassword }),
-  });
-};
-
-export const publishQuiz = async (quizId: string) => {
-  return apiRequest(`/api/quiz/${quizId}/publish`, {
-    method: 'POST',
-  });
-};
-
-export const publishQuizToClass = async (payload: { title: string; questions: any[]; classId: string; subject: string }) => {
-  return apiRequest('/api/quiz/publish-to-class', {
-    method: 'POST',
-    body: JSON.stringify(payload),
-  });
-};
-
-export const submitStandaloneQuiz = async (quizId: string, answers: Array<{ questionIndex: number; selectedAnswer: string }>) => {
+export const submitStandaloneQuiz = async (quizId: string, answers: any[]) => {
   return apiRequest(`/api/quiz/${quizId}/submit`, {
     method: 'POST',
     body: JSON.stringify({ answers }),
   });
 };
 
+export const publishQuiz = async (quizId: string) => {
+  return apiRequest(`/api/quiz/${quizId}/publish`, { method: 'POST' });
+};
+
+export const publishQuizToClass = async (payload: any) => {
+  return apiRequest('/api/quiz/publish-to-class', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+};
+
+// ─── Notes & Storage ─────────────────────────────────────────────────────────
+
+export const uploadClassNotes = async (data: { classId: string; subjectId: string; content: string }) => {
+  return apiRequest('/api/notes/centralized', {
+    method: 'POST',
+    body: JSON.stringify({
+      ...data,
+      title: `${data.subjectId} Quick Note`,
+      noteType: 'class_notes',
+      unitNumber: 1
+    }),
+  });
+};
+
+export const uploadSessionFile = async (data: { file: File; classId: string; subjectId: string; type: string; userId: string }) => {
+  const formData = new FormData();
+  formData.append('file', data.file);
+  formData.append('classId', data.classId);
+  formData.append('subjectId', data.subjectId);
+  formData.append('type', data.type);
+  formData.append('userId', data.userId);
+  return multipartRequest('/api/storage/upload', formData);
+};
+
+export const uploadCentralizedFile = async (data: { file: File; classId: string; subjectId: string; title: string; noteType: string; userId: string }) => {
+  const formData = new FormData();
+  formData.append('file', data.file);
+  formData.append('classId', data.classId);
+  formData.append('subjectId', data.subjectId);
+  formData.append('title', data.title);
+  formData.append('noteType', data.noteType);
+  formData.append('userId', data.userId);
+  return multipartRequest('/api/storage/centralized', formData);
+};
+
+export const listClassNotes = async (params: { classId: string; subjectId: string }) => {
+  const qs = new URLSearchParams(params).toString();
+  return apiRequest(`/api/notes?${qs}`, { method: 'GET' });
+};
+
+export const fetchStudentNotes = async (classId: string, subjectId?: string) => {
+  const qs = subjectId ? `?subjectId=${subjectId}` : '';
+  return apiRequest(`/api/notes/student/${classId}${qs}`, { method: 'GET' });
+};
+
+export const fetchCentralizedNotes = async (params: { subjectId?: string; classId?: string }) => {
+  const qs = new URLSearchParams(params as any).toString();
+  const data = await apiRequest(`/api/notes/centralized?${qs}`, { method: 'GET' });
+  return extractArrayPayload(data);
+};
+
+export const fetchCentralizedNotesCombined = async (subjectId: string, classId?: string) => {
+  const [sessionNotes, centralizedNotes] = await Promise.all([
+    listClassNotes({ classId: classId || '', subjectId }),
+    fetchCentralizedNotes({ subjectId, classId })
+  ]);
+  return [
+    ...(extractArrayPayload(sessionNotes)),
+    ...(extractArrayPayload(centralizedNotes))
+  ];
+};
+
+export const uploadCentralizedNotes = async (payload: any) => {
+  return apiRequest('/api/notes/centralized', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+};
+
+// ─── Analytics ───────────────────────────────────────────────────────────────
+
+export const fetchTeacherStats = async (teacherId: string) => {
+  return apiRequest(`/api/teacher/stats?teacherId=${teacherId}`, { method: 'GET' });
+};
+
+export const fetchQuizStats = async (teacherId: string) => {
+  return apiRequest(`/api/teacher/quiz-stats?teacherId=${teacherId}`, { method: 'GET' });
+};
+
+export const getAnalyticsInsights = async (studentData: any, type?: string) => {
+  return apiRequest('/api/analytics/insights', {
+    method: 'POST',
+    body: JSON.stringify({ studentData, type }),
+  });
+};
+
+export const fetchPerformanceBySubject = async (classId?: string) => {
+  const qs = classId ? `?classId=${classId}` : '';
+  return apiRequest(`/api/analytics/performance-by-subject${qs}`, { method: 'GET' });
+};
+
 export const fetchStudentPerformance = async (studentId: string, startDate?: string, endDate?: string) => {
   const params = new URLSearchParams();
   if (startDate) params.set('startDate', startDate);
   if (endDate) params.set('endDate', endDate);
-  const queryString = params.toString();
-  return apiRequest(`/api/analytics/student-performance/${studentId}${queryString ? `?${queryString}` : ''}`, { method: 'GET' });
+  const qs = params.toString();
+  return apiRequest(`/api/analytics/student-performance/${studentId}${qs ? `?${qs}` : ''}`, { method: 'GET' });
 };
 
-// ─── Announcements ─────────────────────────────────────────────────────────────
+export const fetchLeaderboard = async (classId?: string, limit?: number) => {
+  const params = new URLSearchParams();
+  if (classId) params.set('classId', classId);
+  if (limit) params.set('limit', String(limit));
+  const qs = params.toString();
+  return apiRequest(`/api/analytics/leaderboard${qs ? `?${qs}` : ''}`, { method: 'GET' });
+};
+
+// ─── Miscellaneous ───────────────────────────────────────────────────────────
 
 export const fetchAnnouncements = async (classId?: string) => {
-  const params = classId ? `?classId=${classId}` : '';
-  return apiRequest(`/api/announcements${params}`, { method: 'GET' });
+  const qs = classId ? `?classId=${classId}` : '';
+  return apiRequest(`/api/announcements${qs}`, { method: 'GET' });
 };
 
-export const createAnnouncement = async (payload: {
-  authorId: string;
-  classId: string;
-  title: string;
-  content: string;
-  subjectId?: string;
-  priority?: string;
-}) => {
+export const createAnnouncement = async (payload: any) => {
   return apiRequest('/api/announcements', {
     method: 'POST',
     body: JSON.stringify(payload),
   });
+};
+
+export const fetchTickets = async () => {
+  const data = await apiRequest('/api/tickets', { method: 'GET' });
+  return extractArrayPayload(data);
+};
+
+export const fetchUnassignedTickets = async () => {
+  const data = await apiRequest('/api/tickets/unassigned', { method: 'GET' });
+  return extractArrayPayload(data);
+};
+
+export const createTicket = async (ticket: any) => {
+  return apiRequest('/api/tickets', {
+    method: 'POST',
+    body: JSON.stringify(ticket),
+  });
+};
+
+export const replyToTicket = async (ticketId: string, reply: any) => {
+  return apiRequest(`/api/tickets/${ticketId}/reply`, {
+    method: 'POST',
+    body: JSON.stringify(reply),
+  });
+};
+
+export const closeTicket = async (ticketId: string) => {
+  return apiRequest(`/api/tickets/${ticketId}/close`, { method: 'POST' });
+};
+
+export const assignTicket = async (ticketId: string, adminId?: string) => {
+  return apiRequest(`/api/tickets/${ticketId}/assign`, {
+    method: 'PATCH',
+    body: JSON.stringify({ adminId }),
+  });
+};
+
+export const fetchNotifications = async (userId: string) => {
+  return apiRequest(`/api/notifications?userId=${userId}`, { method: 'GET' });
+};
+
+export const createNotification = async (notif: any) => {
+  return apiRequest('/api/notifications', {
+    method: 'POST',
+    body: JSON.stringify(notif),
+  });
+};
+
+export const markNotificationRead = async (id: string) => {
+  return apiRequest(`/api/notifications/${id}/read`, { method: 'PATCH' });
+};
+
+export const deleteNotification = async (id: string) => {
+  return apiRequest(`/api/notifications/${id}`, { method: 'DELETE' });
+};
+
+export const syncCalendar = async (title: string, start: string, end: string) => {
+  return apiRequest('/api/integrations/calendar/sync', {
+    method: 'POST',
+    body: JSON.stringify({ title, start, end }),
+  });
+};
+
+export const uploadToDrive = async (name: string, url: string) => {
+  return apiRequest('/api/integrations/drive/upload', {
+    method: 'POST',
+    body: JSON.stringify({ name, url }),
+  });
+};
+
+export const sendEmailNotification = async (payload: any) => {
+  return apiRequest('/api/email-notification', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+};
+
+export const sendAIEmail = async (payload: any) => {
+  return apiRequest('/api/ai-email', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+};
+
+export const checkEmailServiceHealth = async () => {
+  return apiRequest('/api/admin/email/health', { method: 'GET' });
+};
+
+export const fetchTagPresets = async (subjectId?: string) => {
+  const qs = subjectId ? `?subjectId=${subjectId}` : '';
+  return apiRequest(`/api/tags-presets${qs}`, { method: 'GET' });
+};
+
+export const updateTagPresets = async (subject: string, tags: string[]) => {
+  return apiRequest('/api/tags-presets/update', {
+    method: 'POST',
+    body: JSON.stringify({ subject, tags }),
+  });
+};
+
+export const adminOverride = async (adminId: string, userId: string, action: string, reason?: string) => {
+  return apiRequest('/api/admin/audit-logs', {
+    method: 'POST',
+    body: JSON.stringify({ type: 'admin_override', userId: adminId, details: { targetUserId: userId, action, reason } }),
+  });
+};
+
+export const fetchWebhooks = async () => {
+  return apiRequest('/api/webhooks', { method: 'GET' });
+};
+
+export const createWebhook = async (webhook: any) => {
+  return apiRequest('/api/webhooks', {
+    method: 'POST',
+    body: JSON.stringify(webhook),
+  });
+};
+
+export const deleteWebhook = async (id: string) => {
+  return apiRequest(`/api/webhooks/${id}`, { method: 'DELETE' });
+};
+
+export const fetchGrades = async (options: any = {}) => {
+  const qs = new URLSearchParams(options).toString();
+  const data = await apiRequest(`/api/grades?${qs}`, { method: 'GET' });
+  return extractArrayPayload(data);
+};
+
+export const addGrade = async (grade: any) => {
+  return apiRequest('/api/grades', {
+    method: 'POST',
+    body: JSON.stringify(grade),
+  });
+};
+
+export const addGradesBulk = async (grades: any[]) => {
+  return apiRequest('/api/grades/bulk', {
+    method: 'POST',
+    body: JSON.stringify({ grades }),
+  });
+};
+
+export const deleteGrade = async (id: string) => {
+  return apiRequest(`/api/grades/${id}`, { method: 'DELETE' });
+};
+
+export const fetchTimetable = async () => {
+  return apiRequest('/api/timetable', { method: 'GET' });
+};
+
+export const saveTimetable = async (entries: any[]) => {
+  return apiRequest('/api/timetable', {
+    method: 'POST',
+    body: JSON.stringify(entries),
+  });
+};
+
+export const addTimetableEntry = async (entry: any) => {
+  return apiRequest('/api/timetable/entry', {
+    method: 'POST',
+    body: JSON.stringify(entry),
+  });
+};
+
+export const deleteTimetableEntry = async (id: string) => {
+  return apiRequest(`/api/timetable/${id}`, { method: 'DELETE' });
 };
