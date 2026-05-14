@@ -17,10 +17,12 @@ const JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET || process.env.JWT_SEC
 export const TOKEN_COOKIE_NAME = 'gyandeep_token';
 export const REFRESH_COOKIE_NAME = 'gyandeep_refresh_token';
 
+const isProd = process.env.NODE_ENV === 'production';
+
 export const COOKIE_OPTIONS = {
   httpOnly: true,
-  secure: true, // Always secure for cross-site cookies
-  sameSite: 'none', // Required for cross-site (Vercel -> Render)
+  secure: isProd, // Only secure in production (requires HTTPS)
+  sameSite: isProd ? 'none' : 'lax', // 'none' for cross-site prod, 'lax' for local
   path: '/',
 };
 

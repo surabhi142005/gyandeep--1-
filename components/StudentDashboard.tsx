@@ -100,16 +100,50 @@ const NotesList: React.FC<{ classId?: string; subjectId: string }> = ({ classId,
               <p className="text-[10px] text-gray-500">{note.noteType === 'centralized_notes' ? 'Centralized' : 'Session'}</p>
             </div>
           </div>
-          <a 
-            href={note.url} 
-            target="_blank" 
-            rel="noopener noreferrer"
-            className="p-2 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 text-primary transition-colors"
-            title={t('Download/View')}
-            aria-label={`${t('Download')} ${note.title || note.fileName || t('Note')}`}
-          >
-            <Download size={16} />
-          </a>
+          {note.url ? (
+            <a 
+              href={note.url} 
+              target="_blank" 
+              rel="noopener noreferrer"
+              className="p-2 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 text-primary transition-colors"
+              title={t('Download/View')}
+              aria-label={`${t('Download')} ${note.title || note.fileName || t('Note')}`}
+            >
+              <Download size={16} />
+            </a>
+          ) : (
+            <button
+              onClick={() => {
+                const win = window.open('', '_blank');
+                if (win) {
+                  win.document.write(`
+                    <html>
+                      <head>
+                        <title>${note.title}</title>
+                        <style>
+                          body { font-family: system-ui, -apple-system, sans-serif; padding: 2rem; line-height: 1.6; max-width: 800px; margin: 0 auto; background: #f9fafb; }
+                          .card { background: white; padding: 2rem; border-radius: 1rem; border: 1px solid #e5e7eb; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+                          h1 { margin-top: 0; color: #111827; }
+                          pre { white-space: pre-wrap; word-break: break-word; color: #374151; }
+                        </style>
+                      </head>
+                      <body>
+                        <div class="card">
+                          <h1>${note.title}</h1>
+                          <pre>${note.content}</pre>
+                        </div>
+                      </body>
+                    </html>
+                  `);
+                  win.document.close();
+                }
+              }}
+              className="p-2 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 text-primary transition-colors"
+              title={t('View Note')}
+            >
+              <FileText size={16} />
+            </button>
+          )}
         </div>
       ))}
     </div>

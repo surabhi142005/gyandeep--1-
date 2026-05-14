@@ -116,10 +116,12 @@ export async function refreshAccessToken(): Promise<boolean> {
 
   refreshPromise = (async () => {
     try {
+      const refreshToken = tokenManager.getTokens()?.refreshToken;
       const res = await fetchWithTimeout(`${API_BASE}/api/auth/refresh`, {
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ refreshToken }),
       });
 
       if (!res.ok) {

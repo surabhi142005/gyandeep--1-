@@ -59,11 +59,12 @@ router.post('/upload', authMiddleware, handleUpload, async (req, res) => {
     const { classId, subjectId, type, userId } = req.body;
     const file = req.file;
 
-    const R2_CONFIGURED = process.env.R2_ACCOUNT_ID && process.env.R2_ACCESS_KEY_ID;
-    const CLOUDINARY_CONFIGURED = process.env.CLOUDINARY_CLOUD_NAME && process.env.CLOUDINARY_API_KEY;
+    const R2_CONFIGURED = !!(process.env.R2_ACCOUNT_ID && process.env.R2_ACCESS_KEY_ID);
+    const CLOUDINARY_CONFIGURED = !!(process.env.CLOUDINARY_CLOUD_NAME && process.env.CLOUDINARY_API_KEY && process.env.CLOUDINARY_API_SECRET);
 
     let result;
     if (R2_CONFIGURED) {
+      console.log('[Storage] Using Cloudflare R2');
       const { uploadFile } = await import('../lib/storage.js');
       const timestamp = Date.now();
       const safeName = file.originalname.replace(/[^a-zA-Z0-9.-]/g, '_');
@@ -107,6 +108,7 @@ router.post('/upload', authMiddleware, handleUpload, async (req, res) => {
         fileSize: file.size,
       });
     } else if (CLOUDINARY_CONFIGURED) {
+      console.log('[Storage] Using Cloudinary');
       const { uploadFile } = await import('../lib/storage.js');
       const timestamp = Date.now();
       const safeName = file.originalname.replace(/[^a-zA-Z0-9.-]/g, '_');
@@ -152,6 +154,7 @@ router.post('/upload', authMiddleware, handleUpload, async (req, res) => {
       });
     }
 
+    console.log('[Storage] Falling back to base64');
     const base64 = file.buffer.toString('base64');
     const dataUrl = `data:${file.mimetype};base64,${base64}`;
     
@@ -193,8 +196,8 @@ router.post('/upload', authMiddleware, handleUpload, async (req, res) => {
       storageWarning: 'Using local storage. Configure Cloudinary for production.',
     });
   } catch (error) {
-    console.error('Upload error:', error);
-    res.status(500).json({ error: 'Failed to upload file' });
+    console.error('Upload error details:', error);
+    res.status(500).json({ error: 'Failed to upload file', details: error.message });
   }
 });
 
@@ -246,7 +249,52 @@ router.post('/centralized', authMiddleware, handleUpload, async (req, res) => {
     });
   } catch (error) {
     console.error('Centralized upload error:', error);
-    res.status(500).json({ error: 'Failed to upload file' });
+    res.status(500).json({ error: 'Failed to upload file', details: error.message });
+  }
+});
+
+// New endpoint for centralized text-only notes
+router.post('/centralized-text', authMiddleware, async (req, res) => {
+  try {
+    const { classId, subjectId, title, content, unitNumber, unitName, userId } = req.body;
+
+    if (!title || !content || !subjectId) {
+      return res.status(400).json({ error: 'Title, content, and subjectId are required' });
+    }
+
+    const db = await connectToDatabase();
+    const note = {
+      classId: classId || null,
+      subjectId,
+      subject: subjectId,
+      unitNumber: parseInt(unitNumber) || 1,
+      unitName: unitName || 'Unit',
+      title,
+      content,
+      url: null,
+      noteType: 'centralized_notes',
+      uploadedBy: userId || req.user?.id || null,
+      _id: new ObjectId(),
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+
+    await db.collection(COLLECTIONS.CENTRALIZED_NOTES).insertOne(note);
+
+    broadcast('centralized_note_uploaded', {
+      id: note._id.toString(),
+      title: note.title,
+      subjectId: note.subjectId,
+    }, classId ? `class:${classId}` : null);
+
+    res.status(201).json({
+      ok: true,
+      id: note._id.toString(),
+      message: 'Text note saved to centralized bank',
+    });
+  } catch (error) {
+    console.error('Centralized text note error:', error);
+    res.status(500).json({ error: 'Failed to save centralized note' });
   }
 });
 

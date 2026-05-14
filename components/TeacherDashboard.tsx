@@ -1118,34 +1118,102 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
                       ))
                     )}
                   </div>
-                  <div className="border-t border-gray-100 dark:border-gray-800 pt-4 mt-4">
-                    <h4 className="font-bold mb-2">{t('Upload to Centralized Bank')}</h4>
-                    <input
-                      type="file"
-                      accept=".pdf,.doc,.docx,.txt,.png,.jpg,.jpeg"
-                      onChange={async (e) => {
-                        const file = e.target.files?.[0];
-                        if (!file) return;
-                        setIsUploading(true);
-                        try {
-                          await uploadCentralizedFile({
-                            file,
-                            classId: classSession.classId || '',
-                            subjectId: selectedSubject,
-                            title: file.name,
-                            noteType: 'centralized_notes',
-                            userId: teacher.id,
-                          });
-                          setSuccessMessage(t('Uploaded to centralized bank!'));
-                          setTimeout(() => setSuccessMessage(null), 3000);
-                        } catch (err) {
-                          setError(t('Upload failed'));
-                        } finally {
-                          setIsUploading(false);
-                        }
-                      }}
-                      className="w-full px-4 py-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800"
-                    />
+                    <div className="border-t border-gray-100 dark:border-gray-800 pt-4 mt-4">
+                      <h4 className="font-bold mb-2">{t('Quick Text Note (Centralized)')}</h4>
+                      <div className="space-y-4">
+                        <input
+                          type="text"
+                          placeholder={t('Note Title')}
+                          id="central-note-title"
+                          className="w-full px-4 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800"
+                        />
+                        <textarea
+                          id="central-note-text"
+                          className="w-full px-4 py-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 h-32 focus:ring-2 focus:ring-primary/20 outline-none transition-all"
+                          placeholder={t('Type centralized notes content here...')}
+                        />
+                        <Button
+                          variant="primary"
+                          onClick={async () => {
+                            const title = (document.getElementById('central-note-title') as HTMLInputElement)?.value;
+                            const content = (document.getElementById('central-note-text') as HTMLTextAreaElement)?.value;
+                            if (!title || !content) {
+                              setError(t('Title and content are required'));
+                              return;
+                            }
+                            setIsUploading(true);
+                            try {
+                              const m = await import('../services/dataService');
+                              await m.uploadCentralizedNotes({
+                                title,
+                                content,
+                                classId: classSession.classId || '',
+                                subjectId: selectedSubject,
+                                userId: teacher.id,
+                              });
+                              setSuccessMessage(t('Text note saved to centralized bank!'));
+                              (document.getElementById('central-note-title') as HTMLInputElement).value = '';
+                              (document.getElementById('central-note-text') as HTMLTextAreaElement).value = '';
+                              
+                              // Refresh centralized notes
+                              const refreshed = await m.fetchCentralizedNotes({ 
+                                subjectId: selectedSubject, 
+                                classId: classSession.classId 
+                              });
+                              setCentralizedNotes(refreshed);
+                              
+                              setTimeout(() => setSuccessMessage(null), 3000);
+                            } catch (err) {
+                              setError(t('Failed to save centralized note'));
+                            } finally {
+                              setIsUploading(false);
+                            }
+                          }}
+                          loading={isUploading}
+                        >
+                          {t('Save & Publish to Students')}
+                        </Button>
+                      </div>
+                    </div>
+
+                    <div className="border-t border-gray-100 dark:border-gray-800 pt-4 mt-4">
+                      <h4 className="font-bold mb-2">{t('Upload File to Centralized Bank')}</h4>
+                      <input
+                        type="file"
+                        accept=".pdf,.doc,.docx,.txt,.png,.jpg,.jpeg"
+                        onChange={async (e) => {
+                          const file = e.target.files?.[0];
+                          if (!file) return;
+                          setIsUploading(true);
+                          try {
+                            const m = await import('../services/dataService');
+                            await m.uploadCentralizedFile({
+                              file,
+                              classId: classSession.classId || '',
+                              subjectId: selectedSubject,
+                              title: file.name,
+                              noteType: 'centralized_notes',
+                              userId: teacher.id,
+                            });
+                            setSuccessMessage(t('Uploaded to centralized bank!'));
+                            
+                            // Refresh
+                            const refreshed = await m.fetchCentralizedNotes({ 
+                              subjectId: selectedSubject, 
+                              classId: classSession.classId 
+                            });
+                            setCentralizedNotes(refreshed);
+                            
+                            setTimeout(() => setSuccessMessage(null), 3000);
+                          } catch (err) {
+                            setError(t('Upload failed'));
+                          } finally {
+                            setIsUploading(false);
+                          }
+                        }}
+                        className="w-full px-4 py-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800"
+                      />
+                    </div>
                   </div>
                 </div>
               )}

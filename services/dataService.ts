@@ -465,10 +465,18 @@ export const fetchCentralizedNotesCombined = async ({ subjectId, classId }: { su
   ];
 };
 
-export const uploadCentralizedNotes = async (payload: any) => {
-  return apiRequest('/api/notes/centralized', {
+export const uploadCentralizedNotes = async (data: { 
+  classId?: string; 
+  subjectId: string; 
+  title: string; 
+  content: string; 
+  unitNumber?: number;
+  unitName?: string;
+  userId: string;
+}) => {
+  return apiRequest('/api/notes/centralized-text', {
     method: 'POST',
-    body: JSON.stringify(payload),
+    body: JSON.stringify(data),
   });
 };
 
