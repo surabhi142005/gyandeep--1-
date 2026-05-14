@@ -1215,7 +1215,6 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
                       />
                     </div>
                   </div>
-                </div>
               )}
            </Card>
         </div>
