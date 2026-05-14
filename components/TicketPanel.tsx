@@ -37,23 +37,34 @@ const TicketPanel: React.FC<TicketPanelProps> = ({ userId, role, colors }) => {
   const [loading, setLoading] = useState(false);
   const isAdmin = role === 'admin';
 
-  const load = async () => {
+  const load = useCallback(async (signal?: AbortSignal) => {
+    if (loading) return;
     setLoading(true);
     try {
       const ts = await fetchTickets();
+      if (signal?.aborted) return;
       setTickets(ts);
       if (isAdmin) {
         const ua = await fetchUnassignedTickets();
+        if (signal?.aborted) return;
         setUnassigned(ua);
+      }
+    } catch (err: any) {
+      if (err.name !== 'AbortError') {
+        console.error('Failed to load tickets:', err);
       }
     } finally {
       setLoading(false);
     }
-  };
+  }, [isAdmin, loading]);
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    const controller = new AbortController();
+    load(controller.signal);
+    return () => controller.abort();
+  }, []);
 
-  const handleCreate = async () => {
+  const handleCreate = useCallback(async () => {
     if (!subject.trim() || !message.trim()) return;
     setLoading(true);
     try {
@@ -61,42 +72,50 @@ const TicketPanel: React.FC<TicketPanelProps> = ({ userId, role, colors }) => {
       setSubject('');
       setMessage('');
       await load();
+    } catch (err) {
+      console.error('Failed to create ticket:', err);
     } finally {
       setLoading(false);
     }
-  };
+  }, [subject, message, priority, load]);
 
-  const handleReply = async (id: string) => {
+  const handleReply = useCallback(async (id: string) => {
     const text = prompt('Reply message');
     if (!text) return;
     setLoading(true);
     try {
       await replyToTicket(id, { message: text });
       await load();
+    } catch (err) {
+      console.error('Failed to reply to ticket:', err);
     } finally {
       setLoading(false);
     }
-  };
+  }, [load]);
 
-  const handleAssign = async (id: string) => {
+  const handleAssign = useCallback(async (id: string) => {
     setLoading(true);
     try {
       await assignTicket(id, userId);
       await load();
+    } catch (err) {
+      console.error('Failed to assign ticket:', err);
     } finally {
       setLoading(false);
     }
-  };
+  }, [userId, load]);
 
-  const handleClose = async (id: string) => {
+  const handleClose = useCallback(async (id: string) => {
     setLoading(true);
     try {
       await closeTicket(id);
       await load();
+    } catch (err) {
+      console.error('Failed to close ticket:', err);
     } finally {
       setLoading(false);
     }
-  };
+  }, [load]);
 
   const PriorityBadge = ({ p }: { p?: string }) => (
     <span className={`text-xs px-2 py-0.5 rounded-full ${

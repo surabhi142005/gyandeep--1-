@@ -41,31 +41,63 @@ function fetchWithTimeout(url: string, options: RequestInit = {}): Promise<Respo
     .finally(() => clearTimeout(timeoutId));
 }
 
-async function apiRequest(path: string, init: RequestInit = {}) {
-  console.log('[API Request]', API_BASE + path);
-  
-  let csrfHeaders = {};
-  if (init.method && init.method !== 'GET' && init.method !== 'HEAD' && init.method !== 'OPTIONS') {
-    await getCSRFToken();
-    csrfHeaders = getCSRFHeaders();
-  }
+async function apiRequest(path: string, init: RequestInit = {}, retryCount = 0): Promise<any> {
+  const maxRetries = 3;
+  const baseDelay = 1000;
 
-  const token = tokenManager.getAccessToken();
-  const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
-    ...csrfHeaders,
-    ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
-    ...(init.headers as Record<string, string> || {}),
-  };
+  try {
+    console.log('[API Request]', API_BASE + path);
+    
+    let csrfHeaders = {};
+    if (init.method && init.method !== 'GET' && init.method !== 'HEAD' && init.method !== 'OPTIONS') {
+      await getCSRFToken();
+      csrfHeaders = getCSRFHeaders();
+    }
 
-  const res = await fetchWithTimeout(`${API_BASE}${path}`, { ...init, headers, credentials: 'include' });
-  console.log('[API Response]', path, res.status);
-  const body = await res.json().catch(() => ({}));
-  if (!res.ok) {
-    const msg = body.error || body.message || `Request failed (${res.status})`;
-    throw new Error(msg);
+    const token = tokenManager.getAccessToken();
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      ...csrfHeaders,
+      ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+      ...(init.headers as Record<string, string> || {}),
+    };
+
+    const res = await fetchWithTimeout(`${API_BASE}${path}`, { ...init, headers, credentials: 'include' });
+    console.log('[API Response]', path, res.status);
+
+    if (res.status === 401 && retryCount < 1) {
+      console.warn(`[API] Unauthorized (401) on ${path}. Attempting token refresh...`);
+      const { refreshAccessToken } = await import('./authService');
+      const refreshed = await refreshAccessToken();
+      if (refreshed) {
+        return apiRequest(path, init, retryCount + 1);
+      }
+    }
+
+    if (res.status === 429 && retryCount < maxRetries) {
+      const delay = baseDelay * Math.pow(2, retryCount);
+      console.warn(`[API] Rate limited (429) on ${path}. Retrying in ${delay}ms...`);
+      await new Promise(resolve => setTimeout(resolve, delay));
+      return apiRequest(path, init, retryCount + 1);
+    }
+
+    const body = await res.json().catch(() => ({}));
+    
+    if (!res.ok) {
+      const msg = body.error || body.message || `Request failed (${res.status})`;
+      const error = new Error(msg) as any;
+      error.status = res.status;
+      throw error;
+    }
+    
+    return body;
+  } catch (err: any) {
+    if (err.name === 'AbortError') {
+      console.warn(`[API] Request aborted: ${path}`);
+      throw err;
+    }
+    throw err;
   }
-  return body;
 }
 
 async function multipartRequest(path: string, formData: FormData) {
@@ -422,7 +454,7 @@ export const fetchCentralizedNotes = async (params: { subjectId?: string; classI
   return extractArrayPayload(data);
 };
 
-export const fetchCentralizedNotesCombined = async (subjectId: string, classId?: string) => {
+export const fetchCentralizedNotesCombined = async ({ subjectId, classId }: { subjectId: string; classId?: string }) => {
   const [sessionNotes, centralizedNotes] = await Promise.all([
     listClassNotes({ classId: classId || '', subjectId }),
     fetchCentralizedNotes({ subjectId, classId })

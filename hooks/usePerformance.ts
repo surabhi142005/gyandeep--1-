@@ -4,6 +4,7 @@
  * Extracts XP / badges / performance update logic from App.tsx.
  */
 
+import React, { useCallback } from 'react';
 import type { AnyUser, PerformanceData, Student } from '../types';
 import { UserRole as UserRoleEnum } from '../types';
 
@@ -17,7 +18,7 @@ const BADGE_RULES: { badge: string; condition: (score: number, student: Student)
 ];
 
 export function usePerformance({ setAllUsers }: UsePerformanceOptions) {
-  const handleUpdatePerformance = (studentId: string, subject: string, score: number) => {
+  const handleUpdatePerformance = useCallback((studentId: string, subject: string, score: number) => {
     const newPerformance: PerformanceData = {
       subject,
       score,
@@ -39,7 +40,7 @@ export function usePerformance({ setAllUsers }: UsePerformanceOptions) {
         badges,
       };
     }));
-  };
+  }, [setAllUsers]);
 
   return { handleUpdatePerformance };
 }

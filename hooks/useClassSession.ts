@@ -1,11 +1,12 @@
 /**
+/**
  * hooks/useClassSession.ts
  *
  * Extracts class session state and attendance handlers from App.tsx.
  * Manages: classSession, attendance, historicalRecords.
  */
 
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import type { ClassSession, AttendanceRecord, HistoricalSessionRecord, AnyUser, SubjectConfig } from '../types';
 import { UserRole as UserRoleEnum } from '../types';
 import type { Teacher } from '../types';
@@ -62,12 +63,12 @@ export function useClassSession({ allUsers, allSubjects, currentUserId }: UseCla
   };
 
   // ── Session handlers ───────────────────────────────────────────────────────
-  const handleUpdateSession = (sessionUpdate: Partial<ClassSession>) => {
+  const handleUpdateSession = useCallback((sessionUpdate: Partial<ClassSession>) => {
     setClassSession(prev => ({ ...prev, ...sessionUpdate }));
-  };
+  }, []);
 
   /** Called when teacher logs in — reset session and initialise attendance list */
-  const initTeacherSession = (teacher: Teacher) => {
+  const initTeacherSession = useCallback((teacher: Teacher) => {
     const currentStudents = allUsers.filter(u => u.role === UserRoleEnum.STUDENT);
     setAttendance(currentStudents.map(s => ({
       studentId: s.id,
@@ -84,17 +85,17 @@ export function useClassSession({ allUsers, allSubjects, currentUserId }: UseCla
       quizPublished: false, subject: defaultSubject,
       teacherLocation: null, attendanceRadius: 100,
     });
-  };
+  }, [allUsers, allSubjects]);
 
-  const handleMarkAttendance = (studentId: string) => {
+  const handleMarkAttendance = useCallback((studentId: string) => {
     setAttendance(prev => prev.map(rec =>
       rec.studentId === studentId
         ? { ...rec, status: 'Present', timestamp: new Date() }
         : rec
     ));
-  };
+  }, []);
 
-  const handleAttendanceUpdate = (newRecord: AttendanceRecord) => {
+  const handleAttendanceUpdate = useCallback((newRecord: AttendanceRecord) => {
     setAttendance(prev => {
       // Check if this student already has a record
       const existingIndex = prev.findIndex(rec => rec.studentId === newRecord.studentId);
@@ -117,9 +118,9 @@ export function useClassSession({ allUsers, allSubjects, currentUserId }: UseCla
         }];
       }
     });
-  };
+  }, []);
 
-  const resetSession = () => {
+  const resetSession = useCallback(() => {
     setClassSession({
       id: '',
       code: null, expiry: null, startedAt: null, endedAt: null, isActive: false, sessionStatus: 'ended', notes: null, quiz: null,
@@ -127,8 +128,7 @@ export function useClassSession({ allUsers, allSubjects, currentUserId }: UseCla
       subject: allSubjects[0]?.name || 'Math',
       teacherLocation: null, attendanceRadius: 100,
     });
-    setAttendance([]);
-  };
+  }, [allSubjects]);
 
   return {
     classSession,

@@ -37,12 +37,12 @@ export function useLiveAttendance({
   }, [records]);
 
   // Fetch initial attendance from server
-  const fetchAttendance = useCallback(async () => {
+  const fetchAttendance = useCallback(async (signal?: AbortSignal) => {
     if (!sessionId) return;
 
     setIsLoading(true);
     try {
-      const response = await fetch(`/api/attendance?sessionId=${sessionId}&limit=100`);
+      const response = await fetch(`/api/attendance?sessionId=${sessionId}&limit=100`, { signal });
       if (response.ok) {
         const data = await response.json();
         const formatted = data.items.map((item: any) => ({
@@ -56,8 +56,10 @@ export function useLiveAttendance({
         setRecords(formatted);
         setLastUpdate(new Date());
       }
-    } catch (error) {
-      console.error('Failed to fetch attendance:', error);
+    } catch (error: any) {
+      if (error.name !== 'AbortError') {
+        console.error('Failed to fetch attendance:', error);
+      }
     } finally {
       setIsLoading(false);
     }
@@ -66,6 +68,9 @@ export function useLiveAttendance({
   // WebSocket listener for real-time updates
   useEffect(() => {
     if (!sessionId) return;
+
+    const controller = new AbortController();
+    const signal = controller.signal;
 
     // Join the session room
     const room = `session-${sessionId}`;
@@ -116,12 +121,13 @@ export function useLiveAttendance({
     });
 
     // Initial fetch
-    fetchAttendance();
+    fetchAttendance(signal);
 
-    // Polling fallback every 10 seconds (in case WebSocket misses)
-    const pollInterval = setInterval(fetchAttendance, 10000);
+    // Polling fallback every 30 seconds (much less frequent)
+    const pollInterval = setInterval(() => fetchAttendance(signal), 30000);
 
     return () => {
+      controller.abort();
       unsubAttendance();
       unsubBulk();
       clearInterval(pollInterval);

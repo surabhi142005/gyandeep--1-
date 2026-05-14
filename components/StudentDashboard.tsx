@@ -231,14 +231,13 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({
       return;
     }
 
-    let cancelled = false;
+    const controller = new AbortController();
+    const signal = controller.signal;
 
     const syncActiveSession = async () => {
       try {
         const data = await fetchActiveSessionByClass(student.classId!);
-        if (cancelled) {
-          return;
-        }
+        if (signal.aborted) return;
 
         if (data?.active && data?.session) {
           onUpdateSession({
@@ -264,15 +263,17 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({
           lat: undefined,
           lng: undefined,
         });
-      } catch (err) {
-        console.error('Failed to sync student session:', err);
+      } catch (err: any) {
+        if (err.name !== 'AbortError') {
+          console.error('Failed to sync student session:', err);
+        }
       }
     };
 
     syncActiveSession();
-    const interval = setInterval(syncActiveSession, 10000);
+    const interval = setInterval(syncActiveSession, 20000);
     return () => {
-      cancelled = true;
+      controller.abort();
       clearInterval(interval);
     };
   }, [student.classId]);

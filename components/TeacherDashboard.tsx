@@ -108,25 +108,59 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
   const [performanceData, setPerformanceData] = useState<{ subject: string; avgScore: number }[]>([]);
   const [liveAttendance, setLiveAttendance] = useState<Map<string, AttendanceRecord>>(new Map());
   
-  // RT-1 & RT-6: Enhanced analytics loading with polling during active session
+  // RT-1 & RT-6: Consolidated dashboard synchronization effect
   useEffect(() => {
-    const loadAnalytics = async () => {
-      try {
-        const [stats, quiz] = await Promise.all([
-          fetchTeacherStats(teacher.id),
-          fetchQuizStats(teacher.id),
-        ]);
-        setTeacherStats(stats || { quizzesTaken: 0, avgScore: 0, totalStudents: 0, attendanceRate: 0 });
-        setQuizStats(quiz || { totalQuizzes: 0, avgScore: 0, totalAttempts: 0 });
-      } catch (err) { console.error('Failed to load teacher stats:', err); }
-    };
-    loadAnalytics();
+    const controller = new AbortController();
+    const signal = controller.signal;
+    let syncInterval: NodeJS.Timeout;
     
-    // Poll during active session
-    if (classSession.isActive) {
-      const pollInterval = setInterval(loadAnalytics, 8000);
-      return () => clearInterval(pollInterval);
-    }
+    const syncDashboard = async () => {
+      if (signal.aborted) return;
+      try {
+        // Parallel fetch for stats and session status
+        const promises: Promise<any>[] = [
+          fetchTeacherStats(teacher.id),
+          fetchQuizStats(teacher.id)
+        ];
+
+        if (classSession.isActive) {
+          promises.push(fetchActiveSession(teacher.id));
+        }
+
+        const results = await Promise.all(promises);
+        if (signal.aborted) return;
+
+        const [stats, quiz, sessionData] = results;
+        
+        if (stats) setTeacherStats(stats);
+        if (quiz) setQuizStats(quiz);
+        
+        if (sessionData?.active && sessionData?.session) {
+          if (sessionData.session.expiry) {
+            setServerExpiryTime(new Date(sessionData.session.expiry).getTime());
+          }
+          if (sessionData.session.remainingTime !== undefined) {
+            setServerExpiryTime(Date.now() + sessionData.session.remainingTime);
+          }
+        }
+      } catch (err: any) {
+        if (err.name !== 'AbortError') {
+          console.warn('[Dashboard Sync] Failed:', err);
+        }
+      }
+    };
+
+    // Initial sync
+    syncDashboard();
+    
+    // Poll every 10 seconds if active, otherwise every 30 seconds
+    const intervalTime = classSession.isActive ? 10000 : 30000;
+    syncInterval = setInterval(syncDashboard, intervalTime);
+
+    return () => {
+      controller.abort();
+      if (syncInterval) clearInterval(syncInterval);
+    };
   }, [teacher.id, classSession.isActive]);
   
   useEffect(() => {
@@ -177,31 +211,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
     };
   }, [teacher.id]);
   
-  // RT-1: Sync session with server every 10 seconds for accurate timer
-  useEffect(() => {
-    if (!classSession.isActive || !classSession.id || !teacher.id) return;
-    
-    const syncWithServer = async () => {
-      try {
-        const data = await fetchActiveSession(teacher.id);
-        if (data.active && data.session) {
-          if (data.session.expiry) {
-            setServerExpiryTime(new Date(data.session.expiry).getTime());
-          }
-          if (data.session.remainingTime !== undefined) {
-            setServerExpiryTime(Date.now() + data.session.remainingTime);
-          }
-        }
-      } catch (err) {
-        console.warn('Failed to sync session with server:', err);
-      }
-    };
-    
-    syncWithServer();
-    const syncInterval = setInterval(syncWithServer, 10000);
-    return () => clearInterval(syncInterval);
-  }, [classSession.isActive, classSession.id, teacher.id]);
-  
+  // Timer logic stays separate for 1s resolution
   useEffect(() => {
     if (!classSession.isActive || !classSession.id) {
       setTimeRemaining('--:--');
@@ -358,13 +368,15 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
     };
   }, [classSession.id, onAttendanceUpdate, onStudentsUpdate, teacher.id]);
   
-  // Polling fallback for attendance updates (if SSE/WebSocket fails)
+  // Polling fallback for attendance updates (less frequent, 20s)
   useEffect(() => {
     if (!classSession.id || !onAttendanceUpdate) return;
     
-    const pollAttendance = async () => {
+    const pollAttendance = async (signal: AbortSignal) => {
       try {
-        const data = await fetchSessionAttendance(classSession.id);
+        const data = await fetchSessionAttendance(classSession.id!);
+        if (signal.aborted) return;
+        
         if (Array.isArray(data)) {
           data.forEach((record: any) => {
             const newAttendance: AttendanceRecord = {
@@ -376,15 +388,20 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
             onAttendanceUpdate(newAttendance);
           });
         }
-      } catch (err) {
-        console.warn('Failed to poll attendance:', err);
+      } catch (err: any) {
+        if (err.name !== 'AbortError') {
+          console.warn('Failed to poll attendance:', err);
+        }
       }
     };
     
-    // Poll every 5 seconds
-    pollAttendance();
-    const pollInterval = setInterval(pollAttendance, 5000);
-    return () => clearInterval(pollInterval);
+    const controller = new AbortController();
+    pollAttendance(controller.signal);
+    const pollInterval = setInterval(() => pollAttendance(controller.signal), 20000);
+    return () => {
+      controller.abort();
+      clearInterval(pollInterval);
+    };
   }, [classSession.id, onAttendanceUpdate]);
   
   useEffect(() => {
