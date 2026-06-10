@@ -4,7 +4,7 @@ import { UserRole as UserRoleEnum, ROLE_DISPLAY_NAMES } from '../types';
 import Spinner from './Spinner';
 import WebcamCapture from './WebcamCapture';
 import AdminFaceViewer from './AdminFaceViewer';
-import { bulkImportUsers, checkEmailServiceHealth, sendEmailNotification, fetchQuestionBank, fetchTagPresets, assignUserToClass } from '../services/dataService';
+import { bulkImportUsers, checkEmailServiceHealth, sendEmailNotification, fetchQuestionBank, fetchTagPresets, assignUserToClass, deleteQuestionFromBank, updateQuestionInBank, addQuestionsToBank } from '../services/dataService';
 import { registerFace, verifyFace, hashPassword } from '../services/authService';
 import { fetchFaceSystemHealth, FaceSystemHealthReport } from '../services/faceHealthService';
 import { formatFaceAuthError } from '../services/faceRecognitionService';
@@ -1244,7 +1244,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
                             <Button variant="ghost" size="sm" icon={<Trash2 size={14} />} onClick={async () => {
                               if (confirm(t('Delete this question?'))) {
                                 try {
-                                  await import('../services/dataService').then(m => m.deleteQuestionFromBank(q.id));
+                                  await deleteQuestionFromBank(q.id);
                                   setBank(bank.filter(b => b.id !== q.id));
                                 } catch (err) { console.error('Delete failed:', err); }
                               }
@@ -1286,10 +1286,10 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
                    };
                    try {
                      if (editingBankItem.id) {
-                       await import('../services/dataService').then(m => m.updateQuestionInBank(editingBankItem.id, questionData));
+                       await updateQuestionInBank(editingBankItem.id, questionData);
                        setBank(bank.map(q => q.id === editingBankItem.id ? { ...q, ...questionData } : q));
                      } else {
-                       const res = await import('../services/dataService').then(m => m.addQuestionsToBank([questionData]));
+                       const res = await addQuestionsToBank([questionData]);
                        const newQ = { ...questionData, id: res.insertedId || Date.now().toString() };
                        setBank([newQ, ...bank]);
                      }

@@ -46,6 +46,7 @@ import { useTeacherSession } from '../hooks/useTeacherSession';
 import { useQuizWorker } from '../hooks/useQuizWorker';
 import { DashboardLayout, Card, Button, Badge, Input } from './ui';
 import { fetchTeacherStats, fetchQuizStats, fetchWeeklyAttendance, fetchPerformanceBySubject } from '../services/dataService';
+import { publishQuizToClass, upsertQuizToBank, uploadCentralizedNotes, fetchCentralizedNotes, uploadCentralizedFile, uploadClassNotes } from '../services/dataService';
 import { realtimeClient } from '../services/realtimeClient';
 import { mapBackendSessionToClassSession } from '../services/sessionState';
 import Timetable from './Timetable';
@@ -888,8 +889,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
                      if (generatedQuiz.length === 0) return;
                      setIsPublishingQuiz(true);
                      try {
-                       const m = await import('../services/dataService');
-                       const response = await m.publishQuizToClass({
+                       const response = await publishQuizToClass({
                          title: `${selectedSubject || t('General')} ${t('Quiz')}`,
                          questions: generatedQuiz,
                          classId: selectedClassId,
@@ -905,7 +905,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
                    }} loading={isPublishingQuiz} disabled={!generatedQuiz.length}>{t('Publish to Class')}</Button>
                    <Button variant="secondary" size="sm" onClick={async () => {
                      try {
-                       await import('../services/dataService').then(m => m.upsertQuizToBank(generatedQuiz, selectedSubject));
+                       await upsertQuizToBank(generatedQuiz, selectedSubject);
                        setSuccessMessage(t('Questions saved to bank!'));
                        setTimeout(() => setSuccessMessage(null), 3000);
                      } catch (err) { console.error('Save failed:', err); }
@@ -1072,13 +1072,11 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
                         if (!notesText.trim()) return;
                         setIsUploading(true);
                         try {
-                          await import('../services/dataService').then(m => 
-                            m.uploadClassNotes({
-                              classId: classSession.classId || '',
-                              subjectId: selectedSubject,
-                              content: notesText,
-                            })
-                          );
+                          await uploadClassNotes({
+                            classId: classSession.classId || '',
+                            subjectId: selectedSubject,
+                            content: notesText,
+                          });
                           setSuccessMessage(t('Notes saved!'));
                           setTimeout(() => setSuccessMessage(null), 3000);
                         } catch (err) {
@@ -1143,8 +1141,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
                             }
                             setIsUploading(true);
                             try {
-                              const m = await import('../services/dataService');
-                              await m.uploadCentralizedNotes({
+                              await uploadCentralizedNotes({
                                 title,
                                 content,
                                 classId: classSession.classId || '',
@@ -1156,7 +1153,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
                               (document.getElementById('central-note-text') as HTMLTextAreaElement).value = '';
                               
                               // Refresh centralized notes
-                              const refreshed = await m.fetchCentralizedNotes({ 
+                              const refreshed = await fetchCentralizedNotes({ 
                                 subjectId: selectedSubject, 
                                 classId: classSession.classId 
                               });
@@ -1186,8 +1183,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
                           if (!file) return;
                           setIsUploading(true);
                           try {
-                            const m = await import('../services/dataService');
-                            await m.uploadCentralizedFile({
+                            await uploadCentralizedFile({
                               file,
                               classId: classSession.classId || '',
                               subjectId: selectedSubject,
@@ -1198,10 +1194,10 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
                             setSuccessMessage(t('Uploaded to centralized bank!'));
                             
                             // Refresh
-                            const refreshed = await m.fetchCentralizedNotes({ 
+                            const refreshed = await fetchCentralizedNotes({ 
                               subjectId: selectedSubject, 
                               classId: classSession.classId 
-                            });
+                              });
                             setCentralizedNotes(refreshed);
                             
                             setTimeout(() => setSuccessMessage(null), 3000);

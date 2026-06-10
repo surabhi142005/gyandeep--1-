@@ -14,14 +14,11 @@ RUN apk add --no-cache python3 make g++
 # Copy package files
 COPY package*.json ./
 
-# Install all dependencies
-RUN npm install --legacy-peer-deps
+# Install all dependencies with quieter, deterministic output
+RUN npm ci --legacy-peer-deps --no-audit --no-fund --loglevel=error
 
 # Copy source files
 COPY . .
-
-# Install Vite for building
-RUN npm install vite -D
 
 # Build frontend
 RUN npx vite build

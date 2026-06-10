@@ -6,6 +6,7 @@ import WebcamCapture from './WebcamCapture';
 import { verifyFace, passwordMatches, hashPassword, login as expressLogin, loginWithFace } from '../services/authService';
 import { preloadFaceApiModels } from '../services/faceApiLoader';
 import { formatFaceAuthError } from '../services/faceRecognitionService';
+import { requestPasswordReset, verifyPasswordReset, completePasswordReset } from '../services/dataService';
 import Spinner from './Spinner';
 import { t } from '../services/i18n';
 
@@ -433,7 +434,6 @@ const Login: React.FC<LoginProps> = ({ onLogin, users, theme, onPasswordReset, o
                 }
                 setIsModalLoading(true);
                 try {
-                  const { requestPasswordReset } = await import('../services/dataService');
                   await requestPasswordReset(forgotPasswordEmail);
                   setModalMessage({ type: 'success', text: 'A reset code has been generated. In offline mode, check the browser console.' });
                   setForgotPasswordStep('enterCode');
@@ -473,7 +473,6 @@ const Login: React.FC<LoginProps> = ({ onLogin, users, theme, onPasswordReset, o
                 }
                 setIsModalLoading(true);
                 try {
-                  const { verifyPasswordReset } = await import('../services/dataService');
                   await verifyPasswordReset(forgotPasswordEmail, verificationCode);
                   setForgotPasswordStep('resetPassword');
                 } catch (err: any) {
@@ -520,7 +519,6 @@ const Login: React.FC<LoginProps> = ({ onLogin, users, theme, onPasswordReset, o
                 try {
                   // Hash the new password before storing
                   const hashed = await hashPassword(newPassword);
-                  const { completePasswordReset } = await import('../services/dataService');
                   await completePasswordReset(forgotPasswordEmail, hashed);
                   // Also update the in-memory users list via onPasswordReset
                   onPasswordReset(forgotPasswordEmail, hashed);

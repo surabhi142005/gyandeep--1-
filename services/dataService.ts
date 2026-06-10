@@ -4,6 +4,7 @@
  * All data operations go through the Express API (MongoDB/Redis backend).
  */
 
+import { refreshAccessToken } from './authService';
 import { tokenManager } from './tokenManager';
 import { websocketService } from './websocketService';
 import { getCSRFHeaders, getCSRFToken } from './csrfService';
@@ -67,7 +68,6 @@ async function apiRequest(path: string, init: RequestInit = {}, retryCount = 0):
 
     if (res.status === 401 && retryCount < 1) {
       console.warn(`[API] Unauthorized (401) on ${path}. Attempting token refresh...`);
-      const { refreshAccessToken } = await import('./authService');
       const refreshed = await refreshAccessToken();
       if (refreshed) {
         return apiRequest(path, init, retryCount + 1);

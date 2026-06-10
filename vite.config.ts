@@ -120,12 +120,11 @@ export default defineConfig(({ mode }) => {
     build: {
       outDir: 'dist',
       target: 'esnext',
-      chunkSizeWarningLimit: 1000,
+      chunkSizeWarningLimit: 1500,
       sourcemap: mode !== 'production',
       rollupOptions: {
         output: {
           manualChunks: {
-            'vendor-react': ['react', 'react-dom'],
             'vendor-utils': ['framer-motion', 'lucide-react', 'recharts'],
             'faceapi': ['@vladmandic/face-api'],
           },

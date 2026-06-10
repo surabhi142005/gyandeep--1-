@@ -10,6 +10,7 @@ import type { AnyUser, Coordinates } from '../types';
 import type { ToastType } from '../components/ToastNotification';
 import { websocketService } from '../services/websocketService';
 import { getCurrentPosition } from '../services/locationService';
+import { getCSRFHeaders, getCSRFToken } from '../services/csrfService';
 import { getCurrentUser, requestPasswordReset, logout as authServiceLogout } from '../services/authService';
 import { useCrossTabSync } from './useCrossTabSync';
 
@@ -112,7 +113,6 @@ export function useAuth({ allUsers: _allUsers, setAllUsers, showNotification }: 
     if (!currentUser) return;
 
     try {
-      const { getCSRFHeaders, getCSRFToken } = await import('../services/csrfService');
       await getCSRFToken();
       const csrfHeaders = getCSRFHeaders();
 
