@@ -301,4 +301,83 @@ router.post('/subject/create', authMiddleware, async (req, res) => {
   }
 });
 
+/**
+ * POST /api/admin/assign-class
+ * Assign a user to a class
+ */
+router.post('/assign-class', authMiddleware, async (req, res) => {
+  try {
+    const db = await connectToDatabase();
+    const { userId, classId } = req.body;
+
+    if (!userId) {
+      return res.status(400).json({ error: 'User ID is required' });
+    }
+
+    const query = ObjectId.isValid(userId) 
+      ? { _id: new ObjectId(userId) }
+      : { id: userId };
+
+    const updateData = {
+      classId: classId ? (ObjectId.isValid(classId) ? new ObjectId(classId) : classId) : null,
+      updatedAt: new Date(),
+    };
+
+    const result = await db.collection(COLLECTIONS.USERS).updateOne(
+      query,
+      { $set: updateData }
+    );
+
+    if (result.matchedCount === 0) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    res.json({ ok: true, message: 'Class assigned successfully' });
+  } catch (error) {
+    console.error('Assign class error:', error);
+    res.status(500).json({ error: 'Failed to assign class' });
+  }
+});
+
+/**
+ * POST /api/admin/save-users
+ * Bulk upsert users list from Admin Dashboard
+ */
+router.post('/save-users', authMiddleware, async (req, res) => {
+  try {
+    const db = await connectToDatabase();
+    const { users } = req.body;
+
+    if (!Array.isArray(users)) {
+      return res.status(400).json({ error: 'Users array is required' });
+    }
+
+    const results = { inserted: 0, updated: 0 };
+    for (const user of users) {
+      const { id, _id, ...updates } = user;
+      const targetId = _id || id;
+      if (!targetId) continue;
+
+      const query = ObjectId.isValid(targetId) ? { _id: new ObjectId(targetId) } : { id: targetId };
+      
+      if (updates.classId !== undefined) {
+        updates.classId = updates.classId ? (ObjectId.isValid(updates.classId) ? new ObjectId(updates.classId) : updates.classId) : null;
+      }
+      
+      const result = await db.collection(COLLECTIONS.USERS).updateOne(
+        query,
+        { $set: { ...updates, updatedAt: new Date() } },
+        { upsert: true }
+      );
+      if (result.upsertedCount > 0) results.inserted++;
+      else results.updated++;
+    }
+
+    res.json({ ok: true, ...results });
+  } catch (error) {
+    console.error('Save users error:', error);
+    res.status(500).json({ error: 'Failed to save users' });
+  }
+});
+
 export default router;

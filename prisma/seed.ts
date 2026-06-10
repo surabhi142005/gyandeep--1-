@@ -336,7 +336,7 @@ async function main() {
         const classStudents = students.filter(std => std.classId === cls.id);
         for (const student of classStudents) {
           const statusRand = Math.random();
-          const status = statusRand > 0.9 ? 'absent' : statusRand > 0.8 ? 'late' : 'present';
+          const status = statusRand > 0.9 ? 'Absent' : statusRand > 0.8 ? 'Late' : 'Present';
           
           await prisma.attendance.create({
             data: {
@@ -345,12 +345,12 @@ async function main() {
               studentId: student.id,
               verifiedById: teacher.id,
               status,
-              markedAt: new Date(currentDay.getTime() + Math.random() * 1800000)
+              timestamp: new Date(currentDay.getTime() + Math.random() * 1800000)
             }
           });
 
           // Quiz attempt if present and quiz published
-          if (session.quizPublished && status !== 'absent') {
+          if (session.quizPublished && status !== 'Absent') {
             const quiz = await prisma.quiz.create({
               data: {
                 odId: generateOdId('QUIZ'),
@@ -372,7 +372,7 @@ async function main() {
                 answersJson: JSON.stringify({ '0': 'A', '1': 'B' }),
                 correctCount: Math.floor(score / 20),
                 totalQuestions: 5,
-                percentage: score,
+                score: score,
                 submittedAt: currentDay,
                 timeTakenSeconds: 300 + Math.random() * 300
               }
