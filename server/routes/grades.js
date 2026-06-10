@@ -29,7 +29,8 @@ router.get('/', authMiddleware, validatePaginationParams, async (req, res) => {
   try {
     const db = await connectToDatabase();
     const { studentId, subjectId, sortBy = 'gradedAt', sortOrder = 'desc' } = req.query;
-    const { pageNum, limitNum, skip } = req.pagination;
+    const { page: pageNum, limit: limitNum } = req.pagination;
+    const skip = (pageNum - 1) * limitNum;
     
     const filter = {};
     if (studentId) {
