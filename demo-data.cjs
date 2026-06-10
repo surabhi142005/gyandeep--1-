@@ -209,33 +209,59 @@ async function createDemoData() {
   
   console.log('\n7️⃣ Creating grades across subjects...');
   let gradeCount = 0;
-  for (const student of allStudents.slice(0, 5)) {
-    for (const subject of subjects.slice(0, 4)) {
-      const existing = await db.collection('grades').findOne({
-        student_id: student._id,
-        subject_id: subject._id,
-      });
-      if (!existing) {
-        await db.collection('grades').insertOne({
-          _id: new ObjectId(),
-          od_id: 'GRADE-' + crypto.randomBytes(4).toString('hex').toUpperCase(),
+  for (const student of allStudents) {
+    for (const subject of subjects) {
+      // Create 10 grades per subject
+      for (let i = 0; i < 10; i++) {
+        const date = new Date();
+        date.setDate(date.getDate() - (i * 3));
+        if (date.getDay() === 0 || date.getDay() === 6) continue;
+        
+        const dayStr = date.toISOString().split('T')[0];
+        const existing = await db.collection('grades').findOne({
           student_id: student._id,
           subject_id: subject._id,
-          category: ['quiz', 'exam', 'assignment'][Math.floor(Math.random() * 3)],
-          title: `Test ${subject.name}`,
-          score: Math.floor(Math.random() * 30) + 70,
-          max_score: 100,
-          date: '2024-11-' + String(Math.floor(Math.random() * 28) + 1).padStart(2, '0'),
-          teacher_id: teachers[0]._id,
-          createdAt: new Date(),
-          updatedAt: new Date(),
+          date: dayStr
         });
-        gradeCount++;
+        
+        if (!existing) {
+          await db.collection('grades').insertOne({
+            _id: new ObjectId(),
+            od_id: 'GRADE-' + crypto.randomBytes(4).toString('hex').toUpperCase(),
+            student_id: student._id,
+            subject_id: subject._id,
+            category: ['quiz', 'exam', 'assignment'][Math.floor(Math.random() * 3)],
+            title: `Test ${subject.name}`,
+            score: Math.floor(Math.random() * 30) + 70,
+            max_score: 100,
+            date: dayStr,
+            teacher_id: teachers[0]._id,
+            createdAt: date,
+            updatedAt: new Date(),
+          });
+          gradeCount++;
+        }
       }
     }
   }
   console.log(`   ✓ Created ${gradeCount} grades`);  
   
+  // Update user performance field for charts
+  console.log('\n🔄 Updating student performance history for charts...');
+  for (const student of allStudents) {
+    const studentGrades = await db.collection('grades').find({ student_id: student._id }).sort({ date: 1 }).toArray();
+    const performance = studentGrades.map(g => ({
+      subject: subjects.find(s => s._id.equals(g.subject_id))?.name || 'Subject',
+      date: g.date,
+      score: g.score
+    }));
+    await db.collection('users').updateOne(
+      { _id: student._id },
+      { $set: { performance } }
+    );
+  }
+  console.log('   ✓ Updated performance history for all students');
+
   console.log('\n8️⃣ Creating activity logs for gamification...');
   const activities = ['QUIZ_COMPLETED', 'ATTENDANCE_MARKED', 'STREAK_BONUS', 'LEVEL_UP', 'NOTE_ACCESSED'];
   let actCount = 0;  

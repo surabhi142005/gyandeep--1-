@@ -74,16 +74,36 @@ export async function reseedDemoDatabase({ clearExisting = false } = {}) {
   const ticketReplyId = new ObjectId();
 
   const studentSeeds = [
-    { name: 'Aarav Kulkarni', email: 'aarav.kulkarni@student.gyandeep.edu', classId: class10AId, xp: 340, coins: 85, level: 4, badges: ['Fast Learner', 'Perfect Attendance'] },
-    { name: 'Diya Nair', email: 'diya.nair@student.gyandeep.edu', classId: class10AId, xp: 290, coins: 72, level: 3, badges: ['Quiz Master'] },
-    { name: 'Ishaan Patil', email: 'ishaan.patil@student.gyandeep.edu', classId: class10AId, xp: 210, coins: 55, level: 3, badges: ['Consistent Learner'] },
-    { name: 'Meera Joshi', email: 'meera.joshi@student.gyandeep.edu', classId: class10AId, xp: 180, coins: 43, level: 2, badges: [] },
-    { name: 'Rhea Sharma', email: 'rhea.sharma@student.gyandeep.edu', classId: class10BId, xp: 265, coins: 61, level: 3, badges: ['Top Performer'] },
-    { name: 'Kabir Deshmukh', email: 'kabir.deshmukh@student.gyandeep.edu', classId: class10BId, xp: 150, coins: 35, level: 2, badges: [] },
+    { name: 'Aarav Kulkarni', email: 'aarav.kulkarni@student.gyandeep.edu', classId: class10AId, xp: 1340, coins: 285, level: 14, badges: ['Fast Learner', 'Perfect Attendance'] },
+    { name: 'Diya Nair', email: 'diya.nair@student.gyandeep.edu', classId: class10AId, xp: 1290, coins: 272, level: 13, badges: ['Quiz Master'] },
+    { name: 'Ishaan Patil', email: 'ishaan.patil@student.gyandeep.edu', classId: class10AId, xp: 1210, coins: 255, level: 13, badges: ['Consistent Learner'] },
+    { name: 'Meera Joshi', email: 'meera.joshi@student.gyandeep.edu', classId: class10AId, xp: 1180, coins: 243, level: 12, badges: [] },
+    { name: 'Rohan Shah', email: 'rohan.shah@student.gyandeep.edu', classId: class10AId, xp: 956, coins: 138, level: 10, badges: [] },
+    { name: 'Ananya Reddy', email: 'ananya.reddy@student.gyandeep.edu', classId: class10AId, xp: 845, coins: 132, level: 9, badges: [] },
+    { name: 'Rhea Sharma', email: 'rhea.sharma@student.gyandeep.edu', classId: class10BId, xp: 1265, coins: 261, level: 13, badges: ['Top Performer'] },
+    { name: 'Kabir Deshmukh', email: 'kabir.deshmukh@student.gyandeep.edu', classId: class10BId, xp: 850, coins: 135, level: 9, badges: [] },
+    { name: 'Sneha Iyer', email: 'sneha.iyer@student.gyandeep.edu', classId: class10BId, xp: 728, coins: 128, level: 8, badges: [] },
+    { name: 'Vihaan Gupta', email: 'vihaan.gupta@student.gyandeep.edu', classId: class10BId, xp: 612, coins: 124, level: 7, badges: [] },
   ];
 
   const studentDocs = studentSeeds.map((student, index) => {
     const studentId = new ObjectId();
+    
+    // Generate 20 random performance entries
+    const performance = [];
+    const subjectsList = ['Mathematics', 'Science', 'History', 'English'];
+    for (let i = 20; i >= 0; i--) {
+      const date = new Date();
+      date.setDate(date.getDate() - i);
+      if (date.getDay() === 0 || date.getDay() === 6) continue;
+      
+      performance.push({
+        subject: subjectsList[Math.floor(Math.random() * subjectsList.length)],
+        date: date.toISOString().split('T')[0],
+        score: 70 + Math.floor(Math.random() * 31)
+      });
+    }
+
     return {
       _id: studentId,
       name: student.name,
@@ -95,16 +115,12 @@ export async function reseedDemoDatabase({ clearExisting = false } = {}) {
       emailVerified: true,
       preferences: { notifications: true },
       history: [],
-      performance: [
-        { subject: 'Mathematics', date: '2026-04-18', score: 72 + index * 3 },
-        { subject: 'Science', date: '2026-04-24', score: 75 + index * 2 },
-        { subject: 'Mathematics', date: '2026-05-02', score: 80 + index * 2 },
-      ],
+      performance,
       badges: student.badges,
       xp: student.xp,
       coins: student.coins,
       level: student.level,
-      streak: 3 + index,
+      streak: 5 + index,
       assignedSubjects: [],
       createdAt: fiveDaysAgo,
       updatedAt: now,
@@ -114,6 +130,190 @@ export async function reseedDemoDatabase({ clearExisting = false } = {}) {
   const mathLeaderIds = studentDocs
     .filter((student) => student.classId.equals(class10AId))
     .map((student) => student._id.toString());
+
+  const users = [
+    {
+      _id: adminId,
+      name: 'GyanDeep Admin',
+      email: 'admin@gyandeep.edu',
+      password: adminPassword,
+      role: 'admin',
+      active: true,
+      emailVerified: true,
+      preferences: { notifications: true },
+      history: [],
+      performance: [],
+      assignedSubjects: [],
+      createdAt: fiveDaysAgo,
+      updatedAt: now,
+    },
+    {
+      _id: teacherAId,
+      name: 'Asha Verma',
+      email: 'teacher.demo@gyandeep.edu',
+      password: teacherPassword,
+      role: 'teacher',
+      active: true,
+      emailVerified: true,
+      assignedSubjects: ['Mathematics', 'Science'],
+      assignedClasses: [class10AId.toString()],
+      preferences: { notifications: true },
+      history: [],
+      performance: [],
+      createdAt: fiveDaysAgo,
+      updatedAt: now,
+    },
+    {
+      _id: teacherBId,
+      name: 'Rohan Mehta',
+      email: 'teacher.history@gyandeep.edu',
+      password: teacherPassword,
+      role: 'teacher',
+      active: true,
+      emailVerified: true,
+      assignedSubjects: ['History', 'English'],
+      assignedClasses: [class10BId.toString()],
+      preferences: { notifications: true },
+      history: [],
+      performance: [],
+      createdAt: fiveDaysAgo,
+      updatedAt: now,
+    },
+    ...studentDocs,
+  ];
+
+  const classes = [
+    {
+      _id: class10AId,
+      name: 'Class 10-A',
+      description: 'STEM demonstration class',
+      section: 'A',
+      grade: 10,
+      subject: 'Mathematics',
+      academicYear: '2026-2027',
+      teacherId: teacherAId.toString(),
+      active: true,
+      createdAt: fiveDaysAgo,
+      updatedAt: now,
+    },
+    {
+      _id: class10BId,
+      name: 'Class 10-B',
+      description: 'Humanities demonstration class',
+      section: 'B',
+      grade: 10,
+      subject: 'History',
+      academicYear: '2026-2027',
+      teacherId: teacherBId.toString(),
+      active: true,
+      createdAt: fiveDaysAgo,
+      updatedAt: now,
+    },
+  ];
+
+  const subjects = [
+    { _id: new ObjectId(), id: 'Mathematics', name: 'Mathematics', code: 'MATH', teacherId: teacherAId.toString(), createdAt: fiveDaysAgo, updatedAt: now },
+    { _id: new ObjectId(), id: 'Science', name: 'Science', code: 'SCI', teacherId: teacherAId.toString(), createdAt: fiveDaysAgo, updatedAt: now },
+    { _id: new ObjectId(), id: 'History', name: 'History', code: 'HIST', teacherId: teacherBId.toString(), createdAt: fiveDaysAgo, updatedAt: now },
+    { _id: new ObjectId(), id: 'English', name: 'English', code: 'ENG', teacherId: teacherBId.toString(), createdAt: fiveDaysAgo, updatedAt: now },
+  ];
+
+  // Historical data generation
+  const historicalAttendance = [];
+  const historicalGrades = [];
+  const historicalQuizzes = [];
+  const historicalQuizAttempts = [];
+
+  for (let i = 30; i >= 0; i--) {
+    const date = new Date();
+    date.setDate(date.getDate() - i);
+    if (date.getDay() === 0 || date.getDay() === 6) continue;
+    
+    const dayStr = date.toISOString().split('T')[0];
+    
+    // For each class, create a session and data
+    for (const cls of classes) {
+      const sessionSub = cls.subject;
+      const sessId = new ObjectId();
+      const quizId = new ObjectId();
+      
+      // Attendance
+      const classStudents = studentDocs.filter(s => s.classId.equals(cls._id));
+      for (const student of classStudents) {
+        const statusRand = Math.random();
+        const status = statusRand > 0.9 ? 'Absent' : statusRand > 0.8 ? 'Late' : 'Present';
+        
+        historicalAttendance.push({
+          _id: new ObjectId(),
+          studentId: student._id.toString(),
+          classId: cls._id.toString(),
+          sessionId: sessId,
+          teacherId: cls.teacherId,
+          status,
+          timestamp: new Date(date.getTime() + 9 * 60 * 60 * 1000 + Math.random() * 3600000),
+          createdAt: date,
+        });
+
+        if (status !== 'Absent' && Math.random() > 0.3) {
+          const score = 70 + Math.floor(Math.random() * 31);
+          
+          historicalGrades.push({
+            _id: new ObjectId(),
+            studentId: student._id.toString(),
+            subjectId: sessionSub,
+            score,
+            maxScore: 100,
+            title: `${sessionSub} Daily Quiz`,
+            category: 'Quiz',
+            teacherId: cls.teacherId,
+            gradedAt: date,
+            createdAt: date,
+          });
+
+          historicalQuizAttempts.push({
+            _id: new ObjectId(),
+            sessionId: sessId,
+            studentId: student._id.toString(),
+            quizId,
+            score,
+            totalQuestions: 10,
+            correctCount: Math.round(score / 10),
+            submittedAt: new Date(date.getTime() + 10 * 60 * 60 * 1000),
+            createdAt: date,
+          });
+
+          // Update student performance array in memory
+          const studentDoc = studentDocs.find(s => s._id.equals(student._id));
+          if (studentDoc) {
+            studentDoc.performance.push({
+              subject: sessionSub,
+              date: dayStr,
+              score
+            });
+          }
+        }
+      }
+
+      historicalQuizzes.push({
+        _id: quizId,
+        sessionId: sessId,
+        classId: cls._id.toString(),
+        teacherId: cls.teacherId,
+        title: `${sessionSub} Checkpoint`,
+        questions: activeQuizQuestions,
+        published: true,
+        publishedAt: date,
+        createdAt: date,
+        updatedAt: date,
+      });
+    }
+  }
+
+  const sixDaysAgo = new Date(now.getTime() - 6 * 24 * 60 * 60 * 1000);
+  const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+  const eightDaysAgo = new Date(now.getTime() - 8 * 24 * 60 * 60 * 1000);
+  const nineDaysAgo = new Date(now.getTime() - 9 * 24 * 60 * 60 * 1000);
+  const tenDaysAgo = new Date(now.getTime() - 10 * 24 * 60 * 60 * 1000);
 
   const users = [
     {
@@ -384,6 +584,92 @@ export async function reseedDemoDatabase({ clearExisting = false } = {}) {
       submittedAt: new Date(now.getTime() - 2 * 60 * 1000),
       createdAt: new Date(now.getTime() - 5 * 60 * 1000),
     },
+    // Past quiz attempts
+    {
+      _id: new ObjectId(),
+      sessionId: pastSessionId,
+      studentId: studentDocs[0]._id.toString(),
+      quizId: pastQuizId,
+      answers: [{ questionId: 'pq1', correctAnswer: 'Law of inertia', studentAnswer: 'Law of inertia', isCorrect: true }],
+      score: 100,
+      totalQuestions: 1,
+      correctCount: 1,
+      submittedAt: new Date(twoDaysAgo.getTime() + 20 * 60 * 1000),
+      createdAt: new Date(twoDaysAgo.getTime() + 15 * 60 * 1000),
+    },
+    {
+      _id: new ObjectId(),
+      sessionId: pastSessionId,
+      studentId: studentDocs[1]._id.toString(),
+      quizId: pastQuizId,
+      answers: [{ questionId: 'pq1', correctAnswer: 'Law of inertia', studentAnswer: 'Law of inertia', isCorrect: true }],
+      score: 100,
+      totalQuestions: 1,
+      correctCount: 1,
+      submittedAt: new Date(twoDaysAgo.getTime() + 25 * 60 * 1000),
+      createdAt: new Date(twoDaysAgo.getTime() + 20 * 60 * 1000),
+    },
+    {
+      _id: new ObjectId(),
+      sessionId: pastSessionId,
+      studentId: studentDocs[3]._id.toString(),
+      quizId: pastQuizId,
+      answers: [{ questionId: 'pq1', correctAnswer: 'Law of inertia', studentAnswer: 'Law of acceleration', isCorrect: false }],
+      score: 0,
+      totalQuestions: 1,
+      correctCount: 0,
+      submittedAt: new Date(twoDaysAgo.getTime() + 30 * 60 * 1000),
+      createdAt: new Date(twoDaysAgo.getTime() + 25 * 60 * 1000),
+    },
+    // Additional quiz attempts for more students
+    {
+      _id: new ObjectId(),
+      sessionId: activeSessionId,
+      studentId: studentDocs[3]._id.toString(),
+      quizId: activeQuizId,
+      answers: [
+        { questionId: 'q1', correctAnswer: 'b^2 - 4ac', studentAnswer: 'b^2 - 4ac', isCorrect: true },
+        { questionId: 'q2', correctAnswer: 'One repeated real root', studentAnswer: 'One repeated real root', isCorrect: true },
+        { questionId: 'q3', correctAnswer: 'Parabola', studentAnswer: 'Parabola', isCorrect: true },
+      ],
+      score: 100,
+      totalQuestions: 3,
+      correctCount: 3,
+      submittedAt: new Date(now.getTime() - 1 * 60 * 1000),
+      createdAt: new Date(now.getTime() - 4 * 60 * 1000),
+    },
+    {
+      _id: new ObjectId(),
+      sessionId: activeSessionId,
+      studentId: studentDocs[4]._id.toString(),
+      quizId: activeQuizId,
+      answers: [
+        { questionId: 'q1', correctAnswer: 'b^2 - 4ac', studentAnswer: 'b^2 - 4ac', isCorrect: true },
+        { questionId: 'q2', correctAnswer: 'One repeated real root', studentAnswer: 'No real roots', isCorrect: false },
+        { questionId: 'q3', correctAnswer: 'Parabola', studentAnswer: 'Circle', isCorrect: false },
+      ],
+      score: 33,
+      totalQuestions: 3,
+      correctCount: 1,
+      submittedAt: new Date(now.getTime() - 3 * 60 * 1000),
+      createdAt: new Date(now.getTime() - 6 * 60 * 1000),
+    },
+    {
+      _id: new ObjectId(),
+      sessionId: activeSessionId,
+      studentId: studentDocs[5]._id.toString(),
+      quizId: activeQuizId,
+      answers: [
+        { questionId: 'q1', correctAnswer: 'b^2 - 4ac', studentAnswer: '2a + b', isCorrect: false },
+        { questionId: 'q2', correctAnswer: 'One repeated real root', studentAnswer: 'One repeated real root', isCorrect: true },
+        { questionId: 'q3', correctAnswer: 'Parabola', studentAnswer: 'Line', isCorrect: false },
+      ],
+      score: 33,
+      totalQuestions: 3,
+      correctCount: 1,
+      submittedAt: new Date(now.getTime() - 2.5 * 60 * 1000),
+      createdAt: new Date(now.getTime() - 5 * 60 * 1000),
+    },
   ];
 
   const attendance = [
@@ -443,9 +729,22 @@ export async function reseedDemoDatabase({ clearExisting = false } = {}) {
       timestamp: new Date(now.getTime() - 24 * 60 * 60 * 1000),
       createdAt: new Date(now.getTime() - 24 * 60 * 60 * 1000),
     },
+    // More students in active session (Class 10-A)
+    { _id: new ObjectId(), studentId: studentDocs[4]._id.toString(), classId: class10AId.toString(), sessionId: activeSessionId, teacherId: teacherAId.toString(), status: 'Present', timestamp: new Date(now.getTime() - 6 * 60 * 1000), locationVerified: true, faceVerified: true, createdAt: new Date(now.getTime() - 6 * 60 * 1000) },
+    { _id: new ObjectId(), studentId: studentDocs[5]._id.toString(), classId: class10AId.toString(), sessionId: activeSessionId, teacherId: teacherAId.toString(), status: 'Present', timestamp: new Date(now.getTime() - 5 * 60 * 1000), locationVerified: true, faceVerified: true, createdAt: new Date(now.getTime() - 5 * 60 * 1000) },
+    // Past session attendance (Class 10-A)
+    { _id: new ObjectId(), studentId: studentDocs[1]._id.toString(), classId: class10AId.toString(), sessionId: pastSessionId, teacherId: teacherAId.toString(), status: 'Present', timestamp: new Date(twoDaysAgo.getTime() + 12 * 60 * 1000), createdAt: new Date(twoDaysAgo.getTime() + 12 * 60 * 1000) },
+    { _id: new ObjectId(), studentId: studentDocs[2]._id.toString(), classId: class10AId.toString(), sessionId: pastSessionId, teacherId: teacherAId.toString(), status: 'Present', timestamp: new Date(twoDaysAgo.getTime() + 8 * 60 * 1000), createdAt: new Date(twoDaysAgo.getTime() + 8 * 60 * 1000) },
+    { _id: new ObjectId(), studentId: studentDocs[4]._id.toString(), classId: class10AId.toString(), sessionId: pastSessionId, teacherId: teacherAId.toString(), status: 'Late', timestamp: new Date(twoDaysAgo.getTime() + 25 * 60 * 1000), createdAt: new Date(twoDaysAgo.getTime() + 25 * 60 * 1000) },
+    { _id: new ObjectId(), studentId: studentDocs[5]._id.toString(), classId: class10AId.toString(), sessionId: pastSessionId, teacherId: teacherAId.toString(), status: 'Absent', timestamp: new Date(twoDaysAgo.getTime() + 30 * 60 * 1000), createdAt: new Date(twoDaysAgo.getTime() + 30 * 60 * 1000) },
+    // Class 10-B students in waiting session
+    { _id: new ObjectId(), studentId: studentDocs[7]._id.toString(), classId: class10BId.toString(), sessionId: waitingSessionId, teacherId: teacherBId.toString(), status: 'Present', timestamp: new Date(now.getTime() - 20 * 60 * 60 * 1000), createdAt: new Date(now.getTime() - 20 * 60 * 60 * 1000) },
+    { _id: new ObjectId(), studentId: studentDocs[8]._id.toString(), classId: class10BId.toString(), sessionId: waitingSessionId, teacherId: teacherBId.toString(), status: 'Present', timestamp: new Date(now.getTime() - 22 * 60 * 60 * 1000), createdAt: new Date(now.getTime() - 22 * 60 * 60 * 1000) },
+    { _id: new ObjectId(), studentId: studentDocs[9]._id.toString(), classId: class10BId.toString(), sessionId: waitingSessionId, teacherId: teacherBId.toString(), status: 'Late', timestamp: new Date(now.getTime() - 26 * 60 * 60 * 1000), createdAt: new Date(now.getTime() - 26 * 60 * 60 * 1000) },
   ];
 
   const grades = [
+    // Class 10-A Mathematics grades
     {
       _id: new ObjectId(),
       studentId: studentDocs[0]._id.toString(),
@@ -472,6 +771,103 @@ export async function reseedDemoDatabase({ clearExisting = false } = {}) {
     },
     {
       _id: new ObjectId(),
+      studentId: studentDocs[0]._id.toString(),
+      subjectId: 'Mathematics',
+      score: 48,
+      maxScore: 50,
+      title: 'Linear Equations Test',
+      category: 'Test',
+      teacherId: teacherAId.toString(),
+      gradedAt: twoDaysAgo,
+      createdAt: twoDaysAgo,
+    },
+    {
+      _id: new ObjectId(),
+      studentId: studentDocs[1]._id.toString(),
+      subjectId: 'Mathematics',
+      score: 38,
+      maxScore: 50,
+      title: 'Linear Equations Test',
+      category: 'Test',
+      teacherId: teacherAId.toString(),
+      gradedAt: twoDaysAgo,
+      createdAt: twoDaysAgo,
+    },
+    {
+      _id: new ObjectId(),
+      studentId: studentDocs[2]._id.toString(),
+      subjectId: 'Mathematics',
+      score: 35,
+      maxScore: 50,
+      title: 'Quadratic Worksheet',
+      category: 'Assignment',
+      teacherId: teacherAId.toString(),
+      gradedAt: new Date(now.getTime() - 24 * 60 * 60 * 1000),
+      createdAt: new Date(now.getTime() - 24 * 60 * 60 * 1000),
+    },
+    {
+      _id: new ObjectId(),
+      studentId: studentDocs[3]._id.toString(),
+      subjectId: 'Mathematics',
+      score: 32,
+      maxScore: 50,
+      title: 'Quadratic Worksheet',
+      category: 'Assignment',
+      teacherId: teacherAId.toString(),
+      gradedAt: new Date(now.getTime() - 24 * 60 * 60 * 1000),
+      createdAt: new Date(now.getTime() - 24 * 60 * 60 * 1000),
+    },
+    {
+      _id: new ObjectId(),
+      studentId: studentDocs[4]._id.toString(),
+      subjectId: 'Mathematics',
+      score: 40,
+      maxScore: 50,
+      title: 'Linear Equations Test',
+      category: 'Test',
+      teacherId: teacherAId.toString(),
+      gradedAt: twoDaysAgo,
+      createdAt: twoDaysAgo,
+    },
+    {
+      _id: new ObjectId(),
+      studentId: studentDocs[5]._id.toString(),
+      subjectId: 'Mathematics',
+      score: 28,
+      maxScore: 50,
+      title: 'Quadratic Worksheet',
+      category: 'Assignment',
+      teacherId: teacherAId.toString(),
+      gradedAt: new Date(now.getTime() - 24 * 60 * 60 * 1000),
+      createdAt: new Date(now.getTime() - 24 * 60 * 60 * 1000),
+    },
+    // Class 10-A Science grades
+    {
+      _id: new ObjectId(),
+      studentId: studentDocs[0]._id.toString(),
+      subjectId: 'Science',
+      score: 45,
+      maxScore: 50,
+      title: 'Force Quiz',
+      category: 'Quiz',
+      teacherId: teacherAId.toString(),
+      gradedAt: fiveDaysAgo,
+      createdAt: fiveDaysAgo,
+    },
+    {
+      _id: new ObjectId(),
+      studentId: studentDocs[1]._id.toString(),
+      subjectId: 'Science',
+      score: 40,
+      maxScore: 50,
+      title: 'Force Quiz',
+      category: 'Quiz',
+      teacherId: teacherAId.toString(),
+      gradedAt: fiveDaysAgo,
+      createdAt: fiveDaysAgo,
+    },
+    {
+      _id: new ObjectId(),
       studentId: studentDocs[2]._id.toString(),
       subjectId: 'Science',
       score: 38,
@@ -484,7 +880,20 @@ export async function reseedDemoDatabase({ clearExisting = false } = {}) {
     },
     {
       _id: new ObjectId(),
-      studentId: studentDocs[4]._id.toString(),
+      studentId: studentDocs[3]._id.toString(),
+      subjectId: 'Science',
+      score: 35,
+      maxScore: 50,
+      title: 'Motion Lab',
+      category: 'Lab',
+      teacherId: teacherAId.toString(),
+      gradedAt: twoDaysAgo,
+      createdAt: twoDaysAgo,
+    },
+    // Class 10-B History grades
+    {
+      _id: new ObjectId(),
+      studentId: studentDocs[6]._id.toString(),
       subjectId: 'History',
       score: 44,
       maxScore: 50,
@@ -493,6 +902,79 @@ export async function reseedDemoDatabase({ clearExisting = false } = {}) {
       teacherId: teacherBId.toString(),
       gradedAt: twoDaysAgo,
       createdAt: twoDaysAgo,
+    },
+    {
+      _id: new ObjectId(),
+      studentId: studentDocs[7]._id.toString(),
+      subjectId: 'History',
+      score: 38,
+      maxScore: 50,
+      title: 'Reform Movements Essay',
+      category: 'Essay',
+      teacherId: teacherBId.toString(),
+      gradedAt: twoDaysAgo,
+      createdAt: twoDaysAgo,
+    },
+    {
+      _id: new ObjectId(),
+      studentId: studentDocs[8]._id.toString(),
+      subjectId: 'History',
+      score: 42,
+      maxScore: 50,
+      title: 'Colonial Period Test',
+      category: 'Test',
+      teacherId: teacherBId.toString(),
+      gradedAt: fiveDaysAgo,
+      createdAt: fiveDaysAgo,
+    },
+    {
+      _id: new ObjectId(),
+      studentId: studentDocs[9]._id.toString(),
+      subjectId: 'History',
+      score: 30,
+      maxScore: 50,
+      title: 'Reform Movements Essay',
+      category: 'Essay',
+      teacherId: teacherBId.toString(),
+      gradedAt: twoDaysAgo,
+      createdAt: twoDaysAgo,
+    },
+    // Additional Math grades for analytics
+    {
+      _id: new ObjectId(),
+      studentId: studentDocs[0]._id.toString(),
+      subjectId: 'Mathematics',
+      score: 50,
+      maxScore: 50,
+      title: 'Chapter Test - Algebra',
+      category: 'Test',
+      teacherId: teacherAId.toString(),
+      gradedAt: sixDaysAgo,
+      createdAt: sixDaysAgo,
+    },
+    {
+      _id: new ObjectId(),
+      studentId: studentDocs[1]._id.toString(),
+      subjectId: 'Mathematics',
+      score: 44,
+      maxScore: 50,
+      title: 'Chapter Test - Algebra',
+      category: 'Test',
+      teacherId: teacherAId.toString(),
+      gradedAt: sixDaysAgo,
+      createdAt: sixDaysAgo,
+    },
+    {
+      _id: new ObjectId(),
+      studentId: studentDocs[2]._id.toString(),
+      subjectId: 'Mathematics',
+      score: 40,
+      maxScore: 50,
+      title: 'Chapter Test - Algebra',
+      category: 'Test',
+      teacherId: teacherAId.toString(),
+      gradedAt: sixDaysAgo,
+      createdAt: sixDaysAgo,
     },
   ];
 
@@ -743,10 +1225,32 @@ export async function reseedDemoDatabase({ clearExisting = false } = {}) {
   await db.collection(COLLECTIONS.CLASSES).insertMany(classes);
   await db.collection(COLLECTIONS.SUBJECTS).insertMany(subjects);
   await db.collection(COLLECTIONS.CLASS_SESSIONS).insertMany(sessions);
-  await db.collection(COLLECTIONS.QUIZZES).insertMany(quizzes);
-  await db.collection(COLLECTIONS.QUIZ_ATTEMPTS).insertMany(quizAttempts);
-  await db.collection(COLLECTIONS.ATTENDANCE).insertMany(attendance);
-  await db.collection(COLLECTIONS.GRADES).insertMany(grades);
+  
+  // Combine static and historical data for insertion
+  if (historicalQuizzes.length > 0) {
+    await db.collection(COLLECTIONS.QUIZZES).insertMany([...quizzes, ...historicalQuizzes]);
+  } else {
+    await db.collection(COLLECTIONS.QUIZZES).insertMany(quizzes);
+  }
+
+  if (historicalQuizAttempts.length > 0) {
+    await db.collection(COLLECTIONS.QUIZ_ATTEMPTS).insertMany([...quizAttempts, ...historicalQuizAttempts]);
+  } else {
+    await db.collection(COLLECTIONS.QUIZ_ATTEMPTS).insertMany(quizAttempts);
+  }
+
+  if (historicalAttendance.length > 0) {
+    await db.collection(COLLECTIONS.ATTENDANCE).insertMany([...attendance, ...historicalAttendance]);
+  } else {
+    await db.collection(COLLECTIONS.ATTENDANCE).insertMany(attendance);
+  }
+
+  if (historicalGrades.length > 0) {
+    await db.collection(COLLECTIONS.GRADES).insertMany([...grades, ...historicalGrades]);
+  } else {
+    await db.collection(COLLECTIONS.GRADES).insertMany(grades);
+  }
+
   await db.collection(COLLECTIONS.SESSION_NOTES).insertMany(sessionNotes);
   await db.collection(COLLECTIONS.CENTRALIZED_NOTES).insertMany(centralizedNotes);
   await db.collection(COLLECTIONS.ANNOUNCEMENTS).insertMany(announcements);
@@ -759,13 +1263,14 @@ export async function reseedDemoDatabase({ clearExisting = false } = {}) {
 
   return {
     skipped: false,
-    message: 'Demo database seeded successfully.',
+    message: 'Demo database seeded successfully with rich historical data.',
     summary: {
       users: users.length,
       classes: classes.length,
       liveSessions: 1,
-      quizzes: quizzes.length,
-      tickets: tickets.length,
+      quizzes: quizzes.length + historicalQuizzes.length,
+      attendanceRecords: attendance.length + historicalAttendance.length,
+      gradeRecords: grades.length + historicalGrades.length,
       leaderboardStudents: mathLeaderIds.length,
     },
     credentials: {

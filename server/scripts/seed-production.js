@@ -141,12 +141,17 @@ async function seed() {
     const categories = ['Quiz', 'Midterm', 'Assignment'];
 
     for (const student of students) {
+      const studentPerformance = [];
       for (const subjectName of subjectsToGrade) {
-        for (let j = 1; j <= 5; j++) {
-          const score = 60 + Math.floor(Math.random() * 40);
+        // Seed 15 grades per subject over 30 days
+        for (let j = 1; j <= 15; j++) {
+          const score = 65 + Math.floor(Math.random() * 35);
           const date = new Date();
-          date.setDate(date.getDate() - (j * 5));
+          date.setDate(date.getDate() - (j * 2));
+          if (date.getDay() === 0 || date.getDay() === 6) continue;
+          
           const _id = new ObjectId();
+          const dayStr = date.toISOString().split('T')[0];
           
           grades.push(withOdId({
             _id,
@@ -160,27 +165,47 @@ async function seed() {
             score: score,
             maxScore: 100,
             gradedAt: date,
-            date: date,
+            date: dayStr,
             teacherId: teachers[0]._id.toString(),
             teacher_id: teachers[0]._id.toString(),
             createdAt: date,
           }, 'GRD'));
+
+          studentPerformance.push({
+            subject: subjectName,
+            date: dayStr,
+            score
+          });
         }
       }
+      
+      // Update student performance field in memory for later update
+      student.performance = studentPerformance.sort((a, b) => new Date(a.date) - new Date(b.date));
     }
     await db.collection(COLLECTIONS.GRADES).insertMany(grades);
     console.log('Seeded Grades');
 
+    // Update users with their generated performance data
+    for (const student of students) {
+      if (student.role === 'student') {
+        await db.collection(COLLECTIONS.USERS).updateOne(
+          { _id: student._id },
+          { $set: { performance: student.performance } }
+        );
+      }
+    }
+    console.log('Updated Student Performance fields');
+
     // 6. Seed Attendance
     const attendance = [];
-    const days = 14;
+    const days = 30;
     for (const student of students) {
       for (let d = 0; d < days; d++) {
         const date = new Date();
         date.setDate(date.getDate() - d);
-        if (date.getDay() === 0) continue;
+        if (date.getDay() === 0 || date.getDay() === 6) continue;
 
-        const isPresent = Math.random() > 0.1;
+        const isPresent = Math.random() > 0.15;
         const dayString = date.toISOString().split('T')[0];
         const _id = new ObjectId();
         
@@ -190,8 +215,8 @@ async function seed() {
           student_id: student._id.toString(),
           classId: student.classId,
           class_id: student.classId,
-          status: isPresent ? 'Present' : 'Absent',
-          timestamp: date,
+          status: isPresent ? 'Present' : Math.random() > 0.5 ? 'Absent' : 'Late',
+          timestamp: new Date(date.getTime() + 9 * 60 * 60 * 1000 + Math.random() * 3600000),
           date: date,
           session_id: `SESS-${dayString}`,
           sessionId: `SESS-${dayString}`,

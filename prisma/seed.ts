@@ -159,11 +159,7 @@ async function main() {
           coins: 1000 + (i * 100),
           level: Math.floor(i / 2) + 5,
           streak: 5 + i,
-          performance: { 
-            averageScore: 75 + (i * 2), 
-            quizzesTaken: 5 + i,
-            attendanceRate: 85 + (i % 15)
-          },
+          performance: [],
           faceImage: i < 5 ? 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==' : null,
           preferences: { 
             theme: i % 3 === 0 ? 'teal' : i % 3 === 1 ? 'indigo' : 'crimson', 
@@ -302,46 +298,124 @@ async function main() {
     });
   }
 
-  console.log('📊 Creating Student Performance...');
-  for (let i = 0; i < 5; i++) {
-    const student = students[i];
-    await prisma.quizAttempt.create({
-      data: {
-        odId: generateOdId('ATMT'),
-        quizId: mathQuiz.id,
-        studentId: student.id,
-        answersJson: JSON.stringify({ '0': '4', '1': 'x² - 4', '2': '4' }),
-        correctCount: 3,
-        totalQuestions: 3,
-        percentage: 100,
-        submittedAt: new Date(),
-        timeTakenSeconds: 120 + (i * 30)
-      }
-    });
+  console.log('📊 Creating Student Performance & Historical Data...');
+  const daysToSeed = 30;
+  const now = new Date();
+  
+  for (let d = daysToSeed; d >= 0; d--) {
+    const currentDay = new Date(now);
+    currentDay.setDate(now.getDate() - d);
+    
+    // Skip weekends
+    if (currentDay.getDay() === 0 || currentDay.getDay() === 6) continue;
+    
+    const dayStr = currentDay.toISOString().split('T')[0];
+    console.log(`  - Seeding data for ${dayStr}...`);
+    
+    for (const cls of classes.slice(0, 3)) { // Seed for first 3 classes
+      // 2 sessions per day per class
+      for (let s = 0; s < 2; s++) {
+        const subject = subjects[Math.floor(Math.random() * subjects.length)];
+        const teacher = teachers[Math.floor(Math.random() * teachers.length)];
+        
+        const session = await prisma.classSession.create({
+          data: {
+            odId: generateOdId('SESS'),
+            code: `${subject.name.substring(0, 3).toUpperCase()}-${Math.random().toString(36).substring(2, 6).toUpperCase()}`,
+            teacherId: teacher.id,
+            classId: cls.id,
+            subjectId: subject.id,
+            expiry: new Date(currentDay.getTime() + 3600000),
+            sessionStatus: d === 0 ? 'active' : 'ended',
+            createdAt: currentDay,
+            quizPublished: Math.random() > 0.3
+          }
+        });
 
-    await prisma.attendance.create({
-      data: {
-        odId: generateOdId('ATT'),
-        sessionId: activeSession.id,
-        studentId: student.id,
-        verifiedById: teachers[0].id,
-        status: i === 4 ? 'late' : 'present'
-      }
-    });
+        // Attendance for all students in this class
+        const classStudents = students.filter(std => std.classId === cls.id);
+        for (const student of classStudents) {
+          const statusRand = Math.random();
+          const status = statusRand > 0.9 ? 'absent' : statusRand > 0.8 ? 'late' : 'present';
+          
+          await prisma.attendance.create({
+            data: {
+              odId: generateOdId('ATT'),
+              sessionId: session.id,
+              studentId: student.id,
+              verifiedById: teacher.id,
+              status,
+              markedAt: new Date(currentDay.getTime() + Math.random() * 1800000)
+            }
+          });
 
-    await prisma.grade.create({
-      data: {
-        odId: generateOdId('GRADE'),
-        studentId: student.id,
-        subjectId: subjectMap['Mathematics'].id,
-        category: 'quiz',
-        title: 'Algebra Fundamentals',
-        score: 90 + i,
-        maxScore: 100,
-        date: new Date().toISOString().split('T')[0],
-        teacherId: teachers[0].id
+          // Quiz attempt if present and quiz published
+          if (session.quizPublished && status !== 'absent') {
+            const quiz = await prisma.quiz.create({
+              data: {
+                odId: generateOdId('QUIZ'),
+                sessionId: session.id,
+                teacherId: teacher.id,
+                title: `${subject.name} - Daily Quiz`,
+                published: true,
+                publishedAt: currentDay,
+                createdAt: currentDay
+              }
+            });
+
+            const score = 60 + Math.floor(Math.random() * 41);
+            await prisma.quizAttempt.create({
+              data: {
+                odId: generateOdId('ATMT'),
+                quizId: quiz.id,
+                studentId: student.id,
+                answersJson: JSON.stringify({ '0': 'A', '1': 'B' }),
+                correctCount: Math.floor(score / 20),
+                totalQuestions: 5,
+                percentage: score,
+                submittedAt: currentDay,
+                timeTakenSeconds: 300 + Math.random() * 300
+              }
+            });
+
+            // Also create a grade for this quiz
+            await prisma.grade.create({
+              data: {
+                odId: generateOdId('GRADE'),
+                studentId: student.id,
+                subjectId: subject.id,
+                category: 'quiz',
+                title: `${subject.name} Daily Quiz`,
+                score,
+                maxScore: 100,
+                date: dayStr,
+                teacherId: teacher.id,
+                sessionId: session.id,
+                createdAt: currentDay
+              }
+            });
+
+            // Update student's performance field (fetch first to accumulate)
+            const dbUser = await prisma.user.findUnique({ where: { id: student.id }, select: { performance: true } });
+            const existingPerformance = Array.isArray(dbUser?.performance) ? (dbUser?.performance as any[]) : [];
+            const newPerformance = {
+              subject: subject.name,
+              date: dayStr,
+              score
+            };
+            
+            await prisma.user.update({
+              where: { id: student.id },
+              data: {
+                performance: [...existingPerformance, newPerformance].slice(-30), // Keep last 30
+                xp: { increment: 50 },
+                coins: { increment: 10 }
+              }
+            });
+          }
+        }
       }
-    });
+    }
   }
 
   console.log('🎫 Creating Support Tickets...');
