@@ -100,7 +100,7 @@ function handleMessage(clientId, data) {
 
       case 'join':
         if (message.room) {
-          leaveAllRooms(clientId);
+          // Allow joining multiple rooms; do not force leaving all existing rooms
           joinRoom(clientId, message.room);
         }
         break;
