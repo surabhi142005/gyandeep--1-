@@ -127,6 +127,8 @@ router.post('/', authMiddleware, async (req, res) => {
     const db = await connectToDatabase();
     const { teacherId, classId, subjectId, code, locationEnabled, locationRadius, locationLat, locationLng, faceEnabled } = req.body;
 
+    console.log('[Sessions] Create session request from', req.user?.email || req.ip, 'body=', req.body);
+
     if (!teacherId || !subjectId) {
       return res.status(400).json({ error: 'Missing required fields' });
     }
@@ -173,6 +175,7 @@ router.post('/', authMiddleware, async (req, res) => {
       createdAt: sessionData.createdAt,
     };
 
+    console.log('[Sessions] Session created', sessionId, 'broadcasting session-update created for room', room);
     broadcastToAll('session-update', { ...session, type: 'created' });
 
     res.status(201).json({ ok: true, session: { ...session, id: sessionId }, room });
@@ -206,11 +209,14 @@ router.patch('/:id/start', async (req, res) => {
     const sessionId = req.params.id;
     const room = `session-${sessionId}`;
 
+    console.log(`[Sessions] Start request for session ${sessionId} by ${req.user?.email || req.ip}`);
+
     await db.collection(COLLECTIONS.CLASS_SESSIONS).updateOne(
       { _id: new ObjectId(sessionId) },
       { $set: { sessionStatus: 'active', startedAt: new Date(), updatedAt: new Date() } }
     );
 
+    console.log(`[Sessions] Broadcasting session-update started for ${sessionId} to room ${room}`);
     broadcastToRoom(room, 'session-update', { id: sessionId, sessionStatus: 'active', type: 'started' });
     broadcastToAll('session-update', { id: sessionId, sessionStatus: 'active', type: 'started' });
 
@@ -227,11 +233,14 @@ router.patch('/:id/end', async (req, res) => {
     const sessionId = req.params.id;
     const room = `session-${sessionId}`;
 
+    console.log(`[Sessions] End request for session ${sessionId} by ${req.user?.email || req.ip}`);
+
     await db.collection(COLLECTIONS.CLASS_SESSIONS).updateOne(
       { _id: new ObjectId(sessionId) },
       { $set: { sessionStatus: 'ended', endedAt: new Date(), updatedAt: new Date() } }
     );
 
+    console.log(`[Sessions] Broadcasting session-update ended for ${sessionId} to room ${room}`);
     broadcastToRoom(room, 'session-update', { id: sessionId, sessionStatus: 'ended', type: 'ended' });
     broadcastToAll('session-update', { id: sessionId, sessionStatus: 'ended', type: 'ended' });
 
