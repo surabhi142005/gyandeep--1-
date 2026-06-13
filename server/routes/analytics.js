@@ -5,7 +5,6 @@
 
 import express from 'express';
 const router = express.Router();
-import { ObjectId } from 'mongodb';
 import { connectToDatabase, COLLECTIONS } from '../db/mongoAtlas.js';
 import { authMiddleware } from '../middleware/auth.js';
 import { callAI, parseAIJson, getAIStatus } from '../services/aiService.js';
@@ -73,8 +72,13 @@ router.get('/overview', authMiddleware, async (req, res) => {
     const db = await connectToDatabase();
     const { startDate, endDate, classId } = req.query;
 
+    const classIdQuery = classId ? (ObjectId.isValid(classId) ? new ObjectId(classId) : classId) : null;
     const studentMatch = { role: 'student', active: true };
-    const classMatch = classId ? { classId } : {};
+    if (classIdQuery) {
+      studentMatch.classId = classIdQuery;
+    }
+    const classMatch = classIdQuery ? { _id: classIdQuery } : {};
+
     const dateMatch = {};
     if (startDate || endDate) {
       dateMatch.timestamp = {};
@@ -82,11 +86,66 @@ router.get('/overview', authMiddleware, async (req, res) => {
       if (endDate) dateMatch.timestamp.$lte = new Date(endDate);
     }
 
+    const gradeDateMatch = {};
+    if (startDate || endDate) {
+      gradeDateMatch.gradedAt = {};
+      if (startDate) gradeDateMatch.gradedAt.$gte = new Date(startDate);
+      if (endDate) gradeDateMatch.gradedAt.$lte = new Date(endDate);
+    }
+
+    const attendanceMatch = { ...dateMatch };
+    if (classIdQuery) {
+      attendanceMatch.classId = classIdQuery;
+    }
+
+    const gradePipeline = [];
+    if (startDate || endDate) {
+      gradePipeline.push({ $match: gradeDateMatch });
+    }
+    if (classIdQuery) {
+      gradePipeline.push(
+        {
+          $lookup: {
+            from: COLLECTIONS.USERS,
+            let: { studentId: '$studentId' },
+            pipeline: [
+              {
+                $match: {
+                  $expr: {
+                    $and: [
+                      {
+                        $or: [
+                          { $eq: ['$_id', { $toObjectId: '$$studentId' }] },
+                          { $eq: ['$id', '$$studentId'] }
+                        ]
+                      },
+                      { $eq: ['$classId', classIdQuery] }
+                    ]
+                  }
+                }
+              }
+            ],
+            as: 'student'
+          }
+        },
+        { $match: { 'student.0': { $exists: true } } }
+      );
+    }
+    gradePipeline.push({
+      $group: {
+        _id: null,
+        totalGrades: { $sum: 1 },
+        averageScore: { $avg: { $divide: ['$score', '$maxScore'] } },
+        highestScore: { $max: { $divide: ['$score', '$maxScore'] } },
+        lowestScore: { $min: { $divide: ['$score', '$maxScore'] } },
+      }
+    });
+
     const [studentCount, classCount, attendanceStats, gradeStats] = await Promise.all([
       db.collection(COLLECTIONS.USERS).countDocuments(studentMatch),
-      db.collection(COLLECTIONS.CLASSES).countDocuments({ ...classMatch, active: true }),
+      db.collection(COLLECTIONS.CLASSES).countDocuments({ ...classMatch }),
       db.collection(COLLECTIONS.ATTENDANCE).aggregate([
-        { $match: dateMatch },
+        { $match: attendanceMatch },
         {
           $group: {
             _id: null,
@@ -97,18 +156,7 @@ router.get('/overview', authMiddleware, async (req, res) => {
           }
         }
       ]).toArray(),
-      db.collection(COLLECTIONS.GRADES).aggregate([
-        { $match: dateMatch },
-        {
-          $group: {
-            _id: null,
-            totalGrades: { $sum: 1 },
-            averageScore: { $avg: { $divide: ['$score', '$maxScore'] } },
-            highestScore: { $max: { $divide: ['$score', '$maxScore'] } },
-            lowestScore: { $min: { $divide: ['$score', '$maxScore'] } },
-          }
-        }
-      ]).toArray(),
+      db.collection(COLLECTIONS.GRADES).aggregate(gradePipeline).toArray(),
     ]);
 
     const att = attendanceStats[0] || { total: 0, present: 0, late: 0 };
@@ -136,10 +184,13 @@ router.get('/attendance-trends', authMiddleware, async (req, res) => {
     const db = await connectToDatabase();
     const { classId, studentId, days = '30' } = req.query;
 
+    const classIdQuery = classId ? (ObjectId.isValid(classId) ? new ObjectId(classId) : classId) : null;
+    const studentIdQuery = studentId ? (ObjectId.isValid(studentId) ? new ObjectId(studentId) : studentId) : null;
+
     const startDate = new Date(Date.now() - parseInt(days) * 24 * 60 * 60 * 1000);
     const match = { timestamp: { $gte: startDate } };
-    if (classId) match.classId = classId;
-    if (studentId) match.studentId = studentId;
+    if (classIdQuery) match.classId = classIdQuery;
+    if (studentIdQuery) match.studentId = studentIdQuery;
 
     const trends = await db.collection(COLLECTIONS.ATTENDANCE).aggregate([
       { $match: match },
@@ -177,8 +228,8 @@ router.get('/grade-distribution', authMiddleware, async (req, res) => {
     const { classId, subjectId } = req.query;
 
     const match = {};
-    if (classId) match.classId = classId;
-    if (subjectId) match.subjectId = subjectId;
+    if (classId) match.classId = ObjectId.isValid(classId) ? new ObjectId(classId) : classId;
+    if (subjectId) match.subjectId = ObjectId.isValid(subjectId) ? new ObjectId(subjectId) : subjectId;
 
     const distribution = await db.collection(COLLECTIONS.GRADES).aggregate([
       { $match: match },
@@ -216,10 +267,14 @@ router.get('/student-performance/:studentId', authMiddleware, async (req, res) =
     const db = await connectToDatabase();
     const { studentId } = req.params;
 
+    const studentFilter = ObjectId.isValid(studentId)
+      ? { $or: [{ studentId }, { studentId: new ObjectId(studentId) }] }
+      : { studentId };
+
     const [grades, attendance, quizResults] = await Promise.all([
-      db.collection(COLLECTIONS.GRADES).find({ studentId }).sort({ timestamp: -1 }).limit(20).toArray(),
-      db.collection(COLLECTIONS.ATTENDANCE).find({ studentId }).sort({ timestamp: -1 }).limit(30).toArray(),
-      db.collection(COLLECTIONS.QUIZ_ATTEMPTS).find({ studentId }).sort({ submittedAt: -1 }).limit(10).toArray()
+      db.collection(COLLECTIONS.GRADES).find(studentFilter).sort({ gradedAt: -1, createdAt: -1 }).limit(20).toArray(),
+      db.collection(COLLECTIONS.ATTENDANCE).find(studentFilter).sort({ timestamp: -1 }).limit(30).toArray(),
+      db.collection(COLLECTIONS.QUIZ_ATTEMPTS).find(studentFilter).sort({ submittedAt: -1 }).limit(10).toArray()
     ]);
 
     const gradeStats = grades.length > 0 ? {
@@ -251,6 +306,130 @@ router.get('/student-performance/:studentId', authMiddleware, async (req, res) =
   } catch (error) {
     console.error('Student performance error:', error);
     res.status(500).json({ error: 'Failed to get student performance' });
+  }
+});
+
+router.get('/weekly-attendance/:id', authMiddleware, async (req, res) => {
+  try {
+    const db = await connectToDatabase();
+    const { id } = req.params;
+
+    const oneWeekAgo = new Date();
+    oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
+
+    const queryId = ObjectId.isValid(id) ? new ObjectId(id) : id;
+    const match = {
+      timestamp: { $gte: oneWeekAgo },
+      status: 'Present',
+      $or: [
+        { classId: id },
+        { classId: queryId },
+        { teacherId: id },
+        { teacherId: queryId }
+      ]
+    };
+
+    const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    const trends = await db.collection(COLLECTIONS.ATTENDANCE).aggregate([
+      { $match: match },
+      {
+        $group: {
+          _id: { $dayOfWeek: '$timestamp' },
+          present: { $sum: 1 }
+        }
+      },
+      { $sort: { _id: 1 } }
+    ]).toArray();
+
+    const data = dayNames.map((name, idx) => {
+      const found = trends.find(t => t._id === idx + 1);
+      return { date: name, present: found ? found.present : 0 };
+    });
+
+    res.json(data);
+  } catch (error) {
+    console.error('Weekly attendance trends error:', error);
+    res.status(500).json({ error: 'Failed to get weekly attendance trends' });
+  }
+});
+
+router.get('/performance-by-subject', authMiddleware, async (req, res) => {
+  try {
+    const db = await connectToDatabase();
+    const { classId } = req.query;
+
+    const pipeline = [];
+    if (classId) {
+      const classIdQuery = ObjectId.isValid(classId) ? new ObjectId(classId) : classId;
+      pipeline.push(
+        {
+          $lookup: {
+            from: COLLECTIONS.USERS,
+            let: { studentId: '$studentId' },
+            pipeline: [
+              {
+                $match: {
+                  $expr: {
+                    $and: [
+                      {
+                        $or: [
+                          { $eq: ['$_id', { $toObjectId: '$$studentId' }] },
+                          { $eq: ['$id', '$$studentId'] }
+                        ]
+                      },
+                      { $eq: ['$classId', classIdQuery] }
+                    ]
+                  }
+                }
+              }
+            ],
+            as: 'student'
+          }
+        },
+        { $match: { 'student.0': { $exists: true } } }
+      );
+    }
+
+    pipeline.push(
+      {
+        $group: {
+          _id: '$subjectId',
+          avgScore: { $avg: { $multiply: [{ $divide: ['$score', '$maxScore'] }, 100] } }
+        }
+      },
+      {
+        $lookup: {
+          from: COLLECTIONS.SUBJECTS,
+          let: { subjectId: '$_id' },
+          pipeline: [
+            {
+              $match: {
+                $expr: {
+                  $or: [
+                    { $eq: ['$_id', { $toObjectId: '$$subjectId' }] },
+                    { $eq: ['$id', '$$subjectId'] },
+                    { $eq: ['$name', '$$subjectId'] }
+                  ]
+                }
+              }
+            }
+          ],
+          as: 'subjectInfo'
+        }
+      },
+      {
+        $project: {
+          subject: { $ifNull: [{ $arrayElemAt: ['$subjectInfo.name', 0] }, '$_id'] },
+          avgScore: { $round: ['$avgScore', 1] }
+        }
+      }
+    );
+
+    const performance = await db.collection(COLLECTIONS.GRADES).aggregate(pipeline).toArray();
+    res.json(performance);
+  } catch (error) {
+    console.error('Performance by subject error:', error);
+    res.status(500).json({ error: 'Failed to get performance by subject' });
   }
 });
 

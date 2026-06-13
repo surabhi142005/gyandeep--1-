@@ -19,7 +19,6 @@ import type { Announcement } from './components/AnnouncementBoard';
 import { ThemeSwitcher, ToastQueue } from './components/ui';
 import ErrorBoundary from './components/ErrorBoundary';
 import { RealtimeProvider } from './services/RealtimeProvider';
-import { realtimeClient } from './services/realtimeClient';
 import { ConnectionStatus, NotificationCenter, NotificationToastList } from './components/realtime';
 import { updateUserPreferences } from './services/authService';
 
@@ -312,39 +311,6 @@ function App() {
         navigateTo(getDashboardPathForRole(user.role));
         if (user.role === UserRoleEnum.TEACHER) initTeacherSession(user as Teacher);
     };
-
-    // Listen for global session updates and synchronize `classSession` across tabs/users
-    useEffect(() => {
-        if (!currentUser) return;
-
-        const unsub = realtimeClient.on('session-update', (data: any) => {
-            try {
-                const type = data.type || data.eventType || null;
-                const sessionStatus = data.sessionStatus || null;
-
-                if (type === 'created' || type === 'started' || sessionStatus === 'active') {
-                    handleUpdateSession({
-                        id: data.id || data.sessionId || '',
-                        code: data.code || null,
-                        expiry: data.expiry || null,
-                        isActive: sessionStatus === 'active' || type === 'started',
-                        sessionStatus: sessionStatus || (type === 'created' ? 'waiting' : 'active'),
-                        subject: data.subject || data.subjectId || undefined,
-                        teacherLocation: data.locationAnchor || (data.locationLat && data.locationLng ? { lat: data.locationLat, lng: data.locationLng } : undefined),
-                        attendanceRadius: data.locationRadius || undefined,
-                    });
-                } else if (type === 'ended' || sessionStatus === 'ended') {
-                    handleUpdateSession({ id: '', isActive: false, sessionStatus: 'ended', endedAt: Date.now(), code: null });
-                }
-            } catch (err) {
-                console.warn('Failed to process session-update event:', err);
-            }
-        });
-
-        return () => {
-            try { unsub(); } catch (e) { /* ignore */ }
-        };
-    }, [currentUser?.id, handleUpdateSession]);
 
     const handleLogoutWithReset = () => {
         handleLogout();
