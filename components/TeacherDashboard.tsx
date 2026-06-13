@@ -165,15 +165,15 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
   }, [teacher.id, classSession.isActive]);
   
   useEffect(() => {
-    if (selectedClassId) {
-      fetchWeeklyAttendance(selectedClassId)
+    if (classSession.classId) {
+      fetchWeeklyAttendance(classSession.classId)
         .then(setWeeklyAttendanceData)
         .catch(err => console.error('Failed to load weekly attendance:', err));
-      fetchPerformanceBySubject(selectedClassId)
+      fetchPerformanceBySubject(classSession.classId)
         .then(setPerformanceData)
         .catch(err => console.error('Failed to load performance data:', err));
     }
-  }, [selectedClassId]);
+  }, [classSession.classId]);
 
   const [tagPresets, setTagPresets] = useState<Record<string, string[]>>({});
   const [notesText, setNotesText] = useState(classSession.notes || '');

@@ -2,622 +2,622 @@
 // Version: 3.0 - Improved with missing relationships and audit fields
 
 generator client {
- provider = "prisma-client-js"
+  provider = "prisma-client-js"
 }
 
 datasource db {
- provider = "mongodb"
- url = env("MONGODB_URI")
+  provider = "mongodb"
+  url      = env("MONGODB_URI")
 }
 
 // ==================== CORE ENTITIES ====================
 
 model Class {
- id String @id @default(auto()) @map("_id") @db.ObjectId
- odId String @unique
- name String @unique
+  id   String @id @default(auto()) @map("_id") @db.ObjectId
+  odId String @unique @map("od_id")
+  name String @unique
 
- createdAt DateTime @default(now())
+  createdAt DateTime @default(now()) @map("created_at")
 
- students User[] @relation("ClassStudents")
- classSessions ClassSession[] @relation("ClassSessions")
- centralizedNotes CentralizedNote[] @relation("ClassNotes")
- timetableEntries TimetableEntry[] @relation("ClassTimetable")
- subjectOfferings ClassSubject[] @relation("ClassSubjectOfferings")
- tickets Ticket[] @relation("ClassTickets")
- announcements Announcement[] @relation("ClassAnnouncements")
+  students          User[]            @relation("ClassStudents")
+  classSessions     ClassSession[]    @relation("ClassSessions")
+  centralizedNotes  CentralizedNote[] @relation("ClassNotes")
+  timetableEntries  TimetableEntry[]  @relation("ClassTimetable")
+  subjectOfferings  ClassSubject[]    @relation("ClassSubjectOfferings")
+  tickets           Ticket[]          @relation("ClassTickets")
+  announcements     Announcement[]    @relation("ClassAnnouncements")
 
- @@map("classes")
+  @@map("classes")
 }
 
 model Subject {
- id String @id @default(auto()) @map("_id") @db.ObjectId
- odId String @unique
- name String @unique
+  id   String @id @default(auto()) @map("_id") @db.ObjectId
+  odId String @unique @map("od_id")
+  name String @unique
 
- createdAt DateTime @default(now())
+  createdAt DateTime @default(now()) @map("created_at")
 
- classSessions ClassSession[] @relation("SubjectSessions")
- centralizedNotes CentralizedNote[] @relation("SubjectNotes")
- timetableEntries TimetableEntry[] @relation("SubjectTimetable")
- grades Grade[] @relation("SubjectGrades")
- teacherInsights TeacherInsight[] @relation("SubjectInsights")
- classOfferings ClassSubject[] @relation("SubjectOfferings")
- teacherExpertise UserSubject[] @relation("SubjectExpertise")
- announcements Announcement[] @relation("SubjectAnnouncements")
+  classSessions     ClassSession[]    @relation("SubjectSessions")
+  centralizedNotes  CentralizedNote[] @relation("SubjectNotes")
+  timetableEntries  TimetableEntry[]  @relation("SubjectTimetable")
+  grades            Grade[]           @relation("SubjectGrades")
+  teacherInsights   TeacherInsight[]  @relation("SubjectInsights")
+  classOfferings    ClassSubject[]    @relation("SubjectOfferings")
+  teacherExpertise  UserSubject[]     @relation("SubjectExpertise")
+  announcements     Announcement[]    @relation("SubjectAnnouncements")
 
- @@map("subjects")
+  @@map("subjects")
 }
 
 model User {
- id String @id @default(auto()) @map("_id") @db.ObjectId
- odId String @unique
- name String?
- email String @unique
- role String @default("student")
- password String?
- googleId String?
- faceImage String?
- active Boolean @default(true)
- emailVerified Boolean @default(false)
+  id               String   @id @default(auto()) @map("_id") @db.ObjectId
+  odId             String   @unique @map("od_id")
+  name             String?
+  email            String   @unique
+  role             String   @default("student")
+  password         String?
+  googleId         String?  @map("google_id")
+  faceImage        String?  @map("face_image")
+  active           Boolean  @default(true)
+  emailVerified    Boolean  @default(false) @map("email_verified")
+  
+  // Gamification
+  xp               Int      @default(0)
+  coins            Int      @default(0)
+  level            Int      @default(1)
+  streak           Int      @default(0)
+  lastActive       DateTime? @map("last_active")
 
- // Gamification
- xp Int @default(0)
- coins Int @default(0)
- level Int @default(1)
- streak Int @default(0)
- lastActive DateTime?
+  preferences      Json?
+  history          Json?
+  assignedSubjects Json?    @map("assigned_subjects")
+  performance      Json?
+  classId          String?  @map("class_id") @db.ObjectId
 
- preferences Json?
- history Json?
- assignedSubjects Json?
- performance Json?
- classId String? @db.ObjectId
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
- createdAt DateTime @default(now())
- updatedAt DateTime @updatedAt
+  class            Class?             @relation("ClassStudents", fields: [classId], references: [id])
+  taughtSessions   ClassSession[]     @relation("TeacherSessions")
+  uploadedNotes    CentralizedNote[]  @relation("TeacherNotes")
+  quizCreated      QuizQuestion[]     @relation("QuestionCreator")
+  quizAttempts     QuizAttempt[]      @relation("StudentAttempts")
+  quizReviewed     QuizAttempt[]      @relation("AttemptReviewer")
+  gradesGiven      Grade[]            @relation("TeacherGrades")
+  gradesReceived   Grade[]            @relation("StudentGrades")
+  timetableSlots   TimetableEntry[]   @relation("TeacherTimetable")
+  insights         TeacherInsight[]   @relation("TeacherInsights")
+  insightsActed    TeacherInsight[]   @relation("InsightActedBy")
+  attendanceGiven  Attendance[]       @relation("AttendanceVerifier")
+  attendanceTaken  Attendance[]       @relation("StudentAttendance")
+  sessionNotes     SessionNote[]      @relation("SessionNoteAuthor")
+  submittedQuiz    QuizSubmission[]   @relation("QuizSubmitter")
+  ticketReplies    TicketReply[]      @relation("TicketReplyUser")
+  auditLogs        AuditLog[]         @relation("UserAuditLogs")
+  idempotencyKeys  IdempotencyKey[]   @relation("IdempotencyUser")
+  userNoteAccesses UserNoteAccess[]   @relation("UserNoteAccesses")
+  quizzesCreated   Quiz[]             @relation("QuizCreator")
+  quizzesReviewed  Quiz[]             @relation("QuizReviewer")
+  ticketsCreated   Ticket[]           @relation("TicketCreator")
+  ticketsAssigned  Ticket[]           @relation("TicketAssignedTo")
+  primaryTeacherFor ClassSubject[]    @relation("ClassSubjectPrimaryTeacher")
+  userSubjects     UserSubject[]      @relation("UserExpertise")
+  notifications    Notification[]     @relation("UserNotifications")
+  announcements    Announcement[]     @relation("AnnouncementAuthor")
+  activities       ActivityLog[]      @relation("UserActivities")
 
- class Class? @relation("ClassStudents", fields: [classId], references: [id])
- taughtSessions ClassSession[] @relation("TeacherSessions")
- uploadedNotes CentralizedNote[] @relation("TeacherNotes")
- quizCreated QuizQuestion[] @relation("QuestionCreator")
- quizAttempts QuizAttempt[] @relation("StudentAttempts")
- quizReviewed QuizAttempt[] @relation("AttemptReviewer")
- gradesGiven Grade[] @relation("TeacherGrades")
- gradesReceived Grade[] @relation("StudentGrades")
- timetableSlots TimetableEntry[] @relation("TeacherTimetable")
- insights TeacherInsight[] @relation("TeacherInsights")
- insightsActed TeacherInsight[] @relation("InsightActedBy")
- attendanceGiven Attendance[] @relation("AttendanceVerifier")
- attendanceTaken Attendance[] @relation("StudentAttendance")
- sessionNotes SessionNote[] @relation("SessionNoteAuthor")
- submittedQuiz QuizSubmission[] @relation("QuizSubmitter")
- ticketReplies TicketReply[] @relation("TicketReplyUser")
- auditLogs AuditLog[] @relation("UserAuditLogs")
- idempotencyKeys IdempotencyKey[] @relation("IdempotencyUser")
- userNoteAccesses UserNoteAccess[] @relation("UserNoteAccesses")
- quizzesCreated Quiz[] @relation("QuizCreator")
- quizzesReviewed Quiz[] @relation("QuizReviewer")
- ticketsCreated Ticket[] @relation("TicketCreator")
- ticketsAssigned Ticket[] @relation("TicketAssignedTo")
- primaryTeacherFor ClassSubject[] @relation("ClassSubjectPrimaryTeacher")
- userSubjects UserSubject[] @relation("UserExpertise")
- notifications Notification[] @relation("UserNotifications")
- announcements Announcement[] @relation("AnnouncementAuthor")
- activities ActivityLog[] @relation("UserActivities")
-
- @@index([role])
- @@index([classId])
- @@index([active])
- @@map("users")
+  @@index([role])
+  @@index([classId])
+  @@index([active])
+  @@map("users")
 }
 
 // ==================== GAMIFICATION & ACTIVITY ====================
 
 model ActivityLog {
- id String @id @default(auto()) @map("_id") @db.ObjectId
- userId String @db.ObjectId
- type String // "QUIZ_COMPLETED", "ATTENDANCE_MARKED", "STREAK_BONUS", etc.
- xpEarned Int
- details String?
- createdAt DateTime @default(now())
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId    String   @map("user_id") @db.ObjectId
+  type      String   // "QUIZ_COMPLETED", "ATTENDANCE_MARKED", "STREAK_BONUS", etc.
+  xpEarned  Int      @map("xp_earned")
+  details   String?
+  createdAt DateTime @default(now()) @map("created_at")
 
- user User @relation("UserActivities", fields: [userId], references: [id])
+  user User @relation("UserActivities", fields: [userId], references: [id])
 
- @@index([userId])
- @@map("activity_logs")
+  @@index([userId])
+  @@map("activity_logs")
 }
 
 // ==================== JUNCTION TABLES ====================
 
 model ClassSubject {
- id String @id @default(auto()) @map("_id") @db.ObjectId
- odId String @unique
- classId String @db.ObjectId
- subjectId String @db.ObjectId
- primaryTeacherId String? @db.ObjectId
- semester String?
+  id               String  @id @default(auto()) @map("_id") @db.ObjectId
+  odId             String  @unique @map("od_id")
+  classId          String  @map("class_id") @db.ObjectId
+  subjectId        String  @map("subject_id") @db.ObjectId
+  primaryTeacherId String? @map("primary_teacher_id") @db.ObjectId
+  semester         String?
 
- class Class @relation("ClassSubjectOfferings", fields: [classId], references: [id])
- subject Subject @relation("SubjectOfferings", fields: [subjectId], references: [id])
- primaryTeacher User? @relation("ClassSubjectPrimaryTeacher", fields: [primaryTeacherId], references: [id])
+  class         Class    @relation("ClassSubjectOfferings", fields: [classId], references: [id])
+  subject       Subject  @relation("SubjectOfferings", fields: [subjectId], references: [id])
+  primaryTeacher User?   @relation("ClassSubjectPrimaryTeacher", fields: [primaryTeacherId], references: [id])
 
- @@unique([classId, subjectId])
- @@index([classId])
- @@index([subjectId])
- @@index([primaryTeacherId])
- @@map("class_subjects")
+  @@unique([classId, subjectId])
+  @@index([classId])
+  @@index([subjectId])
+  @@index([primaryTeacherId])
+  @@map("class_subjects")
 }
 
 model UserSubject {
- id String @id @default(auto()) @map("_id") @db.ObjectId
- odId String @unique
- userId String @db.ObjectId
- subjectId String @db.ObjectId
- certified Boolean @default(false)
- assignedDate DateTime @default(now())
+  id            String   @id @default(auto()) @map("_id") @db.ObjectId
+  odId          String   @unique @map("od_id")
+  userId        String   @map("user_id") @db.ObjectId
+  subjectId     String   @map("subject_id") @db.ObjectId
+  certified     Boolean  @default(false)
+  assignedDate  DateTime @default(now()) @map("assigned_date")
 
- user User @relation("UserExpertise", fields: [userId], references: [id])
- subject Subject @relation("SubjectExpertise", fields: [subjectId], references: [id])
+  user    User    @relation("UserExpertise", fields: [userId], references: [id])
+  subject Subject @relation("SubjectExpertise", fields: [subjectId], references: [id])
 
- @@unique([userId, subjectId])
- @@index([userId])
- @@index([subjectId])
- @@map("user_subjects")
+  @@unique([userId, subjectId])
+  @@index([userId])
+  @@index([subjectId])
+  @@map("user_subjects")
 }
 
 // ==================== SESSION & SCHEDULE ====================
 
 model ClassSession {
- id String @id @default(auto()) @map("_id") @db.ObjectId
- odId String @unique
- code String @unique
- teacherId String @db.ObjectId
- classId String? @db.ObjectId
- subjectId String @db.ObjectId
- expiry DateTime
- endedAt DateTime?
- quizPublished Boolean @default(false)
- quizQuestions String?
- quizPublishedAt DateTime?
- sessionStatus String @default("active")
- timetableEntryId String? @db.ObjectId
+  id                String   @id @default(auto()) @map("_id") @db.ObjectId
+  odId              String   @unique @map("od_id")
+  code              String   @unique
+  teacherId         String   @map("teacher_id") @db.ObjectId
+  classId           String?  @map("class_id") @db.ObjectId
+  subjectId         String   @map("subject_id") @db.ObjectId
+  expiry            DateTime
+  endedAt           DateTime? @map("ended_at")
+  quizPublished     Boolean  @default(false) @map("quiz_published")
+  quizQuestions     String?  @map("quiz_questions")
+  quizPublishedAt   DateTime? @map("quiz_published_at")
+  sessionStatus     String   @default("active") @map("session_status")
+  timetableEntryId  String?  @map("timetable_entry_id") @db.ObjectId
 
- createdAt DateTime @default(now())
- updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
- teacher User @relation("TeacherSessions", fields: [teacherId], references: [id])
- class Class? @relation("ClassSessions", fields: [classId], references: [id])
- subject Subject @relation("SubjectSessions", fields: [subjectId], references: [id])
- timetableEntry TimetableEntry? @relation("TimetableSession", fields: [timetableEntryId], references: [id])
- sessionNotes SessionNote[] @relation("SessionNotes")
- quizzes Quiz[] @relation("SessionQuizzes")
- attendance Attendance[] @relation("SessionAttendance")
- grades Grade[] @relation("SessionGrades")
- quizSubmissions QuizSubmission[] @relation("QuizSubmissionSession")
- teacherInsights TeacherInsight[] @relation("SessionInsights")
- centralizedNotes CentralizedNote[] @relation("NoteSession")
+  teacher         User              @relation("TeacherSessions", fields: [teacherId], references: [id])
+  class           Class?            @relation("ClassSessions", fields: [classId], references: [id])
+  subject         Subject           @relation("SubjectSessions", fields: [subjectId], references: [id])
+  timetableEntry  TimetableEntry?   @relation("TimetableSession", fields: [timetableEntryId], references: [id])
+  sessionNotes    SessionNote[]     @relation("SessionNotes")
+  quizzes         Quiz[]            @relation("SessionQuizzes")
+  attendance      Attendance[]      @relation("SessionAttendance")
+  grades          Grade[]           @relation("SessionGrades")
+  quizSubmissions QuizSubmission[]  @relation("QuizSubmissionSession")
+  teacherInsights TeacherInsight[]  @relation("SessionInsights")
+  centralizedNotes CentralizedNote[] @relation("NoteSession")
 
- @@index([teacherId])
- @@index([expiry])
- @@index([timetableEntryId])
- @@map("class_sessions")
+  @@index([teacherId])
+  @@index([expiry])
+  @@index([timetableEntryId])
+  @@map("class_sessions")
 }
 
 model TimetableEntry {
- id String @id @default(auto()) @map("_id") @db.ObjectId
- odId String @unique
- day String
- startTime String
- endTime String
- subjectId String @db.ObjectId
- teacherId String? @db.ObjectId
- classId String? @db.ObjectId
- room String?
- semester String?
+  id          String  @id @default(auto()) @map("_id") @db.ObjectId
+  odId        String  @unique @map("od_id")
+  day         String
+  startTime   String  @map("start_time")
+  endTime     String  @map("end_time")
+  subjectId   String  @map("subject_id") @db.ObjectId
+  teacherId   String? @map("teacher_id") @db.ObjectId
+  classId     String? @map("class_id") @db.ObjectId
+  room        String?
+  semester    String?
 
- createdAt DateTime @default(now())
- updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
- subject Subject @relation("SubjectTimetable", fields: [subjectId], references: [id])
- teacher User? @relation("TeacherTimetable", fields: [teacherId], references: [id])
- class Class? @relation("ClassTimetable", fields: [classId], references: [id])
- sessions ClassSession[] @relation("TimetableSession")
+  subject   Subject         @relation("SubjectTimetable", fields: [subjectId], references: [id])
+  teacher   User?           @relation("TeacherTimetable", fields: [teacherId], references: [id])
+  class     Class?          @relation("ClassTimetable", fields: [classId], references: [id])
+  sessions  ClassSession[]  @relation("TimetableSession")
 
- @@index([day, startTime])
- @@index([teacherId])
- @@index([classId])
- @@index([subjectId])
- @@map("timetable_entries")
+  @@index([day, startTime])
+  @@index([teacherId])
+  @@index([classId])
+  @@index([subjectId])
+  @@map("timetable_entries")
 }
 
 // ==================== SESSION NOTES (1:N) ====================
 
 model SessionNote {
- id String @id @default(auto()) @map("_id") @db.ObjectId
- odId String @unique
- sessionId String @db.ObjectId
- authorId String? @db.ObjectId
- content String?
- filePath String?
- extractedText String?
- deletedAt DateTime?
+  id             String    @id @default(auto()) @map("_id") @db.ObjectId
+  odId           String    @unique @map("od_id")
+  sessionId      String    @map("session_id") @db.ObjectId
+  authorId       String?   @map("author_id") @db.ObjectId
+  content        String?
+  filePath       String?   @map("file_path")
+  extractedText  String?   @map("extracted_text")
+  deletedAt      DateTime? @map("deleted_at")
 
- createdAt DateTime @default(now())
+  createdAt DateTime @default(now()) @map("created_at")
 
- session ClassSession @relation("SessionNotes", fields: [sessionId], references: [id])
- author User? @relation("SessionNoteAuthor", fields: [authorId], references: [id])
+  session ClassSession @relation("SessionNotes", fields: [sessionId], references: [id])
+  author  User?        @relation("SessionNoteAuthor", fields: [authorId], references: [id])
 
- @@index([sessionId])
- @@map("session_notes")
+  @@index([sessionId])
+  @@map("session_notes")
 }
 
 // ==================== QUIZ SYSTEM (1:N with Session) ====================
 
 model Quiz {
- id String @id @default(auto()) @map("_id") @db.ObjectId
- odId String @unique
- sessionId String @db.ObjectId
- teacherId String @db.ObjectId
- reviewedById String? @db.ObjectId
- title String?
- questionsJson String?
- published Boolean @default(false)
- publishedAt DateTime?
- quizType String @default("main")
+  id             String   @id @default(auto()) @map("_id") @db.ObjectId
+  odId           String   @unique @map("od_id")
+  sessionId      String   @map("session_id") @db.ObjectId
+  teacherId      String   @map("teacher_id") @db.ObjectId
+  reviewedById   String?  @map("reviewed_by_id") @db.ObjectId
+  title          String?
+  questionsJson  String?  @map("questions_json")
+  published      Boolean  @default(false)
+  publishedAt    DateTime? @map("published_at")
+  quizType       String   @default("main") @map("quiz_type")
 
- createdAt DateTime @default(now())
- updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
- session ClassSession @relation("SessionQuizzes", fields: [sessionId], references: [id])
- teacher User @relation("QuizCreator", fields: [teacherId], references: [id])
- reviewedBy User? @relation("QuizReviewer", fields: [reviewedById], references: [id])
- questions QuizQuestion[] @relation("QuizQuestions")
- attempts QuizAttempt[] @relation("QuizAttempts")
+  session    ClassSession   @relation("SessionQuizzes", fields: [sessionId], references: [id])
+  teacher    User           @relation("QuizCreator", fields: [teacherId], references: [id])
+  reviewedBy User?          @relation("QuizReviewer", fields: [reviewedById], references: [id])
+  questions  QuizQuestion[] @relation("QuizQuestions")
+  attempts   QuizAttempt[]  @relation("QuizAttempts")
 
- @@index([sessionId])
- @@index([teacherId])
- @@map("quizzes")
+  @@index([sessionId])
+  @@index([teacherId])
+  @@map("quizzes")
 }
 
 model QuizQuestion {
- id String @id @default(auto()) @map("_id") @db.ObjectId
- odId String @unique
- quizId String @db.ObjectId
- createdById String? @db.ObjectId
- question String
- options String
- correctAnswer String
- difficulty String @default("medium")
- tags String?
- orderIndex Int @default(0)
+  id            String @id @default(auto()) @map("_id") @db.ObjectId
+  odId          String @unique @map("od_id")
+  quizId        String @map("quiz_id") @db.ObjectId
+  createdById   String? @map("created_by_id") @db.ObjectId
+  question      String
+  options       String
+  correctAnswer String @map("correct_answer")
+  difficulty    String @default("medium")
+  tags          String?
+  orderIndex    Int    @default(0) @map("order_index")
 
- quiz Quiz @relation("QuizQuestions", fields: [quizId], references: [id])
- createdBy User? @relation("QuestionCreator", fields: [createdById], references: [id])
- attempts AttemptAnswer[] @relation("QuestionAttempts")
+  quiz      Quiz            @relation("QuizQuestions", fields: [quizId], references: [id])
+  createdBy User?          @relation("QuestionCreator", fields: [createdById], references: [id])
+  attempts  AttemptAnswer[] @relation("QuestionAttempts")
 
- @@index([quizId])
- @@map("quiz_questions")
+  @@index([quizId])
+  @@map("quiz_questions")
 }
 
 model QuizAttempt {
- id String @id @default(auto()) @map("_id") @db.ObjectId
- odId String @unique
- quizId String @db.ObjectId
- studentId String @db.ObjectId
- reviewedById String? @db.ObjectId
- answersJson String
- correctCount Int
- totalQuestions Int
- score Float
- attemptNumber Int @default(1)
- startedAt DateTime?
- submittedAt DateTime @default(now())
- timeTakenSeconds Int?
+  id               String   @id @default(auto()) @map("_id") @db.ObjectId
+  odId             String   @unique @map("od_id")
+  quizId           String   @map("quiz_id") @db.ObjectId
+  studentId        String   @map("student_id") @db.ObjectId
+  reviewedById     String?  @map("reviewed_by_id") @db.ObjectId
+  answersJson      String   @map("answers_json")
+  correctCount     Int      @map("correct_count")
+  totalQuestions   Int      @map("total_questions")
+  percentage       Float
+  attemptNumber    Int      @default(1) @map("attempt_number")
+  startedAt        DateTime? @map("started_at")
+  submittedAt      DateTime @default(now()) @map("submitted_at")
+  timeTakenSeconds Int?     @map("time_taken_seconds")
 
- quiz Quiz @relation("QuizAttempts", fields: [quizId], references: [id])
- student User @relation("StudentAttempts", fields: [studentId], references: [id])
- reviewedBy User? @relation("AttemptReviewer", fields: [reviewedById], references: [id])
- grades Grade[] @relation("QuizAttemptGrade")
- answers AttemptAnswer[] @relation("AttemptAnswers")
+  quiz      Quiz            @relation("QuizAttempts", fields: [quizId], references: [id])
+  student   User            @relation("StudentAttempts", fields: [studentId], references: [id])
+  reviewedBy User?          @relation("AttemptReviewer", fields: [reviewedById], references: [id])
+  grades    Grade[]         @relation("QuizAttemptGrade")
+  answers   AttemptAnswer[] @relation("AttemptAnswers")
 
- @@unique([quizId, studentId, attemptNumber])
- @@index([studentId])
- @@index([quizId])
- @@map("quiz_attempts")
+  @@unique([quizId, studentId, attemptNumber])
+  @@index([studentId])
+  @@index([quizId])
+  @@map("quiz_attempts")
 }
 
 model AttemptAnswer {
- id String @id @default(auto()) @map("_id") @db.ObjectId
- odId String @unique
- attemptId String @db.ObjectId
- questionId String @db.ObjectId
- answerGiven String?
- isCorrect Boolean @default(false)
- marksAwarded Float @default(0)
+  id             String  @id @default(auto()) @map("_id") @db.ObjectId
+  odId           String  @unique @map("od_id")
+  attemptId      String  @map("attempt_id") @db.ObjectId
+  questionId     String  @map("question_id") @db.ObjectId
+  answerGiven    String? @map("answer_given")
+  isCorrect      Boolean @default(false) @map("is_correct")
+  marksAwarded   Float   @default(0) @map("marks_awarded")
 
- attempt QuizAttempt @relation("AttemptAnswers", fields: [attemptId], references: [id])
- question QuizQuestion @relation("QuestionAttempts", fields: [questionId], references: [id])
+  attempt  QuizAttempt   @relation("AttemptAnswers", fields: [attemptId], references: [id])
+  question QuizQuestion @relation("QuestionAttempts", fields: [questionId], references: [id])
 
- @@unique([attemptId, questionId])
- @@index([attemptId])
- @@index([questionId])
- @@map("attempt_answers")
+  @@unique([attemptId, questionId])
+  @@index([attemptId])
+  @@index([questionId])
+  @@map("attempt_answers")
 }
 
 model QuizSubmission {
- id String @id @default(auto()) @map("_id") @db.ObjectId
- odId String @unique
- sessionId String @db.ObjectId
- studentId String @db.ObjectId
- answersJson String
- correctCount Int
- totalQuestions Int
- score Float
- submittedAt DateTime @default(now())
+  id             String   @id @default(auto()) @map("_id") @db.ObjectId
+  odId           String   @unique @map("od_id")
+  sessionId      String   @map("session_id") @db.ObjectId
+  studentId      String   @map("student_id") @db.ObjectId
+  answersJson    String   @map("answers_json")
+  correctCount   Int      @map("correct_count")
+  totalQuestions Int      @map("total_questions")
+  percentage     Float
+  submittedAt    DateTime @default(now()) @map("submitted_at")
 
- session ClassSession @relation("QuizSubmissionSession", fields: [sessionId], references: [id])
- student User @relation("QuizSubmitter", fields: [studentId], references: [id])
+  session ClassSession @relation("QuizSubmissionSession", fields: [sessionId], references: [id])
+  student User         @relation("QuizSubmitter", fields: [studentId], references: [id])
 
- @@unique([sessionId, studentId])
- @@index([studentId])
- @@map("quiz_submissions")
+  @@unique([sessionId, studentId])
+  @@index([studentId])
+  @@map("quiz_submissions")
 }
 
 // ==================== CENTRALIZED NOTES ====================
 
 model CentralizedNote {
- id String @id @default(auto()) @map("_id") @db.ObjectId
- odId String @unique
- classId String? @db.ObjectId
- subjectId String @db.ObjectId
- sessionId String? @db.ObjectId
- unitNumber Int
- unitName String
- title String
- content String?
- filePath String?
- noteType String @default("class_notes")
- teacherId String? @db.ObjectId
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  odId        String   @unique @map("od_id")
+  classId     String?  @map("class_id") @db.ObjectId
+  subjectId   String   @map("subject_id") @db.ObjectId
+  sessionId   String?  @map("session_id") @db.ObjectId
+  unitNumber  Int      @map("unit_number")
+  unitName    String   @map("unit_name")
+  title       String
+  content     String?
+  filePath    String?  @map("file_path")
+  noteType    String   @default("class_notes") @map("note_type")
+  teacherId   String?  @map("teacher_id") @db.ObjectId
 
- createdAt DateTime @default(now())
- updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
- class Class? @relation("ClassNotes", fields: [classId], references: [id])
- subject Subject @relation("SubjectNotes", fields: [subjectId], references: [id])
- session ClassSession? @relation("NoteSession", fields: [sessionId], references: [id])
- teacher User? @relation("TeacherNotes", fields: [teacherId], references: [id])
- accesses UserNoteAccess[] @relation("NoteAccesses")
+  class    Class?           @relation("ClassNotes", fields: [classId], references: [id])
+  subject  Subject          @relation("SubjectNotes", fields: [subjectId], references: [id])
+  session  ClassSession?    @relation("NoteSession", fields: [sessionId], references: [id])
+  teacher  User?            @relation("TeacherNotes", fields: [teacherId], references: [id])
+  accesses UserNoteAccess[] @relation("NoteAccesses")
 
- @@index([subjectId, unitNumber])
- @@index([teacherId])
- @@map("centralized_notes")
+  @@index([subjectId, unitNumber])
+  @@index([teacherId])
+  @@map("centralized_notes")
 }
 
 model UserNoteAccess {
- id String @id @default(auto()) @map("_id") @db.ObjectId
- odId String @unique
- userId String @db.ObjectId
- noteId String @db.ObjectId
- accessedAt DateTime @default(now())
+  id         String   @id @default(auto()) @map("_id") @db.ObjectId
+  odId       String   @unique @map("od_id")
+  userId     String   @map("user_id") @db.ObjectId
+  noteId     String   @map("note_id") @db.ObjectId
+  accessedAt DateTime @default(now()) @map("accessed_at")
 
- user User @relation("UserNoteAccesses", fields: [userId], references: [id])
- note CentralizedNote @relation("NoteAccesses", fields: [noteId], references: [id])
+  user User           @relation("UserNoteAccesses", fields: [userId], references: [id])
+  note CentralizedNote @relation("NoteAccesses", fields: [noteId], references: [id])
 
- @@index([userId])
- @@index([noteId])
- @@map("user_note_accesses")
+  @@index([userId])
+  @@index([noteId])
+  @@map("user_note_accesses")
 }
 
 // ==================== ATTENDANCE ====================
 
 model Attendance {
- id String @id @default(auto()) @map("_id") @db.ObjectId
- odId String @unique
- sessionId String @db.ObjectId
- studentId String @db.ObjectId
- verifiedById String? @db.ObjectId
- status String @default("present")
- timestamp DateTime @default(now())
- verifiedAt DateTime?
+  id           String    @id @default(auto()) @map("_id") @db.ObjectId
+  odId         String    @unique @map("od_id")
+  sessionId    String    @map("session_id") @db.ObjectId
+  studentId    String    @map("student_id") @db.ObjectId
+  verifiedById String?   @map("verified_by_id") @db.ObjectId
+  status       String    @default("present")
+  markedAt     DateTime  @default(now()) @map("marked_at")
+  verifiedAt   DateTime? @map("verified_at")
 
- session ClassSession @relation("SessionAttendance", fields: [sessionId], references: [id])
- student User @relation("StudentAttendance", fields: [studentId], references: [id])
- verifier User? @relation("AttendanceVerifier", fields: [verifiedById], references: [id])
+  session  ClassSession @relation("SessionAttendance", fields: [sessionId], references: [id])
+  student  User         @relation("StudentAttendance", fields: [studentId], references: [id])
+  verifier User?        @relation("AttendanceVerifier", fields: [verifiedById], references: [id])
 
- @@unique([sessionId, studentId])
- @@index([sessionId])
- @@index([studentId])
- @@map("attendance")
+  @@unique([sessionId, studentId])
+  @@index([sessionId])
+  @@index([studentId])
+  @@map("attendance")
 }
 
 // ==================== GRADES ====================
 
 model Grade {
- id String @id @default(auto()) @map("_id") @db.ObjectId
- odId String @unique
- studentId String @db.ObjectId
- subjectId String @db.ObjectId
- category String
- title String
- score Float
- maxScore Float
- weight Float @default(1)
- date String
- teacherId String? @db.ObjectId
- sessionId String? @db.ObjectId
- quizAttemptId String? @db.ObjectId
- gradedAt DateTime @default(now())
+  id            String   @id @default(auto()) @map("_id") @db.ObjectId
+  odId          String   @unique @map("od_id")
+  studentId     String   @map("student_id") @db.ObjectId
+  subjectId     String   @map("subject_id") @db.ObjectId
+  category      String
+  title         String
+  score         Float
+  maxScore      Float    @map("max_score")
+  weight        Float    @default(1)
+  date          String
+  teacherId     String?  @map("teacher_id") @db.ObjectId
+  sessionId     String?  @map("session_id") @db.ObjectId
+  quizAttemptId String?  @map("quiz_attempt_id") @db.ObjectId
+  gradedAt      DateTime @default(now()) @map("graded_at")
 
- createdAt DateTime @default(now())
- updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
- student User @relation("StudentGrades", fields: [studentId], references: [id])
- subject Subject @relation("SubjectGrades", fields: [subjectId], references: [id])
- teacher User? @relation("TeacherGrades", fields: [teacherId], references: [id])
- session ClassSession? @relation("SessionGrades", fields: [sessionId], references: [id])
- quizAttempt QuizAttempt? @relation("QuizAttemptGrade", fields: [quizAttemptId], references: [id])
+  student     User            @relation("StudentGrades", fields: [studentId], references: [id])
+  subject     Subject         @relation("SubjectGrades", fields: [subjectId], references: [id])
+  teacher     User?           @relation("TeacherGrades", fields: [teacherId], references: [id])
+  session     ClassSession?   @relation("SessionGrades", fields: [sessionId], references: [id])
+  quizAttempt QuizAttempt?    @relation("QuizAttemptGrade", fields: [quizAttemptId], references: [id])
 
- @@index([studentId])
- @@index([teacherId])
- @@index([sessionId])
- @@index([subjectId])
- @@index([category])
- @@index([date])
- @@map("grades")
+  @@index([studentId])
+  @@index([teacherId])
+  @@index([sessionId])
+  @@index([subjectId])
+  @@index([category])
+  @@index([date])
+  @@map("grades")
 }
 
 // ==================== TICKET SYSTEM ====================
 
 model Ticket {
- id String @id @default(auto()) @map("_id") @db.ObjectId
- odId String @unique
- userId String @db.ObjectId
- assignedToId String? @db.ObjectId
- classId String? @db.ObjectId
- userName String?
- subject String
- message String
- category String @default("general")
- priority String @default("medium")
- status String @default("open")
- resolvedAt DateTime?
- createdAt DateTime @default(now())
- updatedAt DateTime @updatedAt
- version Int @default(1)
+  id           String   @id @default(auto()) @map("_id") @db.ObjectId
+  odId         String   @unique @map("od_id")
+  userId       String   @map("user_id") @db.ObjectId
+  assignedToId String?  @map("assigned_to_id") @db.ObjectId
+  classId      String?  @map("class_id") @db.ObjectId
+  userName     String?  @map("user_name")
+  subject      String
+  message      String
+  category     String   @default("general")
+  priority     String   @default("medium") @map("priority")
+  status       String   @default("open")
+  resolvedAt   DateTime? @map("resolved_at")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+  version      Int      @default(1)
 
- user User @relation("TicketCreator", fields: [userId], references: [id])
- assignedTo User? @relation("TicketAssignedTo", fields: [assignedToId], references: [id])
- class Class? @relation("ClassTickets", fields: [classId], references: [id])
- replies TicketReply[] @relation("TicketReplies")
+  user       User          @relation("TicketCreator", fields: [userId], references: [id])
+  assignedTo User?         @relation("TicketAssignedTo", fields: [assignedToId], references: [id])
+  class      Class?        @relation("ClassTickets", fields: [classId], references: [id])
+  replies    TicketReply[] @relation("TicketReplies")
 
- @@index([status])
- @@index([assignedToId])
- @@index([priority])
- @@index([userId])
- @@map("tickets")
+  @@index([status])
+  @@index([assignedToId])
+  @@index([priority])
+  @@index([userId])
+  @@map("tickets")
 }
 
 model TicketReply {
- id String @id @default(auto()) @map("_id") @db.ObjectId
- odId String @unique
- ticketId String @db.ObjectId
- userId String @db.ObjectId
- userName String?
- message String
- createdAt DateTime @default(now())
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  odId      String   @unique @map("od_id")
+  ticketId  String   @map("ticket_id") @db.ObjectId
+  userId    String   @map("user_id") @db.ObjectId
+  userName  String?  @map("user_name")
+  message   String
+  createdAt DateTime @default(now()) @map("created_at")
 
- ticket Ticket @relation("TicketReplies", fields: [ticketId], references: [id])
- user User @relation("TicketReplyUser", fields: [userId], references: [id])
+  ticket Ticket @relation("TicketReplies", fields: [ticketId], references: [id])
+  user   User   @relation("TicketReplyUser", fields: [userId], references: [id])
 
- @@index([ticketId, createdAt])
- @@map("ticket_replies")
+  @@index([ticketId, createdAt])
+  @@map("ticket_replies")
 }
 
 // ==================== NEW: NOTIFICATION SYSTEM ====================
 
 model Notification {
- id String @id @default(auto()) @map("_id") @db.ObjectId
- odId String @unique
- userId String @db.ObjectId
- type String
- title String
- message String
- relatedId String? @db.ObjectId
- relatedType String?
- read Boolean @default(false)
- readAt DateTime?
- createdAt DateTime @default(now())
+  id            String    @id @default(auto()) @map("_id") @db.ObjectId
+  odId          String    @unique @map("od_id")
+  userId        String    @map("user_id") @db.ObjectId
+  type          String
+  title         String
+  message       String
+  relatedId     String?   @map("related_id") @db.ObjectId
+  relatedType   String?   @map("related_type")
+  read          Boolean   @default(false)
+  readAt        DateTime? @map("read_at")
+  createdAt     DateTime  @default(now()) @map("created_at")
 
- user User @relation("UserNotifications", fields: [userId], references: [id])
+  user User @relation("UserNotifications", fields: [userId], references: [id])
 
- @@index([userId, read])
- @@index([userId, createdAt])
- @@map("notifications")
+  @@index([userId, read])
+  @@index([userId, createdAt])
+  @@map("notifications")
 }
 
 // ==================== NEW: ANNOUNCEMENT SYSTEM ====================
 
 model Announcement {
- id String @id @default(auto()) @map("_id") @db.ObjectId
- odId String @unique
- authorId String @db.ObjectId
- classId String @db.ObjectId
- subjectId String? @db.ObjectId
- title String
- content String
- priority String @default("normal")
- expiresAt DateTime?
- createdAt DateTime @default(now())
- updatedAt DateTime @updatedAt
+  id         String    @id @default(auto()) @map("_id") @db.ObjectId
+  odId       String    @unique @map("od_id")
+  authorId   String    @map("author_id") @db.ObjectId
+  classId    String    @map("class_id") @db.ObjectId
+  subjectId  String?   @map("subject_id") @db.ObjectId
+  title      String
+  content    String
+  priority   String    @default("normal")
+  expiresAt  DateTime? @map("expires_at")
+  createdAt  DateTime  @default(now()) @map("created_at")
+  updatedAt  DateTime  @updatedAt @map("updated_at")
 
- author User @relation("AnnouncementAuthor", fields: [authorId], references: [id])
- class Class @relation("ClassAnnouncements", fields: [classId], references: [id])
- subject Subject? @relation("SubjectAnnouncements", fields: [subjectId], references: [id])
+  author  User    @relation("AnnouncementAuthor", fields: [authorId], references: [id])
+  class   Class   @relation("ClassAnnouncements", fields: [classId], references: [id])
+  subject Subject? @relation("SubjectAnnouncements", fields: [subjectId], references: [id])
 
- @@index([classId])
- @@index([authorId])
- @@map("announcements")
+  @@index([classId])
+  @@index([authorId])
+  @@map("announcements")
 }
 
 // ==================== TEACHER INSIGHTS ====================
 
 model TeacherInsight {
- id String @id @default(auto()) @map("_id") @db.ObjectId
- odId String @unique
- teacherId String @db.ObjectId
- sessionId String? @db.ObjectId
- subjectId String? @db.ObjectId
- insightText String
- actedOnById String? @db.ObjectId
- generatedAt DateTime @default(now())
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  odId        String   @unique @map("od_id")
+  teacherId   String   @map("teacher_id") @db.ObjectId
+  sessionId   String?  @map("session_id") @db.ObjectId
+  subjectId   String?  @map("subject_id") @db.ObjectId
+  insightText String   @map("insight_text")
+  actedOnById String?  @map("acted_on_by_id") @db.ObjectId
+  generatedAt DateTime @default(now()) @map("generated_at")
 
- teacher User @relation("TeacherInsights", fields: [teacherId], references: [id])
- session ClassSession? @relation("SessionInsights", fields: [sessionId], references: [id])
- subject Subject? @relation("SubjectInsights", fields: [subjectId], references: [id])
- actedOnBy User? @relation("InsightActedBy", fields: [actedOnById], references: [id])
+  teacher   User           @relation("TeacherInsights", fields: [teacherId], references: [id])
+  session   ClassSession?  @relation("SessionInsights", fields: [sessionId], references: [id])
+  subject   Subject?       @relation("SubjectInsights", fields: [subjectId], references: [id])
+  actedOnBy User?          @relation("InsightActedBy", fields: [actedOnById], references: [id])
 
- @@index([teacherId])
- @@index([sessionId])
- @@map("teacher_insights")
+  @@index([teacherId])
+  @@index([sessionId])
+  @@map("teacher_insights")
 }
 
 // ==================== SYSTEM ====================
 
 model AuditLog {
- id String @id @default(auto()) @map("_id") @db.ObjectId
- odId String @unique
- ts DateTime @default(now())
- type String
- userId String? @db.ObjectId
- details Json?
+  id      String    @id @default(auto()) @map("_id") @db.ObjectId
+  odId    String    @unique @map("od_id")
+  ts      DateTime  @default(now())
+  type    String
+  userId  String?   @map("user_id") @db.ObjectId
+  details Json?
 
- user User? @relation("UserAuditLogs", fields: [userId], references: [id])
+  user User? @relation("UserAuditLogs", fields: [userId], references: [id])
 
- @@index([userId, ts])
- @@index([ts])
- @@map("audit_logs")
+  @@index([userId, ts])
+  @@index([ts])
+  @@map("audit_logs")
 }
 
 model IdempotencyKey {
- id String @id @default(auto()) @map("_id") @db.ObjectId
- key String @unique
- userId String @db.ObjectId
- action String
- statusCode Int
- responseBody String
- createdAt DateTime @default(now())
+  id            String   @id @default(auto()) @map("_id") @db.ObjectId
+  key           String   @unique
+  userId        String   @map("user_id") @db.ObjectId
+  action        String
+  statusCode    Int      @map("status_code")
+  responseBody  String   @map("response_body")
+  createdAt     DateTime @default(now()) @map("created_at")
 
- user User @relation("IdempotencyUser", fields: [userId], references: [id])
+  user User @relation("IdempotencyUser", fields: [userId], references: [id])
 
- @@index([createdAt])
- @@map("idempotency_keys")
+  @@index([createdAt])
+  @@map("idempotency_keys")
 }
 
 model DefaultSubject {
- id String @id @default(auto()) @map("_id") @db.ObjectId
- odId String @unique
- name String @unique
+  id   String @id @default(auto()) @map("_id") @db.ObjectId
+  odId String @unique @map("od_id")
+  name String @unique
 
- @@map("default_subjects")
+  @@map("default_subjects")
 }
