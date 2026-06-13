@@ -10,6 +10,12 @@ import { connectToDatabase, COLLECTIONS } from '../db/mongoAtlas.js';
 import { authMiddleware } from '../middleware/auth.js';
 import { broadcastToAll, broadcastToRoom } from '../services/broadcast.js';
 
+function normalizeDateInput(value, fallback = new Date()) {
+  if (!value) return fallback;
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? fallback : parsed;
+}
+
 function buildSubjectFilter(subjectId) {
   if (!subjectId) return null;
   return {
@@ -53,7 +59,7 @@ router.get('/', async (req, res) => {
     const [notes, total] = await Promise.all([
       db.collection(COLLECTIONS.SESSION_NOTES)
         .find({ ...filter, deletedAt: null })
-        .sort({ createdAt: -1 })
+        .sort({ noteDate: -1, createdAt: -1 })
         .skip(skip)
         .limit(limit)
         .toArray(),
@@ -74,6 +80,7 @@ router.post('/upload', authMiddleware, async (req, res) => {
   try {
     const db = await connectToDatabase();
     const { classId, subjectId, content, url, extractedText, fileName, fileType } = req.body;
+    const noteDate = normalizeDateInput(req.body.noteDate);
 
     // Validate file type - PDF, Images, and Docs allowed
     const allowedTypes = [
@@ -107,6 +114,7 @@ router.post('/upload', authMiddleware, async (req, res) => {
       deletedAt: null,
       _id: new ObjectId(),
       createdAt: new Date(),
+      noteDate,
     });
 
     res.json({ ok: true, id: result.insertedId.toString() });
@@ -119,6 +127,7 @@ router.post('/upload', authMiddleware, async (req, res) => {
         subjectId,
         fileName,
         fileType,
+        noteDate,
         uploadedBy: req.user?.id
       });
     } else {
@@ -128,6 +137,7 @@ router.post('/upload', authMiddleware, async (req, res) => {
         subjectId,
         fileName,
         fileType,
+        noteDate,
         uploadedBy: req.user?.id
       });
     }
@@ -152,7 +162,7 @@ router.get('/centralized', authMiddleware, async (req, res) => {
 
     const notes = await db.collection(COLLECTIONS.CENTRALIZED_NOTES)
       .find(filter)
-      .sort({ unitNumber: 1, createdAt: 1 })
+      .sort({ noteDate: -1, unitNumber: 1, createdAt: -1 })
       .toArray();
     res.json(notes.map(n => ({ ...n, id: n._id?.toString() || n.id })));
   } catch (error) {
@@ -165,6 +175,7 @@ router.post('/centralized', authMiddleware, async (req, res) => {
   try {
     const db = await connectToDatabase();
     const { classId, subjectId, unitNumber, unitName, title, content, noteType } = req.body;
+    const noteDate = normalizeDateInput(req.body.noteDate);
 
     const result = await db.collection(COLLECTIONS.CENTRALIZED_NOTES).insertOne({
       classId: classId || null,
@@ -178,6 +189,7 @@ router.post('/centralized', authMiddleware, async (req, res) => {
       uploadedBy: req.user?.id || null,
       _id: new ObjectId(),
       createdAt: new Date(),
+      noteDate,
     });
 
     res.status(201).json({ ok: true, id: result.insertedId.toString() });
@@ -190,6 +202,7 @@ router.post('/centralized', authMiddleware, async (req, res) => {
       unitNumber,
       title,
       noteType,
+      noteDate,
       isCentralized: true
     });
   } catch (error) {
@@ -233,7 +246,7 @@ router.get('/student/:classId', authMiddleware, async (req, res) => {
 
     const notes = await db.collection(COLLECTIONS.SESSION_NOTES)
       .find(filter)
-      .sort({ createdAt: -1 })
+      .sort({ noteDate: -1, createdAt: -1 })
       .toArray();
 
     const notesWithSubject = await Promise.all(notes.map(async (note) => {
@@ -243,6 +256,7 @@ router.get('/student/:classId', authMiddleware, async (req, res) => {
         fileName: note.fileName || null,
         subject: subjectName,
         uploadedAt: note.createdAt,
+        noteDate: note.noteDate || note.createdAt,
         fileUrl: note.url || null,
         content: note.content?.slice(0, 200) || null,
       };

@@ -11,6 +11,12 @@ import { connectToDatabase, COLLECTIONS } from '../db/mongoAtlas.js';
 import { authMiddleware } from '../middleware/auth.js';
 import { broadcast } from '../websocket.js';
 
+function normalizeDateInput(value, fallback = new Date()) {
+  if (!value) return fallback;
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? fallback : parsed;
+}
+
 const multerStorage = multer.memoryStorage();
 
 const upload = multer({
@@ -57,6 +63,7 @@ router.post('/upload', authMiddleware, handleUpload, async (req, res) => {
     }
 
     const { classId, subjectId, type, userId } = req.body;
+    const noteDate = normalizeDateInput(req.body.noteDate);
     const file = req.file;
 
     const R2_CONFIGURED = !!(process.env.R2_ACCOUNT_ID && process.env.R2_ACCESS_KEY_ID);
@@ -89,6 +96,7 @@ router.post('/upload', authMiddleware, handleUpload, async (req, res) => {
         _id: new ObjectId(),
         createdAt: new Date(),
         updatedAt: new Date(),
+        noteDate,
       };
       
       await db.collection(COLLECTIONS.SESSION_NOTES).insertOne(note);
@@ -98,6 +106,7 @@ router.post('/upload', authMiddleware, handleUpload, async (req, res) => {
         title: note.title,
         subject: note.subject,
         url: note.url,
+        noteDate,
       }, classId ? `class:${classId}` : null);
 
       return res.json({
@@ -134,6 +143,7 @@ router.post('/upload', authMiddleware, handleUpload, async (req, res) => {
         _id: new ObjectId(),
         createdAt: new Date(),
         updatedAt: new Date(),
+        noteDate,
       };
       
       await db.collection(COLLECTIONS.SESSION_NOTES).insertOne(note);
@@ -143,6 +153,7 @@ router.post('/upload', authMiddleware, handleUpload, async (req, res) => {
         title: note.title,
         subject: note.subject,
         url: note.url,
+        noteDate,
       }, classId ? `class:${classId}` : null);
 
       return res.json({
@@ -176,6 +187,7 @@ router.post('/upload', authMiddleware, handleUpload, async (req, res) => {
       _id: new ObjectId(),
       createdAt: new Date(),
       updatedAt: new Date(),
+      noteDate,
     };
     
     await db.collection(COLLECTIONS.SESSION_NOTES).insertOne(note);
@@ -185,6 +197,7 @@ router.post('/upload', authMiddleware, handleUpload, async (req, res) => {
       title: note.title,
       subject: note.subject,
       url: dataUrl,
+      noteDate,
     }, classId ? `class:${classId}` : null);
 
     res.json({
@@ -208,6 +221,7 @@ router.post('/centralized', authMiddleware, handleUpload, async (req, res) => {
     }
 
     const { classId, subjectId, unitNumber, unitName, title, content, noteType, userId } = req.body;
+    const noteDate = normalizeDateInput(req.body.noteDate);
     const file = req.file;
 
     const base64 = file.buffer.toString('base64');
@@ -230,6 +244,7 @@ router.post('/centralized', authMiddleware, handleUpload, async (req, res) => {
       uploadedBy: userId || req.user?.id || null,
       _id: new ObjectId(),
       createdAt: new Date(),
+      noteDate,
     };
     
     await db.collection(COLLECTIONS.CENTRALIZED_NOTES).insertOne(note);
@@ -238,6 +253,7 @@ router.post('/centralized', authMiddleware, handleUpload, async (req, res) => {
       id: note._id.toString(),
       title: note.title,
       subjectId: note.subjectId,
+      noteDate,
     }, classId ? `class:${classId}` : null);
 
     res.status(201).json({
@@ -257,6 +273,7 @@ router.post('/centralized', authMiddleware, handleUpload, async (req, res) => {
 router.post('/centralized-text', authMiddleware, async (req, res) => {
   try {
     const { classId, subjectId, title, content, unitNumber, unitName, userId } = req.body;
+    const noteDate = normalizeDateInput(req.body.noteDate);
 
     if (!title || !content || !subjectId) {
       return res.status(400).json({ error: 'Title, content, and subjectId are required' });
@@ -277,6 +294,7 @@ router.post('/centralized-text', authMiddleware, async (req, res) => {
       _id: new ObjectId(),
       createdAt: new Date(),
       updatedAt: new Date(),
+      noteDate,
     };
 
     await db.collection(COLLECTIONS.CENTRALIZED_NOTES).insertOne(note);
@@ -285,6 +303,7 @@ router.post('/centralized-text', authMiddleware, async (req, res) => {
       id: note._id.toString(),
       title: note.title,
       subjectId: note.subjectId,
+      noteDate,
     }, classId ? `class:${classId}` : null);
 
     res.status(201).json({

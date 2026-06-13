@@ -57,6 +57,7 @@ import { t } from '../services/i18n';
 const NotesList: React.FC<{ classId?: string; subjectId: string }> = ({ classId, subjectId }) => {
   const [notes, setNotes] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const formatNoteDate = (value?: string) => value ? new Date(value).toLocaleDateString() : '';
 
   useEffect(() => {
     const loadNotes = async () => {
@@ -98,6 +99,11 @@ const NotesList: React.FC<{ classId?: string; subjectId: string }> = ({ classId,
             <div>
               <p className="text-sm font-medium line-clamp-1">{note.title || note.fileName || 'Untitled Note'}</p>
               <p className="text-[10px] text-gray-500">{note.noteType === 'centralized_notes' ? 'Centralized' : 'Session'}</p>
+              {(note.noteDate || note.uploadedAt || note.createdAt) && (
+                <p className="text-[10px] text-gray-400">
+                  {formatNoteDate(note.noteDate || note.uploadedAt || note.createdAt)}
+                </p>
+              )}
             </div>
           </div>
           {note.url ? (
@@ -677,15 +683,20 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({
                    </h3>
                    <div className="space-y-3">
                      {studentNotes.length > 0 ? studentNotes.slice(0, 5).map((note) => (
-                       <div key={note.id} className="flex items-center justify-between p-3 rounded-xl bg-gray-50 dark:bg-gray-800 border border-gray-100 dark:border-gray-700">
-                         <div>
-                           <p className="text-sm font-semibold">{note.fileName || t('Shared note')}</p>
-                           <p className="text-xs" style={{ color: 'var(--color-text-muted)' }}>{note.subject || t('General')}</p>
-                         </div>
-                         {note.fileUrl ? (
-                           <a href={note.fileUrl} target="_blank" rel="noopener noreferrer" className="text-sm font-semibold text-primary hover:underline">
-                             {t('Open')}
-                           </a>
+                      <div key={note.id} className="flex items-center justify-between p-3 rounded-xl bg-gray-50 dark:bg-gray-800 border border-gray-100 dark:border-gray-700">
+                        <div>
+                          <p className="text-sm font-semibold">{note.fileName || t('Shared note')}</p>
+                          <p className="text-xs" style={{ color: 'var(--color-text-muted)' }}>{note.subject || t('General')}</p>
+                          {(note.noteDate || note.uploadedAt || note.createdAt) && (
+                            <p className="text-[11px]" style={{ color: 'var(--color-text-muted)' }}>
+                              {new Date(note.noteDate || note.uploadedAt || note.createdAt).toLocaleDateString()}
+                            </p>
+                          )}
+                        </div>
+                        {note.fileUrl ? (
+                          <a href={note.fileUrl} target="_blank" rel="noopener noreferrer" className="text-sm font-semibold text-primary hover:underline">
+                            {t('Open')}
+                          </a>
                          ) : (
                            <span className="text-xs text-gray-400">{t('No file')}</span>
                          )}

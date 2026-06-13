@@ -46,7 +46,7 @@ import { useTeacherSession } from '../hooks/useTeacherSession';
 import { useQuizWorker } from '../hooks/useQuizWorker';
 import { DashboardLayout, Card, Button, Badge, Input } from './ui';
 import { fetchTeacherStats, fetchQuizStats, fetchWeeklyAttendance, fetchPerformanceBySubject } from '../services/dataService';
-import { publishQuizToClass, upsertQuizToBank, uploadCentralizedNotes, fetchCentralizedNotes, uploadCentralizedFile, uploadClassNotes } from '../services/dataService';
+import { publishQuizToClass, upsertQuizToBank, uploadCentralizedNotes, fetchCentralizedNotes } from '../services/dataService';
 import { realtimeClient } from '../services/realtimeClient';
 import { mapBackendSessionToClassSession } from '../services/sessionState';
 import Timetable from './Timetable';
@@ -179,6 +179,8 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
   const [notesText, setNotesText] = useState(classSession.notes || '');
   const [notesTab, setNotesTab] = useState<'session' | 'centralized'>('session');
   const [centralizedNotes, setCentralizedNotes] = useState<any[]>([]);
+  const [sessionNoteDate, setSessionNoteDate] = useState(() => new Date().toISOString().split('T')[0]);
+  const [centralNoteDate, setCentralNoteDate] = useState(() => new Date().toISOString().split('T')[0]);
   const [selectedQuizClass, setSelectedQuizClass] = useState<string>('');
   const [expiryWarning, setExpiryWarning] = useState<string | null>(null);
   const [timeRemaining, setTimeRemaining] = useState<string>('--:--');
@@ -1017,6 +1019,16 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
               {notesTab === 'session' && (
                 <div className="space-y-4">
                   <div>
+                    <label htmlFor="session-note-date" className="block text-sm font-bold mb-2">{t('Upload Date')}</label>
+                    <input
+                      id="session-note-date"
+                      type="date"
+                      value={sessionNoteDate}
+                      onChange={(e) => setSessionNoteDate(e.target.value)}
+                      className="w-full md:w-64 px-4 py-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 focus:ring-2 focus:ring-primary/20 outline-none"
+                    />
+                  </div>
+                  <div>
                     <label className="block text-sm font-bold mb-2">{t('Upload File')}</label>
                     <input
                       id="session-note-file"
@@ -1033,6 +1045,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
                             subjectId: selectedSubject,
                             type: 'session_notes',
                             userId: teacher.id,
+                            noteDate: sessionNoteDate,
                           });
                           
                           // Real-time broadcast for newly uploaded note
@@ -1076,6 +1089,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
                             classId: classSession.classId || '',
                             subjectId: selectedSubject,
                             content: notesText,
+                            noteDate: sessionNoteDate,
                           });
                           setSuccessMessage(t('Notes saved!'));
                           setTimeout(() => setSuccessMessage(null), 3000);
@@ -1095,6 +1109,16 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
               
               {notesTab === 'centralized' && (
                 <div className="space-y-4">
+                  <div>
+                    <label htmlFor="central-note-date" className="block text-sm font-bold mb-2">{t('Upload Date')}</label>
+                    <input
+                      id="central-note-date"
+                      type="date"
+                      value={centralNoteDate}
+                      onChange={(e) => setCentralNoteDate(e.target.value)}
+                      className="w-full md:w-64 px-4 py-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 focus:ring-2 focus:ring-primary/20 outline-none"
+                    />
+                  </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {centralizedNotes.length === 0 ? (
                       <div className="col-span-2 p-8 text-center bg-gray-50 dark:bg-gray-800/50 rounded-xl">
@@ -1108,7 +1132,9 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
                             <div className="flex-1">
                               <h4 className="font-medium">{note.title || t('Untitled')}</h4>
                               <p className="text-sm text-gray-500">{note.subjectId || selectedSubject}</p>
-                              {note.createdAt && <p className="text-xs text-gray-400 mt-1">{new Date(note.createdAt).toLocaleDateString()}</p>}
+                              {(note.noteDate || note.createdAt) && (
+                                <p className="text-xs text-gray-400 mt-1">{new Date(note.noteDate || note.createdAt).toLocaleDateString()}</p>
+                              )}
                             </div>
                             <a href={note.url} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline text-sm">{t('View')}</a>
                           </div>
@@ -1147,6 +1173,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
                                 classId: classSession.classId || '',
                                 subjectId: selectedSubject,
                                 userId: teacher.id,
+                                noteDate: centralNoteDate,
                               });
                               setSuccessMessage(t('Text note saved to centralized bank!'));
                               (document.getElementById('central-note-title') as HTMLInputElement).value = '';
@@ -1178,7 +1205,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
                       <input
                         type="file"
                         accept=".pdf,.doc,.docx,.txt,.png,.jpg,.jpeg"
-                        onChange={async (e) => {
+                          onChange={async (e) => {
                           const file = e.target.files?.[0];
                           if (!file) return;
                           setIsUploading(true);
@@ -1190,6 +1217,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
                               title: file.name,
                               noteType: 'centralized_notes',
                               userId: teacher.id,
+                              noteDate: centralNoteDate,
                             });
                             setSuccessMessage(t('Uploaded to centralized bank!'));
                             

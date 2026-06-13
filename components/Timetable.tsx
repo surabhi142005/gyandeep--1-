@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { fetchTimetable, addTimetableEntry, deleteTimetableEntry } from '../services/dataService';
+import { fetchTimetable, addTimetableEntry, updateTimetableEntry, deleteTimetableEntry } from '../services/dataService';
 import { websocketService } from '../services/websocketService';
 
 // --- Types ---
@@ -7,6 +7,7 @@ import { websocketService } from '../services/websocketService';
 interface TimetableEntry {
   id: string;
   day: string;
+  dayOfWeek?: number;
   startTime: string;
   endTime: string;
   subject: string;
@@ -40,6 +41,7 @@ const THEME_COLORS: Record<string, Record<string, string>> = {
 
 const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'] as const;
 const DAY_SHORT = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'] as const;
+const DAY_BY_INDEX = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'] as const;
 
 const TIME_SLOTS: string[] = [];
 for (let h = 8; h <= 15; h++) {
@@ -91,6 +93,12 @@ const emptyForm = {
   room: '',
 };
 
+const resolveEntryDay = (entry: Partial<TimetableEntry>) => {
+  if (entry.day) return entry.day;
+  if (typeof entry.dayOfWeek === 'number' && DAY_BY_INDEX[entry.dayOfWeek]) return DAY_BY_INDEX[entry.dayOfWeek];
+  return 'Monday';
+};
+
 // --- Component ---
 
 const Timetable: React.FC<TimetableProps> = ({
@@ -111,6 +119,7 @@ const Timetable: React.FC<TimetableProps> = ({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState(emptyForm);
   const [submitting, setSubmitting] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -170,7 +179,7 @@ const Timetable: React.FC<TimetableProps> = ({
   const getEntriesForSlot = (day: string, slotTime: string): TimetableEntry[] => {
     const slotMin = timeToMinutes(slotTime);
     return filteredEntries.filter((e) => {
-      if (e.day !== day) return false;
+      if (resolveEntryDay(e) !== day) return false;
       const start = timeToMinutes(e.startTime);
       const end = timeToMinutes(e.endTime);
       return slotMin >= start && slotMin < end;
@@ -204,7 +213,33 @@ const Timetable: React.FC<TimetableProps> = ({
     setForm((prev) => ({ ...prev, [field]: value }));
   };
 
-  const handleAddEntry = async () => {
+  const openCreateForm = () => {
+    setEditingId(null);
+    setForm(emptyForm);
+    setShowForm(true);
+  };
+
+  const openEditForm = (entry: TimetableEntry) => {
+    setEditingId(entry.id);
+    setForm({
+      day: resolveEntryDay(entry),
+      startTime: entry.startTime,
+      endTime: entry.endTime,
+      subject: entry.subject,
+      teacherId: entry.teacherId || '',
+      classId: entry.classId || '',
+      room: entry.room || '',
+    });
+    setShowForm(true);
+  };
+
+  const resetForm = () => {
+    setShowForm(false);
+    setEditingId(null);
+    setForm(emptyForm);
+  };
+
+  const handleSubmitEntry = async () => {
     if (!form.subject) {
       setError('Please select a subject.');
       return;
@@ -216,7 +251,7 @@ const Timetable: React.FC<TimetableProps> = ({
     try {
       setSubmitting(true);
       setError(null);
-      await addTimetableEntry({
+      const payload = {
         day: form.day,
         startTime: form.startTime,
         endTime: form.endTime,
@@ -224,12 +259,16 @@ const Timetable: React.FC<TimetableProps> = ({
         teacherId: form.teacherId || undefined,
         classId: form.classId || undefined,
         room: form.room || undefined,
-      });
-      setForm(emptyForm);
-      setShowForm(false);
+      };
+      if (editingId) {
+        await updateTimetableEntry(editingId, payload);
+      } else {
+        await addTimetableEntry(payload);
+      }
+      resetForm();
       await loadTimetable();
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Failed to add entry');
+      setError(err instanceof Error ? err.message : editingId ? 'Failed to update entry' : 'Failed to add entry');
     } finally {
       setSubmitting(false);
     }
@@ -355,23 +394,34 @@ const Timetable: React.FC<TimetableProps> = ({
                             </div>
                           )}
                           {canEdit && (
-                            <button
-                              onClick={() => handleDeleteEntry(entry.id)}
-                              disabled={deletingId === entry.id}
-                              className="absolute top-1 right-1 opacity-0 group-hover/entry:opacity-100 transition-opacity p-0.5 rounded hover:bg-red-100 text-red-400 hover:text-red-600"
-                              title="Delete entry"
-                            >
-                              {deletingId === entry.id ? (
-                                <svg className="animate-spin h-3.5 w-3.5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
-                                </svg>
-                              ) : (
+                            <div className="absolute top-1 right-1 flex items-center gap-1 opacity-0 group-hover/entry:opacity-100 transition-opacity">
+                              <button
+                                onClick={() => openEditForm(entry)}
+                                className="p-0.5 rounded hover:bg-blue-100 text-blue-500 hover:text-blue-700"
+                                title="Edit entry"
+                              >
                                 <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 4H5a2 2 0 00-2 2v6m14.293-8.293a1 1 0 011.414 0l2.586 2.586a1 1 0 010 1.414L11 22H8v-3L19.293 5.707z" />
                                 </svg>
-                              )}
-                            </button>
+                              </button>
+                              <button
+                                onClick={() => handleDeleteEntry(entry.id)}
+                                disabled={deletingId === entry.id}
+                                className="p-0.5 rounded hover:bg-red-100 text-red-400 hover:text-red-600"
+                                title="Delete entry"
+                              >
+                                {deletingId === entry.id ? (
+                                  <svg className="animate-spin h-3.5 w-3.5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
+                                  </svg>
+                                ) : (
+                                  <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                  </svg>
+                                )}
+                              </button>
+                            </div>
                           )}
                         </div>
                       </td>
@@ -399,7 +449,7 @@ const Timetable: React.FC<TimetableProps> = ({
     const entriesByDay: Record<string, TimetableEntry[]> = {};
     DAYS.forEach((d) => {
       entriesByDay[d] = filteredEntries
-        .filter((e) => e.day === d)
+        .filter((e) => resolveEntryDay(e) === d)
         .sort((a, b) => timeToMinutes(a.startTime) - timeToMinutes(b.startTime));
     });
 
@@ -448,23 +498,34 @@ const Timetable: React.FC<TimetableProps> = ({
                           </div>
                         </div>
                         {canEdit && (
-                          <button
-                            onClick={() => handleDeleteEntry(entry.id)}
-                            disabled={deletingId === entry.id}
-                            className="shrink-0 p-1.5 rounded-lg hover:bg-red-100 text-red-400 hover:text-red-600 transition-colors"
-                            title="Delete entry"
-                          >
-                            {deletingId === entry.id ? (
-                              <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
-                              </svg>
-                            ) : (
+                          <div className="shrink-0 flex items-center gap-1">
+                            <button
+                              onClick={() => openEditForm(entry)}
+                              className="p-1.5 rounded-lg hover:bg-blue-100 text-blue-500 hover:text-blue-700 transition-colors"
+                              title="Edit entry"
+                            >
                               <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 4H5a2 2 0 00-2 2v6m14.293-8.293a1 1 0 011.414 0l2.586 2.586a1 1 0 010 1.414L11 22H8v-3L19.293 5.707z" />
                               </svg>
-                            )}
-                          </button>
+                            </button>
+                            <button
+                              onClick={() => handleDeleteEntry(entry.id)}
+                              disabled={deletingId === entry.id}
+                              className="p-1.5 rounded-lg hover:bg-red-100 text-red-400 hover:text-red-600 transition-colors"
+                              title="Delete entry"
+                            >
+                              {deletingId === entry.id ? (
+                                <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
+                                </svg>
+                              ) : (
+                                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                </svg>
+                              )}
+                            </button>
+                          </div>
                         )}
                       </div>
                     );
@@ -486,7 +547,9 @@ const Timetable: React.FC<TimetableProps> = ({
 
     return (
       <div className="bg-white border border-gray-200 rounded-xl p-4 mb-4 shadow-sm">
-        <h3 className="text-sm font-semibold text-gray-700 mb-3">Add Timetable Entry</h3>
+        <h3 className="text-sm font-semibold text-gray-700 mb-3">
+          {editingId ? 'Edit Timetable Entry' : 'Add Timetable Entry'}
+        </h3>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
           {/* Day */}
           <div>
@@ -596,7 +659,7 @@ const Timetable: React.FC<TimetableProps> = ({
         {/* Form Actions */}
         <div className="flex items-center gap-2 mt-4">
           <button
-            onClick={handleAddEntry}
+            onClick={handleSubmitEntry}
             disabled={submitting}
             className={`inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-white rounded-lg ${colors.primary} ${colors.hover} ${colors.ring} focus:outline-none focus:ring-2 focus:ring-offset-1 transition-colors disabled:opacity-50 disabled:cursor-not-allowed`}
           >
@@ -606,22 +669,22 @@ const Timetable: React.FC<TimetableProps> = ({
                   <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                   <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
                 </svg>
-                Adding...
+                {editingId ? 'Saving...' : 'Adding...'}
               </>
             ) : (
               <>
                 <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
                 </svg>
-                Add Entry
+                {editingId ? 'Save Changes' : 'Add Entry'}
               </>
             )}
           </button>
           <button
-            onClick={() => { setShowForm(false); setForm(emptyForm); }}
+            onClick={resetForm}
             className="px-4 py-2 text-sm font-medium text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
           >
-            Cancel
+            {editingId ? 'Cancel Edit' : 'Cancel'}
           </button>
         </div>
       </div>
@@ -650,7 +713,7 @@ const Timetable: React.FC<TimetableProps> = ({
 
         {canEdit && !showForm && (
           <button
-            onClick={() => setShowForm(true)}
+            onClick={openCreateForm}
             className={`inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-white rounded-lg ${colors.primary} ${colors.hover} ${colors.ring} focus:outline-none focus:ring-2 focus:ring-offset-1 transition-colors shadow-sm`}
           >
             <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">

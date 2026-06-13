@@ -95,7 +95,7 @@ async function main() {
 
   // Teachers
   const teacherData = [
-    { name: 'Dr. John Smith', email: 'john.smith@gyandeep.edu', subjects: ['Mathematics', 'Physics'] },
+    { name: 'John Smith', email: 'john.smith@gyandeep.edu', subjects: ['Mathematics', 'Physics'] },
     { name: 'Sarah Johnson', email: 'sarah.j@gyandeep.edu', subjects: ['Science', 'Biology', 'Chemistry'] },
     { name: 'Michael Brown', email: 'm.brown@gyandeep.edu', subjects: ['English', 'History'] },
     { name: 'Dr. Emily Wilson', email: 'emily.w@gyandeep.edu', subjects: ['Computer Science', 'Mathematics'] },

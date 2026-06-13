@@ -74,7 +74,7 @@ export async function reseedDemoDatabase({ clearExisting = false } = {}) {
   const ticketReplyId = new ObjectId();
 
   const studentSeeds = [
-    { name: 'Aarav Kulkarni', email: 'aarav.kulkarni@student.gyandeep.edu', classId: class10AId, xp: 1340, coins: 285, level: 14, badges: ['Fast Learner', 'Perfect Attendance'] },
+    { name: 'Aarav Sharma', email: 'aarav.sharma@student.gyandeep.edu', classId: class10AId, xp: 1340, coins: 285, level: 14, badges: ['Fast Learner', 'Perfect Attendance'] },
     { name: 'Diya Nair', email: 'diya.nair@student.gyandeep.edu', classId: class10AId, xp: 1290, coins: 272, level: 13, badges: ['Quiz Master'] },
     { name: 'Ishaan Patil', email: 'ishaan.patil@student.gyandeep.edu', classId: class10AId, xp: 1210, coins: 255, level: 13, badges: ['Consistent Learner'] },
     { name: 'Meera Joshi', email: 'meera.joshi@student.gyandeep.edu', classId: class10AId, xp: 1180, coins: 243, level: 12, badges: [] },
@@ -149,8 +149,8 @@ export async function reseedDemoDatabase({ clearExisting = false } = {}) {
     },
     {
       _id: teacherAId,
-      name: 'Asha Verma',
-      email: 'teacher.demo@gyandeep.edu',
+      name: 'John Smith',
+      email: 'john.smith@gyandeep.edu',
       password: teacherPassword,
       role: 'teacher',
       active: true,
@@ -904,6 +904,7 @@ export async function reseedDemoDatabase({ clearExisting = false } = {}) {
       uploadedBy: teacherAId.toString(),
       deletedAt: null,
       createdAt: now,
+      noteDate: now,
     },
     {
       _id: new ObjectId(),
@@ -917,6 +918,7 @@ export async function reseedDemoDatabase({ clearExisting = false } = {}) {
       uploadedBy: teacherAId.toString(),
       deletedAt: null,
       createdAt: twoDaysAgo,
+      noteDate: twoDaysAgo,
     },
   ];
 
@@ -933,6 +935,7 @@ export async function reseedDemoDatabase({ clearExisting = false } = {}) {
       noteType: 'centralized_notes',
       uploadedBy: teacherAId.toString(),
       createdAt: fiveDaysAgo,
+      noteDate: fiveDaysAgo,
     },
     {
       _id: new ObjectId(),
@@ -946,6 +949,7 @@ export async function reseedDemoDatabase({ clearExisting = false } = {}) {
       noteType: 'centralized_notes',
       uploadedBy: teacherAId.toString(),
       createdAt: twoDaysAgo,
+      noteDate: twoDaysAgo,
     },
     {
       _id: new ObjectId(),
@@ -959,6 +963,7 @@ export async function reseedDemoDatabase({ clearExisting = false } = {}) {
       noteType: 'centralized_notes',
       uploadedBy: teacherAId.toString(),
       createdAt: twoDaysAgo,
+      noteDate: twoDaysAgo,
     },
     {
       _id: new ObjectId(),
@@ -972,6 +977,7 @@ export async function reseedDemoDatabase({ clearExisting = false } = {}) {
       noteType: 'centralized_notes',
       uploadedBy: teacherBId.toString(),
       createdAt: twoDaysAgo,
+      noteDate: twoDaysAgo,
     },
   ];
 
@@ -1078,7 +1084,7 @@ export async function reseedDemoDatabase({ clearExisting = false } = {}) {
       _id: new ObjectId(),
       userId: studentDocs[1]._id.toString(),
       title: 'New note uploaded',
-      message: 'Asha Verma uploaded "Quadratic Formula Cheatsheet" to Mathematics.',
+      message: 'John Smith uploaded "Quadratic Formula Cheatsheet" to Mathematics.',
       type: 'announcement',
       relatedId: centralizedNotes[0]._id.toString(),
       relatedType: 'note',
@@ -1188,7 +1194,7 @@ export async function reseedDemoDatabase({ clearExisting = false } = {}) {
     },
     credentials: {
       admin: `admin@gyandeep.edu / ${SEED_PASSWORDS.admin}`,
-      teacher: `teacher.demo@gyandeep.edu / ${SEED_PASSWORDS.teacher}`,
+      teacher: `john.smith@gyandeep.edu / ${SEED_PASSWORDS.teacher}`,
       student: `${studentDocs[0].email} / ${SEED_PASSWORDS.student}`,
     },
   };

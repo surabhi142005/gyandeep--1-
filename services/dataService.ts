@@ -32,6 +32,44 @@ const extractArrayPayload = <T>(payload: unknown): T[] => {
   return [];
 };
 
+const DAY_NAME_TO_NUMBER: Record<string, number> = {
+  Sunday: 0,
+  Monday: 1,
+  Tuesday: 2,
+  Wednesday: 3,
+  Thursday: 4,
+  Friday: 5,
+  Saturday: 6,
+};
+
+const DAY_NUMBER_TO_NAME: Record<number, string> = Object.fromEntries(
+  Object.entries(DAY_NAME_TO_NUMBER).map(([day, index]) => [index, day])
+) as Record<number, string>;
+
+const normalizeTimetableEntry = (entry: any) => {
+  if (!entry || typeof entry !== 'object') return entry;
+  const day = typeof entry.day === 'string' && entry.day
+    ? entry.day
+    : DAY_NUMBER_TO_NAME[Number(entry.dayOfWeek)] || '';
+  const dayOfWeek = entry.dayOfWeek ?? (day ? DAY_NAME_TO_NUMBER[day] : undefined);
+  return {
+    ...entry,
+    day,
+    dayOfWeek,
+    id: entry.id || entry._id?.toString?.() || entry._id,
+  };
+};
+
+const normalizeTimetablePayload = (payload: unknown) => {
+  if (Array.isArray(payload)) return payload.map(normalizeTimetableEntry);
+  if (payload && typeof payload === 'object') {
+    const record = payload as Record<string, unknown>;
+    if (Array.isArray(record.data)) return record.data.map(normalizeTimetableEntry);
+    if (Array.isArray(record.items)) return record.items.map(normalizeTimetableEntry);
+  }
+  return [];
+};
+
 /**
  * Fetch with timeout to prevent hanging requests
  */
@@ -405,29 +443,31 @@ export const publishQuizToClass = async (payload: any) => {
 
 // ─── Notes & Storage ─────────────────────────────────────────────────────────
 
-export const uploadClassNotes = async (data: { classId: string; subjectId: string; content: string }) => {
+export const uploadClassNotes = async (data: { classId: string; subjectId: string; content: string; noteDate?: string }) => {
   return apiRequest('/api/notes/centralized', {
     method: 'POST',
     body: JSON.stringify({
       ...data,
       title: `${data.subjectId} Quick Note`,
       noteType: 'class_notes',
-      unitNumber: 1
+      unitNumber: 1,
+      noteDate: data.noteDate || new Date().toISOString().split('T')[0],
     }),
   });
 };
 
-export const uploadSessionFile = async (data: { file: File; classId: string; subjectId: string; type: string; userId: string }) => {
+export const uploadSessionFile = async (data: { file: File; classId: string; subjectId: string; type: string; userId: string; noteDate?: string }) => {
   const formData = new FormData();
   formData.append('file', data.file);
   formData.append('classId', data.classId);
   formData.append('subjectId', data.subjectId);
   formData.append('type', data.type);
   formData.append('userId', data.userId);
+  if (data.noteDate) formData.append('noteDate', data.noteDate);
   return multipartRequest('/api/storage/upload', formData);
 };
 
-export const uploadCentralizedFile = async (data: { file: File; classId: string; subjectId: string; title: string; noteType: string; userId: string }) => {
+export const uploadCentralizedFile = async (data: { file: File; classId: string; subjectId: string; title: string; noteType: string; userId: string; noteDate?: string }) => {
   const formData = new FormData();
   formData.append('file', data.file);
   formData.append('classId', data.classId);
@@ -435,6 +475,7 @@ export const uploadCentralizedFile = async (data: { file: File; classId: string;
   formData.append('title', data.title);
   formData.append('noteType', data.noteType);
   formData.append('userId', data.userId);
+  if (data.noteDate) formData.append('noteDate', data.noteDate);
   return multipartRequest('/api/storage/centralized', formData);
 };
 
@@ -473,6 +514,7 @@ export const uploadCentralizedNotes = async (data: {
   unitNumber?: number;
   unitName?: string;
   userId: string;
+  noteDate?: string;
 }) => {
   return apiRequest('/api/notes/centralized-text', {
     method: 'POST',
@@ -677,7 +719,8 @@ export const deleteGrade = async (id: string) => {
 };
 
 export const fetchTimetable = async () => {
-  return apiRequest('/api/timetable', { method: 'GET' });
+  const data = await apiRequest('/api/timetable', { method: 'GET' });
+  return normalizeTimetablePayload(data);
 };
 
 export const saveTimetable = async (entries: any[]) => {
@@ -691,6 +734,13 @@ export const addTimetableEntry = async (entry: any) => {
   return apiRequest('/api/timetable/entry', {
     method: 'POST',
     body: JSON.stringify(entry),
+  });
+};
+
+export const updateTimetableEntry = async (id: string, updates: any) => {
+  return apiRequest(`/api/timetable/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify(updates),
   });
 };
 

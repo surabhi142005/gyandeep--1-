@@ -10,21 +10,69 @@ import { connectToDatabase, COLLECTIONS } from '../db/mongoAtlas.js';
 import { authMiddleware } from '../middleware/auth.js';
 import { broadcastToAll } from '../services/broadcast.js';
 
+const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+const DAY_NAME_TO_INDEX = DAY_NAMES.reduce((acc, day, index) => ({ ...acc, [day]: index }), {});
+
+function resolveDayName(entry) {
+  if (entry?.day && typeof entry.day === 'string') return entry.day;
+  const index = Number(entry?.dayOfWeek);
+  return Number.isInteger(index) && index >= 0 && index < DAY_NAMES.length ? DAY_NAMES[index] : 'Monday';
+}
+
+function normalizeTimetableEntry(entry) {
+  const day = resolveDayName(entry);
+  const dayOfWeek = entry?.dayOfWeek ?? DAY_NAME_TO_INDEX[day] ?? 1;
+  return {
+    ...entry,
+    day,
+    dayOfWeek,
+    id: entry._id?.toString() || entry.id,
+  };
+}
+
+function sortTimetableEntries(entries) {
+  return [...entries].sort((a, b) => {
+    const aDay = Number.isFinite(Number(a.dayOfWeek)) ? Number(a.dayOfWeek) : (DAY_NAME_TO_INDEX[resolveDayName(a)] ?? 99);
+    const bDay = Number.isFinite(Number(b.dayOfWeek)) ? Number(b.dayOfWeek) : (DAY_NAME_TO_INDEX[resolveDayName(b)] ?? 99);
+    if (aDay !== bDay) return aDay - bDay;
+    if (String(a.startTime || '') !== String(b.startTime || '')) {
+      return String(a.startTime || '').localeCompare(String(b.startTime || ''));
+    }
+    return String(a.endTime || '').localeCompare(String(b.endTime || ''));
+  });
+}
+
+function normalizeTimetablePayload(payload) {
+  return Array.isArray(payload) ? payload.map(normalizeTimetableEntry) : [];
+}
+
+function prepareTimetablePayload(body) {
+  const day = resolveDayName(body);
+  return {
+    ...body,
+    day,
+    dayOfWeek: Number.isFinite(Number(body.dayOfWeek)) ? Number(body.dayOfWeek) : (DAY_NAME_TO_INDEX[day] ?? 1),
+  };
+}
+
 router.get('/', authMiddleware, async (req, res) => {
   try {
     const db = await connectToDatabase();
-    const { classId, dayOfWeek } = req.query;
+    const { classId, dayOfWeek, day } = req.query;
     
     const filter = {};
     if (classId) filter.classId = classId;
-    if (dayOfWeek) filter.dayOfWeek = dayOfWeek;
+    if (dayOfWeek !== undefined) {
+      const parsedDay = Number(dayOfWeek);
+      filter.dayOfWeek = Number.isNaN(parsedDay) ? dayOfWeek : parsedDay;
+    }
+    if (day) filter.day = day;
 
     const entries = await db.collection(COLLECTIONS.TIMETABLE)
       .find(filter)
-      .sort({ dayOfWeek: 1, startTime: 1 })
       .toArray();
     
-    res.json(entries.map(e => ({ ...e, id: e._id?.toString() || e.id })));
+    res.json(sortTimetableEntries(normalizeTimetablePayload(entries)));
   } catch (error) {
     console.error('Get timetable error:', error);
     res.status(500).json({ error: 'Failed to fetch timetable' });
@@ -47,8 +95,8 @@ router.post('/', authMiddleware, async (req, res) => {
       });
     }
 
-    const docs = entries.map(e => ({
-      ...e,
+    const docs = entries.map(entry => ({
+      ...prepareTimetablePayload(entry),
       _id: new ObjectId(),
       createdAt: now,
       updatedAt: now,
@@ -72,14 +120,14 @@ router.post('/entry', authMiddleware, async (req, res) => {
     const now = new Date();
 
     const result = await db.collection(COLLECTIONS.TIMETABLE).insertOne({
-      ...req.body,
+      ...prepareTimetablePayload(req.body),
       _id: new ObjectId(),
       createdAt: now,
       updatedAt: now,
     });
 
     broadcastToAll('timetable-changed', { type: 'added', entryId: result.insertedId.toString() });
-    res.json({ ok: true, entry: { ...req.body, id: result.insertedId.toString() } });
+    res.json({ ok: true, entry: { ...prepareTimetablePayload(req.body), id: result.insertedId.toString() } });
   } catch (error) {
     console.error('Add timetable entry error:', error);
     res.status(500).json({ error: 'Failed to add entry' });
@@ -89,12 +137,13 @@ router.post('/entry', authMiddleware, async (req, res) => {
 router.patch('/:id', authMiddleware, async (req, res) => {
   try {
     const db = await connectToDatabase();
+    const updates = prepareTimetablePayload(req.body);
     await db.collection(COLLECTIONS.TIMETABLE).updateOne(
       { _id: new ObjectId(req.params.id) },
-      { $set: { ...req.body, updatedAt: new Date() } }
+      { $set: { ...updates, updatedAt: new Date() } }
     );
     broadcastToAll('timetable-changed', { type: 'updated', entryId: req.params.id });
-    res.json({ ok: true });
+    res.json({ ok: true, entry: { ...updates, id: req.params.id } });
   } catch (error) {
     console.error('Update timetable entry error:', error);
     res.status(500).json({ error: 'Failed to update entry' });
