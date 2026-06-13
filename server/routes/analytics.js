@@ -5,6 +5,7 @@
 
 import express from 'express';
 const router = express.Router();
+import { ObjectId } from 'mongodb';
 import { connectToDatabase, COLLECTIONS } from '../db/mongoAtlas.js';
 import { authMiddleware } from '../middleware/auth.js';
 import { callAI, parseAIJson, getAIStatus } from '../services/aiService.js';

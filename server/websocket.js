@@ -40,6 +40,8 @@ export function setupWebSocket(server) {
       lastPing: Date.now(),
     };
 
+    console.log(`[WebSocket] New connection ${clientId} url=${req.url} user=${user?.email || 'anonymous'}`);
+
     clients.set(clientId, clientInfo);
 
     if (user) {
@@ -91,6 +93,8 @@ function handleMessage(clientId, data) {
     const message = JSON.parse(data.toString());
     const client = clients.get(clientId);
 
+    console.log(`[WebSocket] Received message from ${clientId} user=${client?.user?.email || 'anon'}:`, message);
+
     if (!client) return;
 
     switch (message.type) {
@@ -100,19 +104,22 @@ function handleMessage(clientId, data) {
 
       case 'join':
         if (message.room) {
-          leaveAllRooms(clientId);
+          // Allow joining multiple rooms; do not force leaving all existing rooms
+          console.log(`[WebSocket] Client ${clientId} joining room: ${message.room}`);
           joinRoom(clientId, message.room);
         }
         break;
 
       case 'leave':
         if (message.room) {
+          console.log(`[WebSocket] Client ${clientId} leaving room: ${message.room}`);
           leaveRoom(clientId, message.room);
         }
         break;
 
       case 'broadcast':
         if (message.room && message.data) {
+          console.log(`[WebSocket] Client ${clientId} broadcasting to room ${message.room}:`, message.data);
           broadcastToRoom(message.room, {
             type: 'event',
             event: message.data.event || 'broadcast',

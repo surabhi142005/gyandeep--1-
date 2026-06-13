@@ -8,7 +8,7 @@ const router = express.Router();
 import { ObjectId } from 'mongodb';
 import { connectToDatabase, COLLECTIONS } from '../db/mongoAtlas.js';
 import { broadcastAttendanceUpdated, broadcastToUser, broadcastToRoom, broadcastToAll } from '../services/broadcast.js';
-import { isWithinGeofence, validateCoordinates } from '../utils/locationUtils.js';
+import { isWithinGeofence, validateCoordinates, calculateHaversineDistance } from '../utils/locationUtils.js';
 import { authMiddleware } from '../middleware/auth.js';
 import { validateBody } from '../middleware/validate.js';
 import { attendanceSchemas } from '../utils/validationSchemas.js';
@@ -189,9 +189,20 @@ router.post('/', authMiddleware, validateBody(attendanceSchemas.create), async (
         const anchor = session.locationAnchor || { lat: session.lat, lng: session.lng };
         const radius = session.locationRadius || 100;
 
+        // Log for debugging geofence checks (helpful for specific accounts)
+        try {
+          const distance = (anchor && coords) ? calculateHaversineDistance(coords, anchor) : null;
+          console.log('[Attendance] Geofence check for student', studentId, 'session', sessionId, 'coords=', coords, 'anchor=', anchor, 'radius=', radius, 'distance=', distance);
+        } catch (err) {
+          console.warn('[Attendance] Failed to compute geofence distance:', err);
+        }
+
         locationValid = isWithinGeofence(coords, anchor, radius);
         if (!locationValid) {
+          console.log('[Attendance] Geofence failed for student', studentId, 'distance exceeded radius');
           return res.status(403).json({ error: 'You are outside the designated location for this session' });
+        } else {
+          console.log('[Attendance] Geofence passed for student', studentId);
         }
       }
 
