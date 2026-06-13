@@ -52,6 +52,7 @@ export async function reseedDemoDatabase({ clearExisting = false } = {}) {
   const tenMinutesAgo = new Date(now.getTime() - 10 * 60 * 1000);
   const thirtyMinutesFromNow = new Date(now.getTime() + 30 * 60 * 1000);
   const twoDaysAgo = new Date(now.getTime() - 2 * 24 * 60 * 60 * 1000);
+  const threeDaysAgo = new Date(now.getTime() - 3 * 24 * 60 * 60 * 1000);
   const fiveDaysAgo = new Date(now.getTime() - 5 * 24 * 60 * 60 * 1000);
 
   const [adminPassword, teacherPassword, studentPassword] = await Promise.all([
@@ -909,6 +910,20 @@ export async function reseedDemoDatabase({ clearExisting = false } = {}) {
     {
       _id: new ObjectId(),
       classId: class10AId.toString(),
+      subjectId: 'Mathematics',
+      subject: 'Mathematics',
+      content: 'Aarav-focused practice set: solving linear equations, factorization, and word problems with step-by-step solutions.',
+      url: demoPdfUrl,
+      fileName: 'aarav-mathematics-practice-pack.pdf',
+      fileType: 'application/pdf',
+      uploadedBy: teacherAId.toString(),
+      deletedAt: null,
+      createdAt: threeDaysAgo,
+      noteDate: threeDaysAgo,
+    },
+    {
+      _id: new ObjectId(),
+      classId: class10AId.toString(),
       subjectId: 'Science',
       subject: 'Science',
       content: 'Newton laws summary sheet with everyday examples and practice questions.',
@@ -936,6 +951,20 @@ export async function reseedDemoDatabase({ clearExisting = false } = {}) {
       uploadedBy: teacherAId.toString(),
       createdAt: fiveDaysAgo,
       noteDate: fiveDaysAgo,
+    },
+    {
+      _id: new ObjectId(),
+      classId: class10AId.toString(),
+      subjectId: 'Mathematics',
+      subject: 'Mathematics',
+      unitNumber: 2,
+      unitName: 'Aarav Review',
+      title: 'Aarav Sharma Revision Sheet',
+      content: 'Personalized revision checklist for Aarav covering equations, graphs, and quick recap questions.',
+      noteType: 'centralized_notes',
+      uploadedBy: teacherAId.toString(),
+      createdAt: threeDaysAgo,
+      noteDate: threeDaysAgo,
     },
     {
       _id: new ObjectId(),
@@ -1079,6 +1108,17 @@ export async function reseedDemoDatabase({ clearExisting = false } = {}) {
       relatedType: 'quiz',
       read: false,
       createdAt: new Date(now.getTime() - 4 * 60 * 1000),
+    },
+    {
+      _id: new ObjectId(),
+      userId: studentDocs[0]._id.toString(),
+      title: 'New note uploaded',
+      message: 'John Smith uploaded "Aarav Sharma Revision Sheet" to Mathematics.',
+      type: 'announcement',
+      relatedId: centralizedNotes[1]._id.toString(),
+      relatedType: 'note',
+      read: false,
+      createdAt: threeDaysAgo,
     },
     {
       _id: new ObjectId(),
